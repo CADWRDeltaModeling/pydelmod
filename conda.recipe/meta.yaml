@@ -1,0 +1,42 @@
+{% set name = "pydelmod" %}
+{% set data = load_setup_py_data() %}
+
+package:
+  name:           "{{ name|lower }}"
+  version:        "{{ data['version'] }}"
+
+source:
+  #git_url: https://github.com/CADWRDeltaModeling/pydelmod.git
+  path: ..
+
+build:
+  number: 0
+  noarch: python
+  script: python setup.py install --single-version-externally-managed --record=record.txt
+  entry_points:
+    - pydelmod = pydelmod.cli:main
+  #skip:           true
+
+requirements:
+  build:
+    - python
+    - setuptools
+    - click >=6.0
+
+  run:
+    - python
+    - pandas >=0.23
+    - plotly >=3.0
+    - pyhecdss >=0.2.5
+    - qgrid >=1.1
+    - click >=6.0
+
+  test:
+    imports:
+      - pydelmod
+
+about:
+  home:           "https://github.com/CADWRDeltaModeling/pydelmod"
+  license:        "MIT"
+  license_family: "MIT"
+  summary:        "python package for Delta Modeling"
