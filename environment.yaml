@@ -1,4 +1,4 @@
-name: notebook-dcp
+name: pydelmod
 channels:
   - plotly
   - cadwr-dms

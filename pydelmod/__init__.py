@@ -6,4 +6,4 @@ __author__ = """Kijin Name"""
 __email__ = 'knam@water.ca.gov'
 __version__ = '0.1.0'
 
-__all__=['nbplot','utilities']
+__all__ = ['nbplot', 'utilities']

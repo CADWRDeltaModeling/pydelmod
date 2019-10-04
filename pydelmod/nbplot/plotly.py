@@ -2,10 +2,6 @@
 """ Jupyter plotting routine with Plot.ly.
 """
 
-__author__ = "Kijin Nam"
-__version__ = "0.0.9"
-__license__ = "MIT"
-
 import pandas as pd
 import numpy as np
 import plotly.graph_objs as go
