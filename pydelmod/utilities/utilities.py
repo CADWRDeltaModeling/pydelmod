@@ -7,7 +7,7 @@ import pandas as pd
 import netCDF4 as nc
 import pyhecdss
 
-__all__ = ['read_wateryear_types', 'read_regulations', 'read_nc_to_df',
+__all__ = ['read_wateryear_types', 'read_regulations',
            'read_dss_to_df', 'generate_regulation_timeseries', ]
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
