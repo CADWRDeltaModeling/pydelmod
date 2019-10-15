@@ -5,7 +5,7 @@ Credits
 Development Lead
 ----------------
 
-* Kijin Name <knam@water.ca.gov>
+* Kijin Nam <knam@water.ca.gov>
 
 Contributors
 ------------
