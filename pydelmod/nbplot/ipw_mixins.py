@@ -2,10 +2,6 @@
 """ Common mixins for interactive controls
 """
 
-__author__ = "Kijin Nam"
-__version__ = "0.0.9"
-__license__ = "MIT"
-
 import pandas as pd
 import ipywidgets as ipw
 import plotly.io as pio

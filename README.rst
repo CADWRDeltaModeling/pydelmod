@@ -12,7 +12,7 @@ Installation
 ------------
 ## If this is the first time to use this tool
 1. Install Anaconda Python on your system if you do not have one already.
-2. (This step is tested on Windows only for now.) Create a virtual environment with 'environment.yaml' file in this repository by running `conda env create -f environment.yaml` in your (Anaconda) command line. This should create a virtual environment named `notebook-dcp` with necessary packages.
+2. (This step is tested on Windows only for now.) Create a virtual environment with 'environment.yaml' file in this repository by running `conda env create -f environment.yaml` in your (Anaconda) command line. This should create a virtual environment named `pydelmod` with necessary packages.
 
 
 Features

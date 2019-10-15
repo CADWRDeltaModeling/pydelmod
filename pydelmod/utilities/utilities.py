@@ -1,9 +1,5 @@
 # -*- conding: utf-8 -*-
 
-__author__ = "Kijin Nam"
-__version__ = "0.0.9"
-__license__ = "MIT"
-
 import os
 import re
 import numpy as np
@@ -11,7 +7,7 @@ import pandas as pd
 import netCDF4 as nc
 import pyhecdss
 
-__all__ = ['read_wateryear_types', 'read_regulations', 'read_nc_to_df',
+__all__ = ['read_wateryear_types', 'read_regulations',
            'read_dss_to_df', 'generate_regulation_timeseries', ]
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
@@ -125,66 +121,6 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
     return pd.concat(dfs)
 
 
-def read_nc_to_df(fpath, group, stations=None):
-    """ Read an NC file that is converted from a post-processed DSM2 outputs
-        for DCP (or CWF). The result will be returned in pandas.DataFrame.
-
-        Parameters
-        ----------
-        fpath: str
-            an input nc file name
-        group: str
-            a group name to read
-        stations: array-like of strings, optional
-            stations to read in
-
-        Returns
-        -------
-        pandas.DataFrame
-            DataFrame read in from an nc file
-    """
-    df_all = None
-    group = nc.Dataset(fpath)[group]
-    variable_names = group['variable_name'][:]
-    for variable_name in variable_names:
-        val = group[variable_name]
-        start_time = pd.to_datetime(group[variable_name].start_time)
-        interval = group[variable_name].interval
-        stations_in_h5 = None
-        if 'months' in interval:
-            g = int(re.search(r'\d+', interval)[0])
-            times = [start_time + pd.DateOffset(months=i*g)
-                     for i in range(val[:].shape[1])]
-        else:
-            if 'day,' in interval:
-                interval = interval.replace('day, ', '')
-            interval = [int(x) for x in re.split(r'[^\d]', interval)]
-            if len(interval) == 4:
-                interval = pd.Timedelta(days=interval[0])
-            else:
-                interval = pd.Timedelta(hours=interval[0])
-            times = [start_time + interval * i for i in range(val[:].shape[1])]
-        if stations_in_h5 is None:
-            stations_in_h5 = [str(x) for x in group['station_name']]
-        else:
-            if stations_in_h5 != [str(x) for x in group['station_name']]:
-                raise ValueError('Stations are not identical among datasets.')
-        df = pd.DataFrame(val[:].transpose(), columns=stations_in_h5)
-        if stations is not None:
-            df = df[stations]
-        df['time'] = times
-        df['variable'] = variable_name
-        # df['month'] = [t.month for t in df['time']]
-        # df['wateryear'] = [t.year if t.month <
-        #                    10 else t.year + 1 for t in df['time']]
-        if df_all is None:
-            df_all = df
-        else:
-            df_all = df_all.append(df)
-    df_all = df_all.melt(id_vars=['time', 'variable'], var_name='station')
-    return df_all
-
-
 def read_dss_to_df(fpath, bparts_to_read=None,
                    cparts_to_read=None,
                    eparts_to_read=None,
@@ -234,7 +170,7 @@ def read_dss_to_df(fpath, bparts_to_read=None,
         try:
             data.index = data.index.to_timestamp()
         except:
-            pass # it is probably already a DateTimeIndex?
+            pass  # it is probably already a DateTimeIndex?
         data = pd.melt(data.reset_index(), id_vars=[
                        'index'], value_vars=[path], var_name='pathname')
         data.rename(columns={'index': 'time'}, inplace=True)
