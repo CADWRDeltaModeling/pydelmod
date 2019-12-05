@@ -72,6 +72,15 @@ class PlotNotebookBase():
 
 
 class PlotStepBase(PlotNotebookBase):
+    """
+    Example Options dictionary for one time series per scenario
+    options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot'}
+    
+    Example Options dictionary for > one time series per scenario
+    values_to_plot = ['value', 'ssw_highs', 'ssw_lows']
+    options = {'yaxis': 'Stage (ft)', 'title': 'Stage Plot', 'plot_multiple_series_per_study': True, 
+            'colnames_y': values_to_plot, 'multi_series_line_modes': ['lines', 'markers', 'markers'], 'multi_series_line_or_marker_widths': [1, 7, 7]}
+    """
     def __init__(self, df, df_stations, options,
                  colname_x='time', colname_y='value',
                  colname_variable='variable', colname_case='scenario_name',
@@ -80,9 +89,15 @@ class PlotStepBase(PlotNotebookBase):
         self.df = df
         self.df_stations = df_stations
         self.options = {} if options is None else options
+        # if plotting more than one series per study (for example, stage with high tides and low tides)
+        self.multiple_series_per_study = False
+        if self.options.get('plot_multiple_series_per_study') is not None and \
+            self.options.get('plot_multiple_series_per_study') and self.options.get('colnames_y') is not None:
+            self.multiple_series_per_study = True
         self.colname_x = colname_x
         self.colname_y = colname_y
         self.colname_variable = colname_variable
+        # an example of a case is a scenario name
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
         self.preprocess_data()
@@ -111,10 +126,34 @@ class PlotStepBase(PlotNotebookBase):
                            )
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
-            data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
-                                   y=self.df_to_plot[mask][self.colname_y],
-                                   name=case,
-                                   line={'shape': 'hv'}))
+            if self.multiple_series_per_study:
+                colnames_y = self.options.get('colnames_y')
+                colname_index=0
+                for cy in colnames_y:
+                    line_mode = 'lines'
+                    line_or_marker_width = 1
+                    if self.options.get('multi_series_line_or_marker_widths') is not None and self.options.get('multi_series_line_modes') is not None:
+                        line_mode = self.options.get('multi_series_line_modes')[colname_index]
+                        line_or_marker_width = self.options.get('multi_series_line_or_marker_widths')[colname_index]
+                    marker_dict = None
+                    line_dict = None
+                    if line_mode is 'lines':
+                        line_dict=dict(shape='hv', width=line_or_marker_width)
+                    else:
+                        marker_dict = dict(symbol='circle', size=line_or_marker_width)
+                    data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
+                                           y=self.df_to_plot[mask][cy],
+                                           name=case,
+                                           mode=line_mode,
+                                           marker=marker_dict,
+                                           line=line_dict))
+                    colname_index+=1
+            else:
+                # otherwise, default to single series, with name determined by colname_y, which defaults to 'value'
+                data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
+                                       y=self.df_to_plot[mask][self.colname_y],
+                                       name=case,
+                                       line={'shape': 'hv'}))
         self.fig = go.FigureWidget(data=data, layout=layout)
 
     def make_all_true_mask(self):
@@ -125,14 +164,26 @@ class PlotStepBase(PlotNotebookBase):
 
     def update(self):
         self.fig.layout.title.text = self.generate_title()
+        # If user requested plotting multiple series per study, get column name from colnames_y rather than colname_y
+        colnames_y = self.options.get('colnames_y')
+        col_index=0
+        # loops through all the data sets in the graph, for all cases
+        # A scenario is an example of a case
         for i, trace in enumerate(self.fig.data):
-            case = self.cases[i]
+            case = trace['name']
             mask = self.df_to_plot[self.colname_case] == case
             x = self.df_to_plot[mask]['time']
             trace.x = x
-            y = self.df_to_plot[mask][self.colname_y]
+            if self.multiple_series_per_study:
+                cy = colnames_y[col_index]
+                y = self.df_to_plot[mask][cy]
+                if col_index==2:
+                    col_index=0
+                else:
+                    col_index+=1
+            else:
+                y = self.df_to_plot[mask][self.colname_y]
             trace.y = y
-
 
 class PlotMonthlyBarBase(PlotNotebookBase):
     def __init__(self, df, df_stations, options,
