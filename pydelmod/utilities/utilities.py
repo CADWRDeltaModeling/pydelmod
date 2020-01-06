@@ -7,14 +7,16 @@ import pandas as pd
 import netCDF4 as nc
 import pyhecdss
 
-__all__ = ['read_wateryear_types', 'read_regulations',
-           'read_dss_to_df', 'generate_regulation_timeseries', ]
+__all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types', 
+           'read_calsim_sacvalley_table', 'read_regulations', 
+           'read_D1641FWS_conditional', 'read_dss_to_df', 
+           'generate_regulation_timeseries']    
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
           'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
 
 
-def read_wateryear_types(fpath):
+def read_hist_wateryear_types(fpath):
     """ Read a table containing water year types from a text file.
         The text file is the top part of http://cdec.water.ca.gov/reportapp/javareports?name=WSIHIST
         down to the last row of the first table (before min and others).
@@ -39,7 +41,64 @@ def read_wateryear_types(fpath):
                             'sjr_yrtype'],
                      skiprows=14)
     return df
+    
+def read_calsim_wateryear_types(fpath):
+    """ Read a table containing water year types from CalSim II water year types table file.
+        The table file is found in "CONV/Lookup" directory of a CalSim II study.
 
+        Parameters
+        ----------
+        fpath: string-like
+            a text file name to read
+
+        Returns
+        -------
+        pandas.DataFrame
+            A WY table. The column names are:
+            'wy', 'sac_index_num', 'sjr_index_num', 'shasta_index_num',
+            'amer_D893_num', 'feath_index_num', 'trin_index_num',
+            'amer_403030_num', 'dry_years', 'sac_yrtype', 'sjr_yrtype'
+    """
+    def num_to_letter (row,index):
+        if row[index] == 1:
+            return 'W'
+        if row[index] == 2:
+            return 'AN'
+        if row[index] == 3:
+            return 'BN'
+        if row[index] == 4:
+            return 'D'
+        if row[index] == 5:
+            return 'C'
+    df = pd.read_csv(fpath, delim_whitespace = True, header=None,
+                     names=['wy', 'sac_index_num', 'sjr_index_num', 'shasta_index_num',
+                            'amer_D893_num', 'feath_index_num', 'trin_index_num',
+                            'amer_403030_num', 'dry_years'],
+                     skiprows=13)
+    df['sac_yrtype'] = df.apply(lambda row: num_to_letter(row,'sac_index_num'), axis = 1)
+    df['sjr_yrtype'] = df.apply(lambda row: num_to_letter(row,'sjr_index_num'), axis = 1)
+    return df
+
+def read_calsim_sacvalley_table(fpath):
+    """ Read a table containing Sacramento Valley indices from CalSim II SacValleyIndex table file.
+        The table file is found in "CONV/Lookup" directory of a CalSim II study.
+
+        Parameters
+        ----------
+        fpath: string-like
+            a text file name to read
+
+        Returns
+        -------
+        pandas.DataFrame
+            A Sac Valley index table. The column names are:
+            'wy', 'OctMar', 'AprJul', 'WYsum', 'Index'
+    """
+
+    df = pd.read_csv(fpath, delim_whitespace = True, header=None,
+                     names=['wy', 'OctMar', 'AprJul', 'WYsum', 'Index'],
+                     skiprows=4)
+    return df
 
 def read_regulations(fpath, df_wyt):
     """ Read regulations and create irregular time series DataFrame from them.
@@ -67,6 +126,7 @@ def read_regulations(fpath, df_wyt):
     """
     # Read a CSV file
     df = pd.read_csv(fpath, comment='#')
+    df[['month','date']] = df [['month','date']].applymap(np.int64)
     # Filter out years without yeartype information
     df_wy = df_wyt[df_wyt['sac_yrtype'].notnull()]
     locs = df['location'].unique()
@@ -90,7 +150,100 @@ def read_regulations(fpath, df_wyt):
             data={'value': regs, 'location': loc}, index=timestamps))
     return pd.concat(dfs)
 
+def read_D1641FWS_conditional(fpath1, fpath2, df, df_sri, df_wyt):
+    """ Update regulation time series DataFrame with D1641 FWS conditional logic.
 
+        Parameters
+        ----------
+        fpath1: string-like
+            a CSV file that contains D1641 FWS West Suisun Marsh regulations  
+            under low flow conditions
+        fpath2: string-like
+            a CSV file that contains D1641 FWS San Joaquin regulations under 
+            low flow conditions
+        df: pandas.DataFrame
+            Irregular regulation timeseries DataFrame. 
+        df_sri: Pandas.DataFrame
+            Sacramento River Index DataFrame.
+        df_wyt: Pandas.DataFrame
+            a wateryear information DataFrame. Water years and Sac water year
+            type from this DataFrame is used to create a time series.
+            The expected columns are: location, wyt, month, date, val.
+            The first column, 'location,' is the location of the regulation.
+            Station names like 'RSAN018' would be easy to use.
+            The second column, 'wyt,' is the short name of Sac water year type
+            like 'W', 'BN'. The third and fourth columns, 'month' and 'date,'
+            are when the regulation starts. The five columns, 'val,' is a
+            regulation value.
+
+        Returns
+        -------
+        pandas.DataFrame
+            an irregular time series of regulations in DataFrame.
+    """
+    # Read a CSV file
+    df_reg = pd.read_csv(fpath1, comment='#')
+    # Filter out years without yeartype information
+    df_wy = df_wyt[df_wyt['sac_yrtype'].notnull()]
+    locs = df_reg['location'].unique()
+    df['year'] = pd.DatetimeIndex(df.index).year
+    df['month']  = pd.DatetimeIndex(df.index).month
+    yr_start = df_wy['wy'].min()
+    yr_end = df_wy['wy'].max()
+    for loc in locs:
+        timestamps = []
+        regs = []
+        df_reg_loc = df_reg.loc[df_reg['location'] == loc]
+        for wy in range(yr_start + 1, yr_end):
+            wyt = df_wyt[df_wyt['wy'] == wy]['sac_yrtype'].iloc[0]
+            prev_svi = df_sri[df_sri['wy'] == wy - 1]['WYsum'].iloc[0]
+            
+            if wy > yr_start:
+                prev_wyt = df_wyt[df_wyt['wy'] == wy - 1]['sac_yrtype'].iloc[0]
+            else:
+                prev_wyt = wyt
+                
+            if wy > yr_start + 1:
+                prev2_wyt = df_wyt[df_wyt['wy'] == wy - 2]['sac_yrtype'].iloc[0]
+            elif wy > yr_start:
+                prev2_wyt = df_wyt[df_wyt['wy'] == wy - 1]['sac_yrtype'].iloc[0]
+            else:
+                prev2_wyt = wyt
+                
+            flag = 0
+            if wyt == 'C' and (prev_wyt == 'D' or prev_wyt == 'C'):
+                flag = 1
+            elif wyt == 'D' and prev_svi < 11.35:
+                flag = 1
+            elif wyt == 'D' and (prev_wyt == 'D' or prev_wyt == 'C') and prev2_wyt == 'C' and wy > yr_start + 1:
+                flag = 1
+            
+            if flag > 0: 
+                for i, row in df_reg_loc.iterrows():
+                    mo = row['month']
+                    val = row['val']
+                    df.loc[(df['location'] == loc) & (df['year'] == wy) & (df['month'] == mo),'value'] = val
+    
+    # Read a CSV file
+    df_reg = pd.read_csv(fpath2, comment='#')
+    locs = df_reg['location'].unique()
+    for loc in locs:
+        timestamps = []
+        regs = []
+        df_reg_loc = df_reg.loc[df_reg['location'] == loc]
+        for wy in range(yr_start + 1, yr_end):
+            wyt = df_wyt[df_wyt['wy'] == wy]['sac_yrtype'].iloc[0]
+            svi = df_sri[df_sri['wy'] == wy]['WYsum'].iloc[0]
+            sjr_flag = 0
+            if wyt == 'D' and svi < 8.1:
+                sjr_flag = 1
+            if sjr_flag > 0: 
+                for i, row in df_reg_loc.iterrows():
+                    mo = row['month']
+                    val = row['val']
+                    df.loc[(df['location'] == loc) & (df['year'] == wy) & (df['month'] == mo),'value'] = val
+    return(df)
+    
 def generate_regulation_timeseries(df_reg, df, freq=None):
     time = df['time'].unique()
     t_begin = time.min()
@@ -119,7 +272,6 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
             df_ec_reg_ts['time'] <= t_end)
         dfs.append(df_ec_reg_ts[mask])
     return pd.concat(dfs)
-
 
 def read_dss_to_df(fpath, bparts_to_read=None,
                    cparts_to_read=None,
@@ -170,7 +322,7 @@ def read_dss_to_df(fpath, bparts_to_read=None,
         try:
             data.index = data.index.to_timestamp()
         except:
-            pass  # it is probably already a DateTimeIndex?
+            pass
         data = pd.melt(data.reset_index(), id_vars=[
                        'index'], value_vars=[path], var_name='pathname')
         data.rename(columns={'index': 'time'}, inplace=True)
