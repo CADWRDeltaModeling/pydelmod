@@ -681,6 +681,14 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         yaxis_name = self.options.get('yaxis_name',
                                       'Difference in EC (micromhos/cm)')
         self.layout = go.Layout(template='seaborn',
+                                title=dict(text=title),
+                                yaxis=dict(zeroline=True,
+                                           zerolinecolor='#000000',
+                                           title=yaxis_name,
+                                           rangemode='tozero'),
+                                xaxis=dict(title=xaxis_name),
+                                height=self.height,
+                                margin=self.margin)
         results = {'Scenario': [],
                    '# of Days Standards are Applicable': [],
                    '# of Days Violated': [],
