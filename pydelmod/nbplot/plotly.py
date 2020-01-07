@@ -66,8 +66,10 @@ def plot_exceedance_w_regulation(df, df_reg, df_stations=None, options=None):
     p = PlotExceedanceWithRegulation(df, df_reg, df_stations, options)
     return p.plot()
 
+
 def set_default_plot_margin(margin):
     PLOT_MARGIN = margin
+
 
 class PlotNotebookBase():
     def __init__(self, *args, **kwargs):
@@ -81,12 +83,13 @@ class PlotStepBase(PlotNotebookBase):
     """
     Example Options dictionary for one time series per scenario
     options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot'}
-    
+
     Example Options dictionary for > one time series per scenario
     values_to_plot = ['value', 'ssw_highs', 'ssw_lows']
     options = {'yaxis': 'Stage (ft)', 'title': 'Stage Plot', 'plot_multiple_series_per_study': True, 
             'colnames_y': values_to_plot, 'multi_series_line_modes': ['lines', 'markers', 'markers'], 'multi_series_line_or_marker_widths': [1, 7, 7]}
     """
+
     def __init__(self, df, df_stations, options,
                  colname_x='time', colname_y='value',
                  colname_variable='variable', colname_case='scenario_name',
@@ -98,7 +101,7 @@ class PlotStepBase(PlotNotebookBase):
         # if plotting more than one series per study (for example, stage with high tides and low tides)
         self.multiple_series_per_study = False
         if self.options.get('plot_multiple_series_per_study') is not None and \
-            self.options.get('plot_multiple_series_per_study') and self.options.get('colnames_y') is not None:
+                self.options.get('plot_multiple_series_per_study') and self.options.get('colnames_y') is not None:
             self.multiple_series_per_study = True
         self.colname_x = colname_x
         self.colname_y = colname_y
@@ -106,8 +109,8 @@ class PlotStepBase(PlotNotebookBase):
         # an example of a case is a scenario name
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
@@ -135,31 +138,35 @@ class PlotStepBase(PlotNotebookBase):
                                 yaxis=dict(title=yaxis_name),
                                 height=self.height,
                                 margin=self.margin
-                           )
+                                )
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             if self.multiple_series_per_study:
                 colnames_y = self.options.get('colnames_y')
-                colname_index=0
+                colname_index = 0
                 for cy in colnames_y:
                     line_mode = 'lines'
                     line_or_marker_width = 1
                     if self.options.get('multi_series_line_or_marker_widths') is not None and self.options.get('multi_series_line_modes') is not None:
-                        line_mode = self.options.get('multi_series_line_modes')[colname_index]
-                        line_or_marker_width = self.options.get('multi_series_line_or_marker_widths')[colname_index]
+                        line_mode = self.options.get('multi_series_line_modes')[
+                            colname_index]
+                        line_or_marker_width = self.options.get(
+                            'multi_series_line_or_marker_widths')[colname_index]
                     marker_dict = None
                     line_dict = None
                     if line_mode is 'lines':
-                        line_dict=dict(shape='hv', width=line_or_marker_width)
+                        line_dict = dict(
+                            shape='hv', width=line_or_marker_width)
                     else:
-                        marker_dict = dict(symbol='circle', size=line_or_marker_width)
+                        marker_dict = dict(
+                            symbol='circle', size=line_or_marker_width)
                     data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
                                            y=self.df_to_plot[mask][cy],
                                            name=case,
                                            mode=line_mode,
                                            marker=marker_dict,
                                            line=line_dict))
-                    colname_index+=1
+                    colname_index += 1
             else:
                 # otherwise, default to single series, with name determined by colname_y, which defaults to 'value'
                 data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
@@ -178,7 +185,7 @@ class PlotStepBase(PlotNotebookBase):
         self.fig.layout.title.text = self.generate_title()
         # If user requested plotting multiple series per study, get column name from colnames_y rather than colname_y
         colnames_y = self.options.get('colnames_y')
-        col_index=0
+        col_index = 0
         # loops through all the data sets in the graph, for all cases
         # A scenario is an example of a case
         for i, trace in enumerate(self.fig.data):
@@ -189,13 +196,14 @@ class PlotStepBase(PlotNotebookBase):
             if self.multiple_series_per_study:
                 cy = colnames_y[col_index]
                 y = self.df_to_plot[mask][cy]
-                if col_index==2:
-                    col_index=0
+                if col_index == 2:
+                    col_index = 0
                 else:
-                    col_index+=1
+                    col_index += 1
             else:
                 y = self.df_to_plot[mask][self.colname_y]
             trace.y = y
+
 
 class PlotMonthlyBarBase(PlotNotebookBase):
     def __init__(self, df, df_stations, options,
@@ -211,8 +219,8 @@ class PlotMonthlyBarBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
@@ -238,7 +246,7 @@ class PlotMonthlyBarBase(PlotNotebookBase):
         self.layout = go.Layout(template='seaborn',
                                 title=title,
                                 yaxis=dict(title=yaxis_name),
-                                height = self.height,
+                                height=self.height,
                                 margin=self.margin)
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
@@ -307,8 +315,8 @@ class PlotBoxBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
@@ -368,8 +376,8 @@ class PlotExceedanceBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
@@ -523,8 +531,8 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
@@ -562,9 +570,9 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
                                       'EC (micromhos/cm)')
         self.layout = go.Layout(template='seaborn',
                                 title=dict(text=title),
-                           #    yaxis=dict(rangemode='tozero')
-                                yaxis=dict(title=yaxis_name),
-                                height=height,
+                                yaxis=dict(title=yaxis_name,
+                                           rangemode='tozero'),
+                                height=self.height,
                                 margin=self.margin)
         for case in self.cases_to_plot:
             mask = (self.df_to_plot[self.colname_case] == case)
@@ -637,8 +645,8 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
-        self.height = options['height'] if ('height' in options) else None
-        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.height = self.options['height'] if 'height' in self.options else None
+        self.margin = self.options['margin'] if 'margin' in self.options else DEFAULT_PLOT_MARGIN
         self.layout = None
         self.preprocess_data()
         self.create_widgets()
