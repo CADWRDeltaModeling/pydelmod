@@ -20,6 +20,10 @@ WY_MONTHS = {'OCT': 10, 'NOV': 11, 'DEC': 12, 'JAN': 1, 'FEB': 2,
              'MAR': 3, 'APR': 4, 'MAY': 5, 'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, }
 YEARTYPES = ['W', 'AN', 'BN', 'D', 'C']
 
+# Default margin for plots. Can be overridden for individual plots by including differnt margin in options. Example:
+# 'margin': dict(l=80, r=10, t=40, b=0)
+DEFAULT_PLOT_MARGIN = dict(l=80, r=10, t=40, b=0)
+
 
 def plot_step_w_variable_station_filters(df, df_stations=None, options=None):
     """
@@ -62,6 +66,8 @@ def plot_exceedance_w_regulation(df, df_reg, df_stations=None, options=None):
     p = PlotExceedanceWithRegulation(df, df_reg, df_stations, options)
     return p.plot()
 
+def set_default_plot_margin(margin):
+    PLOT_MARGIN = margin
 
 class PlotNotebookBase():
     def __init__(self, *args, **kwargs):
@@ -100,6 +106,9 @@ class PlotStepBase(PlotNotebookBase):
         # an example of a case is a scenario name
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -120,9 +129,12 @@ class PlotStepBase(PlotNotebookBase):
         title = self.generate_title()
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=title,
-                           yaxis=dict(title=yaxis_name),
+        # adjusted layout to include margins that are more appropriate for exporting.
+        self.layout = go.Layout(template='seaborn',
+                                title=title,
+                                yaxis=dict(title=yaxis_name),
+                                height=self.height,
+                                margin=self.margin
                            )
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
@@ -154,7 +166,7 @@ class PlotStepBase(PlotNotebookBase):
                                        y=self.df_to_plot[mask][self.colname_y],
                                        name=case,
                                        line={'shape': 'hv'}))
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
         self.mask = pd.Series(True, self.df.index)
@@ -199,6 +211,9 @@ class PlotMonthlyBarBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -220,10 +235,11 @@ class PlotMonthlyBarBase(PlotNotebookBase):
         title = self.generate_title()
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=title,
-                           yaxis=dict(title=yaxis_name),
-                           )
+        self.layout = go.Layout(template='seaborn',
+                                title=title,
+                                yaxis=dict(title=yaxis_name),
+                                height = self.height,
+                                margin=self.margin)
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             df = self.df_to_plot[mask].set_index(
@@ -231,7 +247,7 @@ class PlotMonthlyBarBase(PlotNotebookBase):
             data.append(go.Bar(x=list(WY_MONTHS.keys()),
                                y=df[self.colname_y],
                                name=case))
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
         self.mask = pd.Series(True, self.df.index)
@@ -291,6 +307,9 @@ class PlotBoxBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -310,15 +329,16 @@ class PlotBoxBase(PlotNotebookBase):
         title = self.generate_title()
         xaxis_name = self.options.get('xaxis_name',
                                       'EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=dict(text=title),
-                           xaxis=dict(title=xaxis_name)
-                           )
+        self.layout = go.Layout(template='seaborn',
+                                title=dict(text=title),
+                                xaxis=dict(title=xaxis_name),
+                                height=self.height,
+                                margin=self.margin)
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             data.append(go.Box(name=case,
                                x=self.df_to_plot[mask][self.colname_y]))
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
         self.mask = pd.Series(True, self.df.index)
@@ -348,6 +368,9 @@ class PlotExceedanceBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -367,10 +390,11 @@ class PlotExceedanceBase(PlotNotebookBase):
         title = self.generate_title()
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=dict(text=title),
-                           yaxis=dict(title=yaxis_name)
-                           )
+        self.layout = go.Layout(template='seaborn',
+                                title=dict(text=title),
+                                yaxis=dict(title=yaxis_name),
+                                height=self.height,
+                                margin=self.margin)
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             yval = self.df_to_plot[mask][self.colname_y].sort_values(
@@ -380,7 +404,7 @@ class PlotExceedanceBase(PlotNotebookBase):
             data.append(go.Scatter(x=xval,
                                    y=yval,
                                    name=case))
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
         self.mask = pd.Series(True, self.df.index)
@@ -418,6 +442,8 @@ class PlotStepWithControls(ExportPlotForStationsMixin,
         self.widgets = ipw.VBox((self.fig,
                                  ipw.HBox((self.dd_variable,
                                            self.dd_station)),
+
+
                                  ipw.HBox((self.tb_showdata,
                                            self.tb_savedata)),
                                  self.box_exportplots,
@@ -497,6 +523,9 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -531,11 +560,12 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
         title = self.generate_title()
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=dict(text=title),
+        self.layout = go.Layout(template='seaborn',
+                                title=dict(text=title),
                            #    yaxis=dict(rangemode='tozero')
-                           yaxis=dict(title=yaxis_name)
-                           )
+                                yaxis=dict(title=yaxis_name),
+                                height=height,
+                                margin=self.margin)
         for case in self.cases_to_plot:
             mask = (self.df_to_plot[self.colname_case] == case)
             # Hard-wired, assuming that the regulation comes with this name.
@@ -550,7 +580,7 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
                                        y=self.df_to_plot[mask][self.colname_y],
                                        line={'shape': 'hv'},
                                        name=case))
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
         self.mask = pd.Series(True, self.df.index)
@@ -607,6 +637,9 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         self.colname_variable = colname_variable
         self.colname_case = colname_case
         self.colname_station_id = colname_station_id
+        self.height = options['height'] if ('height' in options) else None
+        self.margin = options['margin'] if ('margin' in options) else DEFAULT_PLOT_MARGIN
+        self.layout = None
         self.preprocess_data()
         self.create_widgets()
         self.create_figure()
@@ -647,14 +680,15 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                       'Probability of Compliance (%)')
         yaxis_name = self.options.get('yaxis_name',
                                       'Difference in EC (micromhos/cm)')
-        layout = go.Layout(template='seaborn',
-                           title=dict(text=title),
-                           yaxis=dict(zeroline=True,
-                                      zerolinecolor='#000000',
-                                      title=yaxis_name,
-                                      rangemode='tozero'),
-                           xaxis=dict(title=xaxis_name)
-                           )
+        self.layout = go.Layout(template='seaborn',
+                                title=dict(text=title),
+                                yaxis=dict(zeroline=True,
+                                           zerolinecolor='#000000',
+                                           title=yaxis_name,
+                                           rangemode='tozero'),
+                                xaxis=dict(title=xaxis_name),
+                                height=self.height,
+                                margin=self.margin)
         results = {'Scenario': [],
                    '# of Days Standards are Applicable': [],
                    '# of Days Violated': [],
@@ -675,7 +709,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
             results['# of Days Violated'].append(n_violated)
             results[r'% of Days Violated'].append(
                 f'{n_violated / n * 100.:.2f}')
-        self.fig = go.FigureWidget(data=data, layout=layout)
+        self.fig = go.FigureWidget(data=data, layout=self.layout)
         self.df_results = pd.DataFrame(data=results)
         self.results = go.FigureWidget(data=[go.Table(
             header=dict(values=[[v] for v in self.df_results.columns]),

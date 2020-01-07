@@ -6,6 +6,7 @@ import pandas as pd
 import ipywidgets as ipw
 import plotly.io as pio
 import qgrid
+import plotly.graph_objs as go
 
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
@@ -209,10 +210,13 @@ class ExportPlotForStationsMixin():
         super().__init__(*args, **kwargs)
 
     def create_widgets(self):
+        # create the 'Export Plots' button
         self.tb_exportplots = ipw.ToggleButton(
             value=False, description='Export Plots',
             # layout=Layout(width='100px')
         )
+
+        # allow user to specify a plot prefix, which is a string that will be used for filenames
         self.t_exportplots_prefix = ipw.Text(
             value='plot',
             placeholder='Prefix for plots',
@@ -230,9 +234,6 @@ class ExportPlotForStationsMixin():
         self.tb_exportplots.value = False
 
     def export_plots(self):
-        width = 5
-        height = 3
-
         table_plots = {'station': [], 'filename': [], 'station_long_name': []}
         plot_prefix = self.t_exportplots_prefix.value
         for i, row in self.df_stations.iterrows():
@@ -241,8 +242,10 @@ class ExportPlotForStationsMixin():
             station_id = row['ID']
             self.update()
             fpath_plot = f'{plot_prefix}_{station_id}.png'
-            pio.write_image(self.fig, fpath_plot, scale=3,
-                            width=width, height=height)
+            # don't know why, but for some reason it is necessary to reapply the layout
+            self.fig.layout = self.layout
+            self.fig.layout.title = station_name
+            pio.write_image(self.fig, fpath_plot, scale=3)
             table_plots['station'].append(station_id)
             table_plots['filename'].append(fpath_plot)
             table_plots['station_long_name'].append(station_name)
