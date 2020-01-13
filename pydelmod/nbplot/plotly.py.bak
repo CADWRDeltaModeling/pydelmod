@@ -80,13 +80,12 @@ class PlotNotebookBase():
 class PlotStepBase(PlotNotebookBase):
     """
     Example Options dictionary for one time series per scenario
-    options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot', 'single_series_line_styles': ['solid', 'dash', 'dot']}
+    options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot'}
     
     Example Options dictionary for > one time series per scenario
     values_to_plot = ['value', 'ssw_highs', 'ssw_lows']
     options = {'yaxis': 'Stage (ft)', 'title': 'Stage Plot', 'plot_multiple_series_per_study': True, 
-            'colnames_y': values_to_plot, 'multi_series_line_modes': ['lines', 'markers', 'markers'], 'multi_series_line_or_marker_widths': [1, 7, 7], 
-            'single_series_line_styles': ['solid', 'dash', 'dot']}
+            'colnames_y': values_to_plot, 'multi_series_line_modes': ['lines', 'markers', 'markers'], 'multi_series_line_or_marker_widths': [1, 7, 7]}
     """
     def __init__(self, df, df_stations, options,
                  colname_x='time', colname_y='value',
@@ -137,7 +136,6 @@ class PlotStepBase(PlotNotebookBase):
                                 height=self.height,
                                 margin=self.margin
                            )
-        caseIndex = 0
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             if self.multiple_series_per_study:
@@ -164,14 +162,10 @@ class PlotStepBase(PlotNotebookBase):
                     colname_index+=1
             else:
                 # otherwise, default to single series, with name determined by colname_y, which defaults to 'value'
-                line_dict={'shape': 'hv'}
-                if('single_series_line_styles' in self.options):
-                    line_dict.update({'dash': self.options['single_series_line_styles'][caseIndex]})
                 data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
                                        y=self.df_to_plot[mask][self.colname_y],
                                        name=case,
-                                       line=line_dict))
-            caseIndex += 1
+                                       line={'shape': 'hv'}))
         self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
