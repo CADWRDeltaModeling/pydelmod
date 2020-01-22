@@ -1,0 +1,67 @@
+﻿# Combined output locations from
+# DSM2_ResultsDatabase_EC_Monthly_SWRCBHearing_May201.xlsm
+Location,ID
+Sacramento River at FRWA Intake (u/s of NDD),NDD_US
+Sacramento River at Freeport,RSAC155
+Sacramento River at Hood,RSAC142
+Sacramento River at Greens Landing,RSAC139
+Sacramento River downstream of Sutter Slough,SAC_DS_SUTSL
+Sacramento River downstream of Steamboat Slough,SAC_DS_STMBTSL
+Sacramento River upstream of DCC,RSAC128
+Sacramento River downstream of Georgiana Slough,RSAC123
+Sacramento River at Rio Vista,RSAC101
+Sacramento River at Emmaton,RSAC092
+Sacramento River near Sherman Lake  ,RSAC084
+Sacramento River at Collinsville,RSAC081
+Sacramento River at Mallard Island (MAL),RSAC075
+"Chipps Island (North, Channel 437)",CHIPS_N_437
+"Chipps Island (South, Channel 442)",CHIPS_S_442
+Sacramento River at Port Chicago,RSAC064
+Sacramento River at Suisun Bay,SACR_AT_SUISUN_BAY
+Sacramento River at Martinez,RSAC054
+Delta Cross Channel,DCC
+Georgiana Slough,GEORG_SL
+Sutter Slough at Head,SUTR_SL
+Sutter Slough Upstream of Miner Slough,SUT_US_MIN
+Miner Slough,MINER_SL
+Steamboat Slough upstream of Sutter Confluence,STMBT_SL
+Steamboat Slough downstream of Sutter Confluence,SLSBT011
+Cache Sl at Vallejo Intake,SLCCH016
+Barker Slough / North Bay Aqueduct,SLBAR002
+Cache Slough at Ryer Island,CACHE_RYER
+Threemile Slough,SLTRM004
+North Fork Mokelumne River,RMKL019
+South Fork Mokelumne River at Staten Island (Terminous),RSMKL008
+Montezuma Slough at Beldon's Landing,SLMZU011
+Chadborne Sl at Sunrise Duck Club,SLCBN002
+Suisun Sl near Volanti Intake  ,SLSUS012
+False River at Russo Landing,FALSER_RUSSO_LNDG
+Disappointment Slough,DISPT_SL
+Columbia Cut,COLUMBIA_CUT
+Turner Cut,TRNR_CUT
+Contra Costa Pumping Plant/Rock Slough,CHCCC006
+Victoria Canal (CCWD AIP),VICT_Intake
+Grant Line Canal,GLC_W_DS_BAR
+Clifton Court Forebay,CLIFTON_COURT
+Old River at Clifton Court Forebay,CHSWP003
+Delta Mendota Canal at Tracy Pumping Plant,CHDMC006
+Delta Mendota Canal,CHDMC004
+Middle River at Bacon Island (channel 144),RMID015
+Middle River at Mowry Bridge,RMID040
+Middle River at Old River,RMID041
+Old River at Rock Slough,ROLD024
+Old River at Hwy4,ROLD034
+Old River at Tracy Road,ROLD059
+Old River near Middle River,OLDR_MIDR
+Old River at Head,ROLD074
+San Joaquin River at Antioch,RSAN007
+San Joaquin River at Jersey Point,RSAN018
+San Joaquin River at San Andreas,SJR_SAN_AND
+San Joaquin River at San Andreas Landing ,RSAN032
+San Joaquin River at Prisoners Point,RSAN037
+San Joaquin River at Venice Island ,RSAN043
+San Joaquin River between Turner & Columbia Cut,RSAN046
+San Joaquin River at Buckley Cove,SJR_BUCKLEY_COVE
+San Joaquin River at Stockton,RSAN058
+San Joaquin River at Brandt Bridge,RSAN072
+San Joaquin River at Vernalis,RSAN112
