@@ -48,8 +48,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'Delta Modeling Python Package'
-copyright = u"2019, Kijin Name"
-author = u"Kijin Name"
+copyright = u"2019, Kijin Nam"
+author = u"Kijin Nam"
 
 # The version info for the project you're documenting, acts as replacement
 # for |version| and |release|, also used in various other places throughout
@@ -130,7 +130,7 @@ latex_elements = {
 latex_documents = [
     (master_doc, 'pydelmod.tex',
      u'Delta Modeling Python Package Documentation',
-     u'Kijin Name', 'manual'),
+     u'Kijin Nam', 'manual'),
 ]
 
 

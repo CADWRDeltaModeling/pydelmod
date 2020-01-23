@@ -34,9 +34,9 @@ setup_requirements = ['pytest-runner', ]
 test_requirements = ['pytest>=3', ]
 
 setup(
-    author="Kijin Name",
+    author="Kijin Nam",
     author_email='knam@water.ca.gov',
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

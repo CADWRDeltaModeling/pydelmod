@@ -2,7 +2,7 @@
 
 """Top-level package for Delta Modeling Python Package."""
 
-__author__ = """Kijin Name"""
+__author__ = """Kijin Nam"""
 __email__ = 'knam@water.ca.gov'
 __version__ = '0.1.0'
 
