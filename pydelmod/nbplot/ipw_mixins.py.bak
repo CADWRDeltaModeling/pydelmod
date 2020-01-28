@@ -216,28 +216,16 @@ class ExportPlotForStationsMixin():
             # layout=Layout(width='100px')
         )
 
-        prefix_initial_string = ''
-        suffix_initial_string = ''
-        if 'export_prefix' in self.options:
-            prefix_initial_string = self.options['export_prefix']
-        if 'export_suffix' in self.options:
-            suffix_initial_string = self.options['export_suffix']
-        # allow user to specify a plot prefix, which is a string that will be included in the filenames before the station ID
+        # allow user to specify a plot prefix, which is a string that will be used for filenames
         self.t_exportplots_prefix = ipw.Text(
-            value=prefix_initial_string,
+            value='plot',
             placeholder='Prefix for plots',
             description='Plot prefix:',
-            disabled=False)
-        # allow user to specify a plot suffix, which is a string that will be included in the filenames after the station ID
-        self.t_exportplots_suffix = ipw.Text(
-            value=suffix_initial_string,
-            placeholder='Suffix for plots',
-            description='Plot suffix:',
             disabled=False)
         self.lb_msg = ipw.Label(value='')
         self.tb_exportplots.observe(self.response_exportplots, names='value')
         self.box_exportplots = ipw.HBox(
-            (self.tb_exportplots, self.t_exportplots_prefix, self.t_exportplots_suffix))
+            (self.tb_exportplots, self.t_exportplots_prefix))
         super().create_widgets()
 
     def response_exportplots(self, change):
@@ -247,21 +235,13 @@ class ExportPlotForStationsMixin():
 
     def export_plots(self):
         table_plots = {'station': [], 'filename': [], 'station_long_name': []}
-        plot_prefix = self.t_exportplots_prefix.value+'_' if (len(self.t_exportplots_prefix.value) > 0) else ''
-        plot_suffix = '_'+self.t_exportplots_suffix.value if (len(self.t_exportplots_suffix.value) > 0) else ''
+        plot_prefix = self.t_exportplots_prefix.value
         for i, row in self.df_stations.iterrows():
             station_name = row['Location']
             self.dd_station.value = station_name
             station_id = row['ID']
-            # prepend export plot sequence to filename prefix. This will be a code that will create
-            # filenames that when sorted alphanumerically, will be grouped together by station and in 
-            # order by north-south and east-west.
-            export_plot_sequence = str(row['ExportPlotSequence']) if('ExportPlotSequence' in row) else ''
-            if(len(export_plot_sequence) == 1):
-                export_plot_sequence = '0'+export_plot_sequence 
-            combined_plot_prefix = export_plot_sequence + '_' + plot_prefix
             self.update()
-            fpath_plot = f'{combined_plot_prefix}{station_id}{plot_suffix}.png'
+            fpath_plot = f'{plot_prefix}_{station_id}.png'
             # don't know why, but for some reason it is necessary to reapply the layout
             self.fig.layout = self.layout
             self.fig.layout.title = station_name
@@ -269,7 +249,7 @@ class ExportPlotForStationsMixin():
             table_plots['station'].append(station_id)
             table_plots['filename'].append(fpath_plot)
             table_plots['station_long_name'].append(station_name)
-        fpath_map = f'{plot_prefix}description{plot_suffix}.csv'
+        fpath_map = f'{plot_prefix}_description.csv'
         df_plots = pd.DataFrame(data=table_plots)
         df_plots.to_csv(fpath_map)
         self.lb_msg.value = f'Finished saving plots. See {fpath_map} for plot information.'

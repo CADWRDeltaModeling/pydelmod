@@ -82,12 +82,13 @@ class PlotNotebookBase():
 class PlotStepBase(PlotNotebookBase):
     """
     Example Options dictionary for one time series per scenario
-    options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot'}
+    options = {'xaxis_name': 'Time', 'yaxis_name': 'Stage (cfs)', 'title': 'Stage Plot', 'single_series_line_styles': ['solid', 'dash', 'dot']}
+    
     Example Options dictionary for > one time series per scenario
     values_to_plot = ['value', 'ssw_highs', 'ssw_lows']
     options = {'yaxis': 'Stage (ft)', 'title': 'Stage Plot', 'plot_multiple_series_per_study': True, 
             'colnames_y': values_to_plot, 'multi_series_line_modes': ['lines', 'markers', 'markers'], 'multi_series_line_or_marker_widths': [1, 7, 7], 
-            'single_series_line_styles': ['solid', 'dash', 'dot']}
+            'single_series_line_styles': ['solid', 'dash', 'dot'], 'single_series_line_widths': [1,1,1]}
     """
 
     def __init__(self, df, df_stations, options,
@@ -139,6 +140,7 @@ class PlotStepBase(PlotNotebookBase):
                                 height=self.height,
                                 margin=self.margin
                                 )
+        case_index = 0
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             if self.multiple_series_per_study:
@@ -171,12 +173,30 @@ class PlotStepBase(PlotNotebookBase):
                 # otherwise, default to single series, with name determined by colname_y, which defaults to 'value'
                 line_dict={'shape': 'hv'}
                 if('single_series_line_styles' in self.options):
-                    line_dict.update({'dash': self.options['single_series_line_styles'][caseIndex]})
+                    dash_option_dict = self.options['single_series_line_styles']
+                    c_index = 0
+                    # if not enough line styles (dash options) specified, use the last option
+                    if case_index < len(dash_option_dict):
+                        c_index = case_index
+                    else:
+                        c_index = len(dash_option_dict)-1
+                    dash_option = dash_option_dict[c_index]
+                    line_dict.update({'dash': dash_option_dict[c_index]})
+                if('single_series_line_widths' in self.options):
+                    line_widths_dict = self.options['single_series_line_widths']
+                    c_index = 0
+                    # if not enough line widths specified, use the last option
+                    if case_index < len(line_widths_dict):
+                        c_index = case_index
+                    else:
+                        c_index = len(line_widths_dict)-1
+                    line_width = line_widths_dict[c_index]
+                    line_dict.update({'width': line_widths_dict[c_index]})
                 data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
                                        y=self.df_to_plot[mask][self.colname_y],
                                        name=case,
                                        line=line_dict))
-            caseIndex += 1
+            case_index += 1
         self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
