@@ -305,10 +305,6 @@ def read_dss_to_df(fpath, bparts_to_read=None,
             This data frame will contain all data contained within
             the entire DSS file given as input.
     """
-    if not os.path.exists(fpath):
-        raise FileNotFoundError('DSS file does not exist: ' + fpath)
-    else:
-        # don't execute this code if the file doesn't exist, because it will create a new DSS file.
     pyhecdss.set_message_level(2)
     dssfile = pyhecdss.DSSFile(fpath)  # create DSSFile object
     paths = dssfile.get_pathnames()  # fetch all internal paths

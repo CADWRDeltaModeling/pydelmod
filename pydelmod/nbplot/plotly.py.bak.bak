@@ -140,7 +140,6 @@ class PlotStepBase(PlotNotebookBase):
                                 height=self.height,
                                 margin=self.margin
                                 )
-        case_index = 0
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             if self.multiple_series_per_study:
@@ -150,14 +149,18 @@ class PlotStepBase(PlotNotebookBase):
                     line_mode = 'lines'
                     line_or_marker_width = 1
                     if self.options.get('multi_series_line_or_marker_widths') is not None and self.options.get('multi_series_line_modes') is not None:
-                        line_mode = self.options.get('multi_series_line_modes')[colname_index]
-                        line_or_marker_width = self.options.get('multi_series_line_or_marker_widths')[colname_index]
+                        line_mode = self.options.get('multi_series_line_modes')[
+                            colname_index]
+                        line_or_marker_width = self.options.get(
+                            'multi_series_line_or_marker_widths')[colname_index]
                     marker_dict = None
                     line_dict = None
                     if line_mode is 'lines':
-                        line_dict=dict(shape='hv', width=line_or_marker_width)
+                        line_dict = dict(
+                            shape='hv', width=line_or_marker_width)
                     else:
-                        marker_dict = dict(symbol='circle', size=line_or_marker_width)
+                        marker_dict = dict(
+                            symbol='circle', size=line_or_marker_width)
                     data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
                                            y=self.df_to_plot[mask][cy],
                                            name=case,
@@ -169,30 +172,12 @@ class PlotStepBase(PlotNotebookBase):
                 # otherwise, default to single series, with name determined by colname_y, which defaults to 'value'
                 line_dict={'shape': 'hv'}
                 if('single_series_line_styles' in self.options):
-                    dash_option_dict = self.options['single_series_line_styles']
-                    c_index = 0
-                    # if not enough line styles (dash options) specified, use the last option
-                    if case_index < len(dash_option_dict):
-                        c_index = case_index
-                    else:
-                        c_index = len(dash_option_dict)-1
-                    dash_option = dash_option_dict[c_index]
-                    line_dict.update({'dash': dash_option_dict[c_index]})
-                if('single_series_line_widths' in self.options):
-                    line_widths_dict = self.options['single_series_line_widths']
-                    c_index = 0
-                    # if not enough line widths specified, use the last option
-                    if case_index < len(line_widths_dict):
-                        c_index = case_index
-                    else:
-                        c_index = len(line_widths_dict)-1
-                    line_width = line_widths_dict[c_index]
-                    line_dict.update({'width': line_widths_dict[c_index]})
+                    line_dict.update({'dash': self.options['single_series_line_styles'][caseIndex]})
                 data.append(go.Scatter(x=self.df_to_plot[mask]['time'],
                                        y=self.df_to_plot[mask][self.colname_y],
                                        name=case,
                                        line=line_dict))
-            case_index += 1
+            caseIndex += 1
         self.fig = go.FigureWidget(data=data, layout=self.layout)
 
     def make_all_true_mask(self):
