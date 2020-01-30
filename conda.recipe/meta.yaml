@@ -29,9 +29,11 @@ requirements:
     - pyhecdss >=0.2.5
     - qgrid >=1.1
 
-  test:
-    imports:
-      - pydelmod
+test:
+  imports:
+    - pydelmod
+  requires:
+    - pytest
 
 about:
   home:           "https://github.com/CADWRDeltaModeling/pydelmod"
