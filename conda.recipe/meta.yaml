@@ -21,7 +21,6 @@ requirements:
   build:
     - python
     - setuptools
-    - click >=6.0
 
   run:
     - python
@@ -29,7 +28,6 @@ requirements:
     - plotly >=3.0
     - pyhecdss >=0.2.5
     - qgrid >=1.1
-    - click >=6.0
 
   test:
     imports:
