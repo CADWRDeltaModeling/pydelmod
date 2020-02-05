@@ -10,7 +10,9 @@ Python package to work with Delta Modeling tasks
 
 Installation
 ------------
-## If this is the first time to use this tool
+If this is the first time to use this tool
+******************************************
+
 1. Install Anaconda Python on your system if you do not have one already.
 2. (This step is tested on Windows only for now.) Create a virtual environment with 'environment_windows.yaml' file in this repository by running `conda env create -f environment_windows.yaml` in your (Anaconda) command line. This should create a virtual environment named `pydelmod` with necessary packages.
 
