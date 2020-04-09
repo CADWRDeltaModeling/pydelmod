@@ -27,7 +27,7 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['Click>=7.0', 'plotly >=3.0,<4.0']
+requirements = ['pyhecdss >=0.2.5', 'plotly >=3.0,<4.0']
 
 setup_requirements = ['pytest-runner', ]
 
@@ -36,7 +36,7 @@ test_requirements = ['pytest>=3', ]
 setup(
     author="Kijin Nam",
     author_email='knam@water.ca.gov',
-    python_requires='>=3.6',
+    python_requires='>=3.7',
     classifiers=[
         'Development Status :: 2 - Pre-Alpha',
         'Intended Audience :: Developers',

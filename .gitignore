@@ -1,3 +1,7 @@
+# Temporary files
+*~
+*.swp
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -109,3 +113,4 @@ ENV/
 *.dsc
 *.dsd
 *.dsk
+*.png
