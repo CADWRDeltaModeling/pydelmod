@@ -6,3 +6,7 @@ call conda install -y -n pydelmod -c defaults scipy jupyter matplotlib shapely x
 call conda install -y -n pydelmod -c defaults -c cadwr-dms pyhecdss vtools3 pydsm
 call conda install -y -n pydelmod -c defaults -c plotly plotly=3.*
 call conda install -y -n pydelmod -c defaults -c conda-forge jupyter_contrib_nbextensions
+call conda install -y -n pydelmod -c defaults networkx matplotlib hvplot
+call conda install -y -n pydelmod -c defaults -c conda-forge ipywidgets ipyleaflet ipysheet
+# versioneer install
+call conda install -y -n pydelmod -c defaults - conda-forge versioneer
