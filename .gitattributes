@@ -1,1 +1,4 @@
 pydelmod/_version.py export-subst
+
+*.ipynb filter=nbstripout
+*.ipynb diff=ipynb
