@@ -549,13 +549,37 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
                     mask = ((self.df[self.colname_case] == case) & 
                             (self.df[self.colname_variable] == variable) &
                             (self.df[self.colname_station_id] == station_id))
-                    df = self.df[mask].set_index('time').rolling('14d')[
-                        'value'].mean().reset_index()
+                    # processed data based on stations/criteria
+                    if (self.df_reg['scenario_name'].unique() in ['D1641 AG WI','D1641 FWS SJR']):
+                        df = self.df[mask].set_index('time').rolling('14d')[
+                             'value'].mean().reset_index()
+                        df[self.colname_variable] = variable + '-14DAY'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 AG South'):
+                        df = self.df[mask].set_index('time').rolling('30d')[
+                             'value'].mean().reset_index()
+                        df[self.colname_variable] = variable + '-30DAY'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 AG Export'):
+                        df = self.df[mask].set_index('time').resample('1m')[
+                             'value'].mean().reset_index()
+                        df[self.colname_variable] =  variable + '-MAVG'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 FWS Suisun'):
+                        # print("D1641_FWS")
+                        # print(station_id)
+                        df = self.df[mask].set_index('time').resample('1m')[
+                             'value'].mean().reset_index()
+                        df[self.colname_variable] = variable + '-MAVG'
+                    elif (self.df_reg['scenario_name'].unique() in ['D1641 MI 250','D1641 MI 150']):
+                        df = self.df[mask].set_index('time').reset_index()
+                        df[self.colname_variable] = variable
+                    else: 
+                        print("not stations in D1641_AG or FWS or MI:",station_id)
+
+                    
                     df.rename(columns={'index': 'time'}, inplace=True)
                     df[self.colname_station_id] = station_id
-                    df[self.colname_variable] = variable + '-14DAY'
                     df[self.colname_case] = case
                     dfs.append(df)
+
         self.df = pd.concat(dfs)
         self.df = pd.concat([self.df, self.df_reg], sort=False)
         self.cases_to_plot = self.df[self.colname_case].unique()
@@ -663,17 +687,57 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                     mask = ((self.df[self.colname_case] == case) & 
                         (self.df[self.colname_variable] == variable) &
                         (self.df[self.colname_station_id] == station_id))
-                    ds_14d = self.df[mask].set_index('time').rolling('14d')[
-                        'value'].mean()
                     mask_reg = (
                         self.df_reg[self.colname_station_id] == station_id)
                     ds_reg = self.df_reg[mask_reg][self.df_reg[mask_reg]
                                                    ['value'] > 0.].set_index('time')['value']
-                    ds_diff = ds_14d.loc[ds_reg.index] - ds_reg
-                    df = ds_diff.to_frame().reset_index()
+                    
+                    # diff processed data based on stations/criteria
+                    if (self.df_reg['scenario_name'].unique() in ['D1641 AG WI','D1641 FWS SJR']):
+                        ds = self.df[mask].set_index('time').rolling('14d')[
+                             'value'].mean()
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-14DAY-DIFF'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 AG South'):
+                        ds = self.df[mask].set_index('time').rolling('30d')[
+                             'value'].mean()
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-30DAY-DIFF'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 AG Export'):
+                        ds = self.df[mask].set_index('time').resample('1m')[
+                             'value'].mean()
+                        ds = ds.reindex(pd.date_range(start=ds.index[0].replace(day=1), end=ds.index[-1],
+                             freq='D')).bfill()
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-MAVG-DIFF'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 FWS Suisun'):
+                        ds = self.df[mask].set_index('time').resample('1m')[
+                             'value'].mean()
+                        ds = ds.reindex(pd.date_range(start=ds.index[0].replace(day=1), end=ds.index[-1],
+                             freq='D')).bfill()
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-MAVG-DIFF'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 250'):
+                        ds = self.df[mask].set_index('time')['value']
+                        ds = ds.reindex(pd.date_range(start=ds.index[0].replace(day=1), end=ds.index[-1],
+                             freq='D')).bfill()
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-DIFF'
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'):#D1641_MI 150
+                        ds = self.df[mask].set_index('time')['value']
+                        ds_diff = ds.reindex(ds_reg.index) - ds_reg
+                        df = ds_diff.to_frame().reset_index()
+                        df[self.colname_variable] = variable + '-DIFF'
+                    else: 
+                        print("not stations in D1641_AG or FWS or MI:",station_id)
+
                     df.rename(columns={'index': 'time'})
                     df[self.colname_station_id] = station_id
-                    df[self.colname_variable] = variable + '-14DAY-DIFF'
                     df[self.colname_case] = case
                     dfs.append(df)
         self.df = pd.concat(dfs)
@@ -699,10 +763,16 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                 xaxis=dict(title=xaxis_name),
                                 height=self.height,
                                 margin=self.margin)
-        results = {'Scenario': [],
-                   '# of Days Standards are Applicable': [],
-                   '# of Days Exceeded': [],
-                   r'% of Days Exceeded': []}
+        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # MI CCC 150
+            results = {'Scenario': [],
+                    '# of Years Standards are Applicable': [],
+                    '# of Years Exceeded': [],
+                    r'% of Years Exceeded': []}
+        else:
+            results = {'Scenario': [],
+                    '# of Days Standards are Applicable': [],
+                    '# of Days Exceeded': [],
+                    r'% of Days Exceeded': []}
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             yval = self.df_to_plot[mask][self.colname_y].sort_values(
@@ -714,11 +784,20 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                    y=yval.values,
                                    name=case))
             results['Scenario'].append(case)
-            results['# of Days Standards are Applicable'].append(n)
-            n_exceeded = yval[yval > 0.].count()
-            results['# of Days Exceeded'].append(n_exceeded)
-            results[r'% of Days Exceeded'].append(
-                f'{n_exceeded / n * 100.:.2f}')
+            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # MI CCC 150 Chloride, count under standard
+                results['# of Years Standards are Applicable'].append(n)
+                n_exceeded = yval[yval < 0.].count()
+                results['# of Years Exceeded'].append(n_exceeded)
+                results[r'% of Years Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
+            else: # most cases, count over standard
+                results['# of Days Standards are Applicable'].append(n)
+                n_exceeded = yval[yval > 0.].count()
+                results['# of Days Exceeded'].append(n_exceeded)
+                # print(n_exceeded) #todel
+                # print(n)#todel
+                results[r'% of Days Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
         self.fig = go.FigureWidget(data=data, layout=self.layout)
         self.df_results = pd.DataFrame(data=results)
         self.results = go.FigureWidget(data=[go.Table(
