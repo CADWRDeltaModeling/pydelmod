@@ -134,7 +134,7 @@ class PlotStepBase(PlotNotebookBase):
                                       'EC (micromhos/cm)')
         # adjusted layout to include margins that are more appropriate for exporting.
         self.layout = go.Layout(template='seaborn',
-                                title=title,
+                                title=dict(text=title),
                                 yaxis=dict(title=yaxis_name),
                                 height=self.height,
                                 margin=self.margin
@@ -244,7 +244,7 @@ class PlotMonthlyBarBase(PlotNotebookBase):
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
         self.layout = go.Layout(template='seaborn',
-                                title=title,
+                                title=dict(text=title),
                                 yaxis=dict(title=yaxis_name),
                                 height=self.height,
                                 margin=self.margin)
@@ -355,6 +355,7 @@ class PlotBoxBase(PlotNotebookBase):
         self.df_to_plot = self.df[self.mask]
 
     def update(self):
+        self.fig.layout.title.text = self.generate_title()
         for i, trace in enumerate(self.fig.data):
             case = self.cases[i]
             mask = self.df_to_plot[self.colname_case] == case
@@ -436,7 +437,8 @@ class PlotExceedanceBase(PlotNotebookBase):
 class PlotStepWithControls(ExportPlotForStationsMixin,
                            SaveDataMixin, ShowDataMixin,
                            FilterStationMixin,
-                           FilterVariableMixin, PlotStepBase):
+                           FilterVariableMixin,
+                           PlotStepBase):
     def __init__(self, *args, **kwargs):
         """
         """
@@ -450,8 +452,6 @@ class PlotStepWithControls(ExportPlotForStationsMixin,
         self.widgets = ipw.VBox((self.fig,
                                  ipw.HBox((self.dd_variable,
                                            self.dd_station)),
-
-
                                  ipw.HBox((self.tb_showdata,
                                            self.tb_savedata)),
                                  self.box_exportplots,
@@ -464,7 +464,8 @@ class PlotBoxWithControls(ExportPlotForStationsMixin,
                           FilterMonthMixin,
                           FilterWateryearTypeMixin,
                           FilterStationMixin,
-                          FilterVariableMixin, PlotBoxBase):
+                          FilterVariableMixin,
+                          PlotBoxBase):
     def __init__(self, *args, **kwargs):
         """
         """
@@ -478,10 +479,10 @@ class PlotBoxWithControls(ExportPlotForStationsMixin,
         self.widgets = ipw.VBox((self.fig,
                                  ipw.HBox((self.dd_variable,
                                            self.dd_station)),
-                                 ipw.HBox((self.tb_showdata,
-                                           self.tb_savedata)),
                                  self.box_yeartypes,
                                  self.box_months,
+                                 ipw.HBox((self.tb_showdata,
+                                           self.tb_savedata)),
                                  self.box_exportplots,
                                  self.lb_msg))
         return self.widgets
@@ -492,7 +493,8 @@ class PlotExceedanceWithControls(ExportPlotForStationsMixin,
                                  FilterMonthMixin,
                                  FilterWateryearTypeMixin,
                                  FilterStationMixin,
-                                 FilterVariableMixin, PlotExceedanceBase):
+                                 FilterVariableMixin,
+                                 PlotExceedanceBase):
 
     def __init__(self, *args, **kwargs):
         """
@@ -507,10 +509,10 @@ class PlotExceedanceWithControls(ExportPlotForStationsMixin,
         self.widgets = ipw.VBox((self.fig,
                                  ipw.HBox((self.dd_variable,
                                            self.dd_station)),
-                                 ipw.HBox((self.tb_showdata,
-                                           self.tb_savedata)),
                                  self.box_yeartypes,
                                  self.box_months,
+                                 ipw.HBox((self.tb_showdata,
+                                           self.tb_savedata)),
                                  self.box_exportplots,
                                  self.lb_msg))
         return self.widgets
@@ -544,9 +546,9 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
         for case in cases:
             for variable in self.df[self.colname_variable].unique():
                 for station_id in self.df_stations['ID'].unique():
-                    mask = ((self.df[self.colname_case] == case) & (
-                        self.df[self.colname_variable] == variable) &
-                        (self.df[self.colname_station_id] == station_id))
+                    mask = ((self.df[self.colname_case] == case) & 
+                            (self.df[self.colname_variable] == variable) &
+                            (self.df[self.colname_station_id] == station_id))
                     df = self.df[mask].set_index('time').rolling('14d')[
                         'value'].mean().reset_index()
                     df.rename(columns={'index': 'time'}, inplace=True)
@@ -658,8 +660,8 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         for case in cases:
             for variable in self.df[self.colname_variable].unique():
                 for station_id in self.df_stations['ID'].unique():
-                    mask = ((self.df[self.colname_case] == case) & (
-                        self.df[self.colname_variable] == variable) &
+                    mask = ((self.df[self.colname_case] == case) & 
+                        (self.df[self.colname_variable] == variable) &
                         (self.df[self.colname_station_id] == station_id))
                     ds_14d = self.df[mask].set_index('time').rolling('14d')[
                         'value'].mean()
@@ -699,8 +701,8 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                 margin=self.margin)
         results = {'Scenario': [],
                    '# of Days Standards are Applicable': [],
-                   '# of Days Violated': [],
-                   r'% of Days Violated': []}
+                   '# of Days Exceeded': [],
+                   r'% of Days Exceeded': []}
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             yval = self.df_to_plot[mask][self.colname_y].sort_values(
@@ -713,10 +715,10 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                    name=case))
             results['Scenario'].append(case)
             results['# of Days Standards are Applicable'].append(n)
-            n_violated = yval[yval > 0.].count()
-            results['# of Days Violated'].append(n_violated)
-            results[r'% of Days Violated'].append(
-                f'{n_violated / n * 100.:.2f}')
+            n_exceeded = yval[yval > 0.].count()
+            results['# of Days Exceeded'].append(n_exceeded)
+            results[r'% of Days Exceeded'].append(
+                f'{n_exceeded / n * 100.:.2f}')
         self.fig = go.FigureWidget(data=data, layout=self.layout)
         self.df_results = pd.DataFrame(data=results)
         self.results = go.FigureWidget(data=[go.Table(
@@ -740,8 +742,8 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         self.fig.layout.title.text = self.generate_title()
         results = {'Scenario': [],
                    '# of Days Standards are Applicable': [],
-                   '# of Days Violated': [],
-                   r'% of Days Violated': []}
+                   '# of Days Exceeded': [],
+                   r'% of Days Exceeded': []}
         for i, trace in enumerate(self.fig.data):
             case = self.cases[i]
             mask = self.df_to_plot[self.colname_case] == case
@@ -751,10 +753,10 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
             xval = np.arange(1, n + 1) / n * 100.
             results['Scenario'].append(case)
             results['# of Days Standards are Applicable'].append(n)
-            n_violated = yval[yval > 0.].count()
-            results['# of Days Violated'].append(n_violated)
-            results[r'% of Days Violated'].append(
-                f'{n_violated / n * 100.:.2f}')
+            n_exceeded = yval[yval > 0.].count()
+            results['# of Days Exceeded'].append(n_exceeded)
+            results[r'% of Days Exceeded'].append(
+                f'{n_exceeded / n * 100.:.2f}')
             trace.x = xval
             trace.y = yval
         self.df_results = pd.DataFrame(data=results)
