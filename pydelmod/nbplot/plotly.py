@@ -728,7 +728,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                         ds_diff = ds.reindex(ds_reg.index) - ds_reg
                         df = ds_diff.to_frame().reset_index()
                         df[self.colname_variable] = variable + '-DIFF'
-                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'):#D1641_MI 150
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'):
                         ds = self.df[mask].set_index('time')['value']
                         ds_diff = ds.reindex(ds_reg.index) - ds_reg
                         df = ds_diff.to_frame().reset_index()
@@ -739,6 +739,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                     df.rename(columns={'index': 'time'})
                     df[self.colname_station_id] = station_id
                     df[self.colname_case] = case
+                    df = df.merge(self.df[mask][["time", "sac_yrtype"]], on="time", how="left")
                     dfs.append(df)
         self.df = pd.concat(dfs)
         self.cases = self.df[self.colname_case].unique()
@@ -763,16 +764,16 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                 xaxis=dict(title=xaxis_name),
                                 height=self.height,
                                 margin=self.margin)
-        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # MI CCC 150
+        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride
             results = {'Scenario': [],
-                    '# of Years Standards are Applicable': [],
-                    '# of Years Exceeded': [],
-                    r'% of Years Exceeded': []}
+                       '# of Years Standards are Applicable': [],
+                       '# of Years Exceeded': [],
+                       r'% of Years Exceeded': []}
         else:
             results = {'Scenario': [],
-                    '# of Days Standards are Applicable': [],
-                    '# of Days Exceeded': [],
-                    r'% of Days Exceeded': []}
+                       '# of Days Standards are Applicable': [],
+                       '# of Days Exceeded': [],
+                       r'% of Days Exceeded': []}
         for case in self.cases:
             mask = (self.df_to_plot[self.colname_case] == case)
             yval = self.df_to_plot[mask][self.colname_y].sort_values(
@@ -784,7 +785,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                    y=yval.values,
                                    name=case))
             results['Scenario'].append(case)
-            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # MI CCC 150 Chloride, count under standard
+            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC 150 Chloride, count under standard
                 results['# of Years Standards are Applicable'].append(n)
                 n_exceeded = yval[yval < 0.].count()
                 results['# of Years Exceeded'].append(n_exceeded)
@@ -819,10 +820,16 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
 
     def update(self):
         self.fig.layout.title.text = self.generate_title()
-        results = {'Scenario': [],
-                   '# of Days Standards are Applicable': [],
-                   '# of Days Exceeded': [],
-                   r'% of Days Exceeded': []}
+        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride, count under standard
+            results = {'Scenario': [],
+                       '# of Years Standards are Applicable': [],
+                       '# of Years Exceeded': [],
+                       r'% of Years Exceeded': []}
+        else:
+            results = {'Scenario': [],
+                       '# of Days Standards are Applicable': [],
+                       '# of Days Exceeded': [],
+                       r'% of Days Exceeded': []}
         for i, trace in enumerate(self.fig.data):
             case = self.cases[i]
             mask = self.df_to_plot[self.colname_case] == case
@@ -831,11 +838,18 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
             n = yval.count()
             xval = np.arange(1, n + 1) / n * 100.
             results['Scenario'].append(case)
-            results['# of Days Standards are Applicable'].append(n)
-            n_exceeded = yval[yval > 0.].count()
-            results['# of Days Exceeded'].append(n_exceeded)
-            results[r'% of Days Exceeded'].append(
-                f'{n_exceeded / n * 100.:.2f}')
+            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride, count under standard
+                results['# of Years Standards are Applicable'].append(n)
+                n_exceeded = yval[yval < 0.].count()
+                results['# of Years Exceeded'].append(n_exceeded)
+                results[r'% of Years Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
+            else: # most cases, count over standard
+                results['# of Days Standards are Applicable'].append(n)
+                n_exceeded = yval[yval > 0.].count()
+                results['# of Days Exceeded'].append(n_exceeded)
+                results[r'% of Days Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
             trace.x = xval
             trace.y = yval
         self.df_results = pd.DataFrame(data=results)
@@ -845,6 +859,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
 
 class PlotExceedanceWithRegulation(ExportPlotForStationsMixin,
                                    SaveDataMixin, ShowDataMixin,
+                                   FilterWateryearTypeMixin,
                                    FilterStationMixin,
                                    PlotExceedanceWithRegulationBase):
     def __init__(self, *args, **kwargs):
@@ -860,6 +875,7 @@ class PlotExceedanceWithRegulation(ExportPlotForStationsMixin,
         self.widgets = ipw.VBox((self.fig,
                                  self.results,
                                  ipw.HBox((self.dd_station,)),
+                                 self.box_yeartypes,
                                  ipw.HBox((self.tb_showdata,
                                            self.tb_savedata)),
                                  self.box_exportplots,
