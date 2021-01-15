@@ -47,7 +47,7 @@ def scatterplot(dflist, names, index_x=0):
     dfa = pd.concat(dflist, axis=1)
     dfa.columns = names
     dfa = dfa.resample('D').mean()
-    return dfa.hvplot.scatter(x=dfa.columns[index_x])
+    return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols='all')
 
 
 def calculate_metrics(dflist, names, index_x=0):
@@ -162,6 +162,9 @@ def kdeplot(dflist, names, xlabel):
 
 
 # - Customized functions for calibration / validation templates
+# Needed because of name with . https://github.com/holoviz/holoviews/issues/4714
+def sanitize_name(name):
+    return name.replace('.', ' ')
 
 
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False):
@@ -176,7 +179,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     Returns:
         panel: A template ready for rendering by display or save
-    """    
+    """
     pp = [postpro.PostProcessor(study, location, vartype) for study in studies]
     for p in pp:
         p.load_processed(timewindow=timewindow)
@@ -185,11 +188,14 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         ylabel=f'{vartype.name} @ {location.name}', show_grid=True, gridstyle=gridstyle)
     gtsp = tsplot([p.gdf for p in pp], [p.study.name for p in pp]).opts(
         ylabel=f'{vartype.name} @ {location.name}', show_grid=True, gridstyle=gridstyle)
-    splot = scatterplot([p.gdf for p in pp], [p.study.name for p in pp])\
+    splot = scatterplot([p.gdf.resample('D').mean() for p in pp], [p.study.name for p in pp])\
         .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
         .opts(ylabel='Model', legend_position="top_left")\
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
+
     dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+    dfmetrics_monthly = calculate_metrics(
+        [p.gdf.resample('M').mean() for p in pp], [p.study.name for p in pp])
 
     slope_plots = regression_line_plots(dfmetrics)
     cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
@@ -197,16 +203,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
 
     dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
+    dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
     dfdisplayed_metrics.index.name = 'DSM2 Run'
-    dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error', 'RMSE']
+    dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Monthly Mean Error','Monthly RMSE']
     metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics)
 
-    for p in pp[1:]:
+    for p in pp[1:]:  # TODO: move this out of here. Nothing to do with plotting!
         p.process_diff(pp[0])
-
-    # Needed because of name with . https://github.com/holoviz/holoviews/issues/4714
-    def sanitize_name(name):
-        return name.replace('.', ' ')
 
     amp_diff_kde = kdeplot([p.amp_diff for p in pp[1:]], [
         p.study.name for p in pp[1:]], 'Amplitude Diff')
