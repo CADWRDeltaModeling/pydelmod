@@ -14,7 +14,7 @@ from pydsm import postpro
 ## - Generic Plotting Functions ##
 
 
-def tsplot(dflist, names):
+def tsplot(dflist, names, timewindow=None):
     """Time series overlay plots
 
     Handles missing DataFrame, just put None in the list
@@ -22,11 +22,24 @@ def tsplot(dflist, names):
     Args:
         dflist (List): Time-indexed DataFrame list
         names (List): Names list (same size as dflist)
+        timewindow (str, optional): time window for plot. Must be in format: 'YYYY-MM-DD:YYYY-MM-DD'
 
     Returns:
         Overlay: Overlay of Curve
     """
-    plt = [df.hvplot(label=name) if df is not None else hv.Curve(None, label=name)
+    start_dt = dflist[0].index.min()
+    end_dt = dflist[0].index.max()
+    if timewindow is not None:
+        try:
+            parts = timewindow.split(":")
+            start_dt = parts[0]
+            end_dt = parts[1]
+        except:
+            start_dt = dflist[0].index.min()
+            end_dt = dflist[0].index.max()
+            print('error in calibplot.tsplot, while parsing timewindow. Timewindow must be in format 2011-09-01:2011-09-30. Ignoring timewindow')
+
+    plt = [df[start_dt: end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
            for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
            if c.name != '' else c for c in plt]
@@ -75,7 +88,7 @@ def calculate_metrics(dflist, names, index_x=0):
         slopes.append(slope)
         interceps.append(intercep)
         sign = '-' if intercep <= 0 else '+'
-        equation = 'y = %.4fx %s %.4f' % (slope, sign, abs(intercep))
+        equation = 'y=%.2fx%s%.2f' % (slope, sign, abs(intercep))
         equations.append(equation)
         r2s.append(rval*rval)
         pvals.append(pval)
@@ -167,7 +180,8 @@ def sanitize_name(name):
     return name.replace('.', ' ')
 
 
-def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False):
+def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
+    inst_plot_timewindow=None):
     """Builds calibration plot template
 
     Args:
@@ -176,6 +190,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         vartype (VarType): name,units
         timewindow (str): timewindow as start_date_str "-" end_date_str or "" for full availability
         tidal_template (bool, optional): If True include tidal plots. Defaults to False.
+        flow_in_thousands (bool, optional): If True, template is for flow data, and 
+            1) y axis title will include the string '(1000 CFS)', and 
+            2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
+        units (str, optional): a string representing the units of the data. examples: CFS, FEET, UMHOS/CM. 
+            Included in axis titles if specified.
+        inst_plot_timewindow (str, optional): Defines a separate timewindow to use for the instantaneous plot. 
+            Must be in format 'YYYY-MM-DD:YYYY-MM-DD'
 
     Returns:
         panel: A template ready for rendering by display or save
@@ -184,33 +205,95 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     for p in pp:
         p.load_processed(timewindow=timewindow)
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
-    tsp = tsplot([p.df for p in pp], [p.study.name for p in pp]).opts(
-        ylabel=f'{vartype.name} @ {location.name}', show_grid=True, gridstyle=gridstyle)
-    gtsp = tsplot([p.gdf for p in pp], [p.study.name for p in pp]).opts(
-        ylabel=f'{vartype.name} @ {location.name}', show_grid=True, gridstyle=gridstyle)
-    splot = scatterplot([p.gdf.resample('D').mean() for p in pp], [p.study.name for p in pp])\
+
+    # create axis titles with units (if specified), and modify titles and data if displaying flow data in 1000 CFS
+    unit_string = ''
+    if flow_in_thousands and units is not None: 
+        unit_string = '(1000 %s)' % units
+    elif units is not None:
+        unit_string = '(%s)' % units
+    y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
+    godin_y_axis_label = 'Godin '+y_axis_label
+    # plot_data are scaled, if flow_in_thousands == True
+    tsp_plot_data = [p.df for p in pp]
+    gtsp_plot_data = [p.gdf for p in pp]
+    splot_plot_data = [p.gdf.resample('D').mean() for p in pp]
+    splot_metrics_data = [p.gdf.resample('D').mean() for p in pp]
+    if flow_in_thousands: 
+        tsp_plot_data = [p.df/1000.0 for p in pp]
+        gtsp_plot_data = [p.gdf/1000.0 for p in pp]
+        splot_plot_data = [p.gdf.resample('D').mean()/1000.0 for p in pp]
+
+    # create plots: instantaneous, godin, and scatter 
+    tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow).opts(
+        ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle)
+    gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
+        ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
+    splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
         .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
         .opts(ylabel='Model', legend_position="top_left")\
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
 
-    dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+    # calculate calibration metrics
+    slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
+
+    # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+    dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
     dfmetrics_monthly = calculate_metrics(
         [p.gdf.resample('M').mean() for p in pp], [p.study.name for p in pp])
 
-    slope_plots = regression_line_plots(dfmetrics)
+    # add regression lines to scatter plot, and set x and y axis titles
+    slope_plots = regression_line_plots(slope_plots_dfmetrics)
     cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
-    cplot = cplot.opts(xlabel='Observed', ylabel='Model', legend_position="top_left")\
+    cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
 
-    dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
-    dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
-    dfdisplayed_metrics.index.name = 'DSM2 Run'
-    dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Monthly Mean Error','Monthly RMSE']
-    metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics)
-
+    # calculate amp diff, amp % diff, and phase diff
+    amp_avg_pct_errors = []
+    amp_avg_phase_errors = []
     for p in pp[1:]:  # TODO: move this out of here. Nothing to do with plotting!
         p.process_diff(pp[0])
+        amp_avg_pct_errors.append(float(p.amp_diff_pct.mean(axis=0)))
+        amp_avg_phase_errors.append(float(p.phase_diff.mean(axis=0)))
 
+    # display calibration metrics
+    if tidal_template:
+        dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
+        dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
+        dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
+        dfdisplayed_metrics = dfdisplayed_metrics.round(2)
+        # not for hydro
+        # dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
+        dfdisplayed_metrics.index.name = 'DSM2 Run'
+        # dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Monthly Mean Error','Monthly RMSE']
+        dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Amp Avg pct Err','Avg Phase Err']
+        # doesn't work properly--replaces some values with blanks
+        # metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
+
+        a=dfdisplayed_metrics['Equation'].to_list()
+        b=dfdisplayed_metrics['R Squared'].to_list()
+        c=dfdisplayed_metrics['Mean Error'].to_list()
+        d=dfdisplayed_metrics['RMSE'].to_list()
+        e=dfdisplayed_metrics['Amp Avg pct Err'].to_list()
+        f=dfdisplayed_metrics['Avg Phase Err'].to_list()
+        metrics_panel = hv.Table((a,b,c,d,e,f), ['Equation', 'R Squared', 'Mean Error','RMSE','Amp Avg pct Err','Avg Phase Err']).opts(width=580)
+        
+    else:
+        dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
+        dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
+        dfdisplayed_metrics = dfdisplayed_metrics.round(2)
+        dfdisplayed_metrics.index.name = 'DSM2 Run'
+        dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Mnly Mean Err','Mnly RMSE']
+        # doesn't work properly--replaces some values with blanks
+        # metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
+        a=dfdisplayed_metrics['Equation'].to_list()
+        b=dfdisplayed_metrics['R Squared'].to_list()
+        c=dfdisplayed_metrics['Mean Error'].to_list()
+        d=dfdisplayed_metrics['RMSE'].to_list()
+        e=dfdisplayed_metrics['Mnly Mean Err'].to_list()
+        f=dfdisplayed_metrics['Mnly RMSE'].to_list()
+        metrics_panel = hv.Table((a,b,c,d,e,f), ['Equation', 'R Squared', 'Mean Error','RMSE','Mnly Mean Err','Mnly RMSE']).opts(width=580)
+    # create kernel density estimate plots
     amp_diff_kde = kdeplot([p.amp_diff for p in pp[1:]], [
         p.study.name for p in pp[1:]], 'Amplitude Diff')
     amp_diff_kde = amp_diff_kde.opts(opts.Distribution(
@@ -226,15 +309,24 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     phase_diff_kde = phase_diff_kde.opts(opts.Distribution(
         line_color=shift_cycle(hv.Cycle('Category10')), filled=True))
 
-    kdeplots = amp_diff_kde.opts(
-        show_legend=False)+amp_pdiff_kde.opts(show_legend=False)+phase_diff_kde.opts(show_legend=False)
-    kdeplots = kdeplots.cols(3).opts(shared_axes=False).opts(
+
+    # create panel containing 3 kernel density estimate plots. We currently only want the last two, so commenting this out for now.
+    # amp diff, amp % diff, phase diff
+    # kdeplots = amp_diff_kde.opts(
+    #     show_legend=False)+amp_pdiff_kde.opts(show_legend=False)+phase_diff_kde.opts(show_legend=False)
+    # kdeplots = kdeplots.cols(3).opts(shared_axes=False).opts(
+    #     opts.Distribution(height=200, width=300))
+    # don't use 
+
+    # create panel containing amp % diff and phase diff kernel density estimate plots. Excluding amp diff plot
+    kdeplots = amp_pdiff_kde.opts(show_legend=False)+phase_diff_kde.opts(show_legend=False)
+    kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
         opts.Distribution(height=200, width=300))
 
+    # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
 
-    tsplots2 = (tsp.opts(width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
-
+    tsplots2 = (tsp.opts(axiswise=True,width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
     if tidal_template:
         return pn.Column(
             header_panel,
