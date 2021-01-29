@@ -11,8 +11,27 @@ from bokeh.themes import built_in_themes
 #
 from pydsm.functions import tsmath
 from pydsm import postpro
+import datetime
 ## - Generic Plotting Functions ##
 
+
+def parse_time_window(timewindow):
+    """
+    Args:
+        timewindow (str, optional): time window for plot. Must be in format: 'YYYY-MM-DD:YYYY-MM-DD'
+    
+    Returns:
+        list:str containing starting and ending times
+    """    
+    return_list = []
+    try:
+        parts = timewindow.split(":")
+        for p in parts:
+            date_parts = [int(i) for i in p.split('-')]
+            return_list.append(date_parts)
+    except:
+        print('error in calibplot.parse_time_window, while parsing timewindow. Timewindow must be in format 2011-09-01:2011-09-30. Ignoring timewindow')
+    return return_list
 
 def tsplot(dflist, names, timewindow=None):
     """Time series overlay plots
@@ -31,15 +50,12 @@ def tsplot(dflist, names, timewindow=None):
     end_dt = dflist[0].index.max()
     if timewindow is not None:
         try:
-            parts = timewindow.split(":")
+            parts = timewindow.split(':')
             start_dt = parts[0]
             end_dt = parts[1]
         except:
-            start_dt = dflist[0].index.min()
-            end_dt = dflist[0].index.max()
-            print('error in calibplot.tsplot, while parsing timewindow. Timewindow must be in format 2011-09-01:2011-09-30. Ignoring timewindow')
-
-    plt = [df[start_dt: end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
+            print("error in calibplot.tsplot")
+    plt = [df[start_dt:end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
            for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
            if c.name != '' else c for c in plt]
@@ -226,7 +242,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     # create plots: instantaneous, godin, and scatter 
     tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow).opts(
-        ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle)
+        ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
+    # zoom in to desired timewindow: works, but doesn't zoom y axis, so need to fix later
+    # if inst_plot_timewindow is not None:
+    #     start_end_times = parse_time_window(inst_plot_timewindow)
+    #     s = start_end_times[0]
+    #     e = start_end_times[1]
+    #     tsp.opts(xlim=(datetime.datetime(s[0], s[1], s[1]), datetime.datetime(e[0],e[1],e[2])))
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
     splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
@@ -257,59 +279,61 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         amp_avg_phase_errors.append(float(p.phase_diff.mean(axis=0)))
 
     # display calibration metrics
+    # create a list containing study names, excluding observed.
+    study_list = [study.name.replace('DSM2', '') for study in studies if study.name.lower()!='observed']
     if tidal_template:
         dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
         dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
         dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
-        dfdisplayed_metrics = dfdisplayed_metrics.round(2)
+
         # not for hydro
         # dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         # dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Monthly Mean Error','Monthly RMSE']
         dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Amp Avg pct Err','Avg Phase Err']
-        # doesn't work properly--replaces some values with blanks
-        # metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
-
+    
         a=dfdisplayed_metrics['Equation'].to_list()
-        b=dfdisplayed_metrics['R Squared'].to_list()
-        c=dfdisplayed_metrics['Mean Error'].to_list()
-        d=dfdisplayed_metrics['RMSE'].to_list()
-        e=dfdisplayed_metrics['Amp Avg pct Err'].to_list()
-        f=dfdisplayed_metrics['Avg Phase Err'].to_list()
-        metrics_panel = hv.Table((a,b,c,d,e,f), ['Equation', 'R Squared', 'Mean Error','RMSE','Amp Avg pct Err','Avg Phase Err']).opts(width=580)
-        
+        b=['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
+        c=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
+        d=['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
+        e=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg pct Err'].to_list()]
+        f=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
+        metrics_panel = hv.Table((study_list, a,b,c,d,e,f), ['Study','Equation', 'R Squared', 'Mean Error','RMSE','Amp Avg pct Err','Avg Phase Err']).opts(width=580)
     else:
         dfdisplayed_metrics = dfmetrics.loc[:, ['regression_equation', 'r2', 'mean_error', 'rmse']]
         dfdisplayed_metrics=pd.concat([dfdisplayed_metrics,dfmetrics_monthly.loc[:,['mean_error','rmse']]],axis=1)
-        dfdisplayed_metrics = dfdisplayed_metrics.round(2)
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns=['Equation','R Squared','Mean Error','RMSE','Mnly Mean Err','Mnly RMSE']
+        format_dict = {'Equation':'{:,.2f}','R Squared':'{:,.2f}','Mean Error':'{:,.2f}','RMSE':'{:,.2}',\
+            'Amp Avg pct Err':'{:,.2f}','Avg Phase Err':'{:,.2f}'}
+        dfdisplayed_metrics.style.format(format_dict)
         # doesn't work properly--replaces some values with blanks
         # metrics_panel = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
         a=dfdisplayed_metrics['Equation'].to_list()
-        b=dfdisplayed_metrics['R Squared'].to_list()
-        c=dfdisplayed_metrics['Mean Error'].to_list()
-        d=dfdisplayed_metrics['RMSE'].to_list()
-        e=dfdisplayed_metrics['Mnly Mean Err'].to_list()
-        f=dfdisplayed_metrics['Mnly RMSE'].to_list()
-        metrics_panel = hv.Table((a,b,c,d,e,f), ['Equation', 'R Squared', 'Mean Error','RMSE','Mnly Mean Err','Mnly RMSE']).opts(width=580)
+        b=['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
+        c=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
+        d=['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
+        e=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
+        f=['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
+        metrics_panel = hv.Table((study_list, a,b,c,d,e,f), ['Study','Equation', 'R Squared', 'Mean Error','RMSE','Mnly Mean Err','Mnly RMSE']).opts(width=580)
     # create kernel density estimate plots
-    amp_diff_kde = kdeplot([p.amp_diff for p in pp[1:]], [
-        p.study.name for p in pp[1:]], 'Amplitude Diff')
-    amp_diff_kde = amp_diff_kde.opts(opts.Distribution(
-        color=shift_cycle(hv.Cycle('Category10'))))
+    # We're currently not including the amplitude diff plot
+    # amp_diff_kde = kdeplot([p.amp_diff for p in pp[1:]], [
+    #     p.study.name for p in pp[1:]], 'Amplitude Diff')
+    # amp_diff_kde = amp_diff_kde.opts(opts.Distribution(
+    #     color=shift_cycle(hv.Cycle('Category10'))))
 
     amp_pdiff_kde = kdeplot([p.amp_diff_pct for p in pp[1:]], [
         p.study.name for p in pp[1:]], 'Amplitude Diff (%)')
     amp_pdiff_kde = amp_pdiff_kde.opts(opts.Distribution(
-        color=shift_cycle(hv.Cycle('Category10'))))
+        line_color=shift_cycle(hv.Cycle('Category10')), filled=False))
+    amp_pdiff_kde.opts(opts.Distribution(line_width=5))
 
     phase_diff_kde = kdeplot([p.phase_diff for p in pp[1:]], [
         p.study.name for p in pp[1:]], 'Phase Diff (minutes)')
     phase_diff_kde = phase_diff_kde.opts(opts.Distribution(
-        line_color=shift_cycle(hv.Cycle('Category10')), filled=True))
-
-
+        line_color=shift_cycle(hv.Cycle('Category10')), filled=False))
+    phase_diff_kde.opts(opts.Distribution(line_width=5))
     # create panel containing 3 kernel density estimate plots. We currently only want the last two, so commenting this out for now.
     # amp diff, amp % diff, phase diff
     # kdeplots = amp_diff_kde.opts(
@@ -319,21 +343,28 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # don't use 
 
     # create panel containing amp % diff and phase diff kernel density estimate plots. Excluding amp diff plot
-    kdeplots = amp_pdiff_kde.opts(show_legend=False)+phase_diff_kde.opts(show_legend=False)
+    kdeplots = amp_pdiff_kde.opts(show_legend=False, title='(e)')+phase_diff_kde.opts(show_legend=False, title='(f)')
     kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
         opts.Distribution(height=200, width=300))
 
     # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
+    # do this if you want to link the axes
+    # tsplots2 = (tsp.opts(width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
+        # start_dt = dflist[0].index.min()
+        # end_dt = dflist[0].index.max()
 
-    tsplots2 = (tsp.opts(axiswise=True,width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
     if tidal_template:
         return pn.Column(
             header_panel,
-            pn.Row(tsplots2),
-            pn.Row(cplot.opts(shared_axes=False, toolbar=None), metrics_panel), pn.Row(kdeplots.opts(toolbar=None)))
+            # tsp.opts(width=900, legend_position='right'), 
+            tsp.opts(width=900, toolbar=None, title='(a)'), 
+            gtsp.opts(width=900, toolbar=None, title='(b)'),
+            # pn.Row(tsplots2),
+            pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_panel.opts(title='(d)')), \
+                pn.Row(kdeplots.opts(toolbar=None)))
     else:
         return pn.Column(
             header_panel,
-            pn.Row(gtsp.opts(width=900, show_legend=True)),
-            pn.Row(cplot.opts(shared_axes=False), metrics_panel))
+            pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)')),
+            pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'), metrics_panel.opts(title='(c)')))
