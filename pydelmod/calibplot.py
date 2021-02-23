@@ -100,7 +100,7 @@ def calculate_metrics(dflist, names, index_x=0):
     dfr = dfa.drop(columns=dfa.columns[index_x])
     names.remove(names[index_x])
     slopes, interceps, equations, r2s, pvals, stds = [], [], [], [], [], []
-    mean_errors, mses, rmses, percent_biases, nses = [], [], [], [], []
+    mean_errors, mses, rmses, percent_biases, nses, rsrs = [], [], [], [], [], []
 
     for col in dfr.columns:
         y_series = dfr.loc[:, col]
@@ -118,11 +118,13 @@ def calculate_metrics(dflist, names, index_x=0):
         rmses.append(tsmath.rmse(y_series, x_series))
         percent_biases.append(tsmath.percent_bias(y_series, x_series))
         nses.append(tsmath.nash_sutcliffe(y_series, x_series))
+        rsrs.append(tsmath.rsr(y_series, x_series))
     dfmetrics = pd.concat([pd.DataFrame(arr)
-                           for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, mses, rmses, percent_biases, nses)], axis=1)
+                           for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, mses, rmses, percent_biases, \
+                               nses, rsrs)], axis=1)
     dfmetrics.columns = ['regression_slope', 'regression_intercep', 'regression_equation',
                          'r2', 'pval', 'std', 'mean_error',
-                         'mse', 'rmse', 'percent_bias', 'nash_sutcliffe']
+                         'mse', 'rmse', 'percent_bias', 'nash_sutcliffe', 'rsr']
     dfmetrics.index = names
     return dfmetrics
 
@@ -266,9 +268,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     # calculate calibration metrics
     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
-
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
     dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
+
     dfmetrics_monthly = calculate_metrics(
         [p.gdf.resample('M').mean() for p in pp], [p.study.name for p in pp])
 
@@ -296,37 +298,40 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     metrics_table = None
     if tidal_template:
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe']]
+            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
         dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
 
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns = ['Equation', 'R Squared',
-                                       'Mean Error', 'RMSE', 'NSE', 'Amp Avg %Err', 'Avg Phase Err']
+                                       'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
 
         a = dfdisplayed_metrics['Equation'].to_list()
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
         c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
         d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
-        d2 = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        e = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
-        f = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
+        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
+        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
         if layout_nash_sutcliffe:
-            metrics_table = hv.Table((study_list, a, b, c, d, d2, e, f), [
-                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
+            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
+                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', \
+                                        'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
         else:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, f), [
+            metrics_table = hv.Table((study_list, a, b, c, d, h, i), [
                                      'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
     else:
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe']]
+            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics = pd.concat(
             [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['mean_error', 'rmse']]], axis=1)
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns = ['Equation', 'R Squared',
-                                       'Mean Error', 'RMSE', 'NSE', 'Mnly Mean Err', 'Mnly RMSE']
+                                       'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
         format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'Mean Error': '{:,.2f}', 'RMSE': '{:,.2}',
-                       'Amp Avg %Err': '{:,.2f}', 'Avg Phase Err': '{:,.2f}', 'NSE': '{:,.2f}'}
+                       'Amp Avg %Err': '{:,.2f}', 'Avg Phase Err': '{:,.2f}', 'NSE': '{:,.2f}', 'PBIAS': '{:,.2f}', 'RSR': '{:,.2f}'}
         dfdisplayed_metrics.style.format(format_dict)
         # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
         # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
@@ -334,15 +339,19 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
         c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
         d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
-        d2 = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        e = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
-        f = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
+        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
+        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
         if layout_nash_sutcliffe:
-            metrics_table = hv.Table((study_list, a, b, c, d, d2, e, f), [
-                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
+            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
+                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', \
+                                        'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
         else:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, f), [
-                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
+            metrics_table = hv.Table((study_list, a, b, c, d, h, i), [
+                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'Mnly Mean Err', \
+                                        'Mnly RMSE']).opts(width=580, fontscale=.8)
     # create kernel density estimate plots
     # We're currently not including the amplitude diff plot
     # amp_diff_kde = kdeplot([p.amp_diff for p in pp[1:]], [
