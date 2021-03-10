@@ -1,0 +1,32 @@
+name: pydelmod
+channels:
+  - cadwr-dms
+  - defaults
+  - pyviz
+  - plotly
+  - conda-forge
+dependencies:
+  - python=3.7
+  # first our packages
+  - pyhecdss
+  - vtools3
+  - pydsm
+  - pydelmod
+  # then basics
+  - xarray
+  - netcdf4
+  - scipy
+  - gdal
+  - shapely
+  # then plot stuff
+  - matplotlib
+  - holoviews=1.13
+  - hvplot
+  - jupyter
+  - plotly=3
+  - networkx
+  - ipyleaflet
+  - ipywidgets
+  # finally misc 
+  - jupyter_contrib_nbextensions
+  - ipysheet
