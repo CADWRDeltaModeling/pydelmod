@@ -27,5 +27,6 @@ jobs:
         conda activate test_pydelmod
         conda config --set anaconda_upload yes
         conda build -c cadwr-dms -c defaults -c plotly --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN" conda.recipe
+        conda activate
         conda remove -n test_pydelmod --all
   
