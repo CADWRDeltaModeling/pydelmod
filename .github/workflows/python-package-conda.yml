@@ -23,12 +23,9 @@ jobs:
         ANACONDA_CHANNEL_UPLOAD_TOKEN: ${{ secrets.ANACONDA_CHANNEL_UPLOAD_TOKEN }}
       run: |
         conda create -n test_pydelmod -y conda-build conda-verify numpy anaconda-client
-        conda init bash
+        conda init bash && source ~/.bashrc
         conda activate test_pydelmod
         conda config --set anaconda_upload yes
         conda build -c cadwr-dms -c defaults -c plotly --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN" conda.recipe
         conda remove -n test_pydelmod --all
-    - name: Test with pytest
-      run: |
-        conda install pytest
-        pytest
+  
