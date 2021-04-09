@@ -1,8 +1,8 @@
 name: pydelmod
 channels:
   - cadwr-dms
-  - defaults
   - pyviz
+  - defaults
   - plotly
   - conda-forge
 dependencies:
@@ -20,7 +20,7 @@ dependencies:
   - shapely
   # then plot stuff
   - matplotlib
-  - holoviews=1.13
+  - holoviews
   - hvplot
   - jupyter
   - plotly=3
