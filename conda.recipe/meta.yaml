@@ -14,8 +14,9 @@ build:
   noarch: python
   script: python setup.py install --single-version-externally-managed --record=record.txt
   entry_points:
-    - pydelmod = pydelmod.cli:main
-  #skip:           true
+ {% for entry in data['entry_points']['console_scripts'] %}
+    - {{ entry.split('=')[0].strip() }} = {{ entry.split('=')[1].strip() }}
+  {% endfor %}  #skip:           true
 
 requirements:
   build:
@@ -24,15 +25,13 @@ requirements:
     - pytest-runner
 
   run:
-    - python >=3.5
-    - pandas >=1.1
-    - pyhecdss >=0.2.5
-    - pydsm >=0.2
-    - plotly >=4.0
-    - psutil >=5.4
-    - plotly-orca >=1.2
-    - netcdf4 >=1.4
-    - qgrid >=1.3
+    - python
+     # dependencies are defined in setup.py
+    {% for dep in data['install_requires'] %}
+    - {{ dep.lower() }}
+    {% endfor %}
+    {# raw is for ignoring templating with cookiecutter, leaving it for use with conda-build #}
+
 
 test:
   imports:
@@ -42,6 +41,6 @@ test:
 
 about:
   home:           "https://github.com/CADWRDeltaModeling/pydelmod"
-  license:        "MIT"
-  license_family: "MIT"
+  license: {{ data['license'] }}
+  license_file: LICENSE
   summary:        "python package for Delta Modeling"
