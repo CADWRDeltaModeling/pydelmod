@@ -12,6 +12,7 @@ from bokeh.themes import built_in_themes
 from pydsm.functions import tsmath
 from pydsm import postpro
 import datetime
+import sys
 ## - Generic Plotting Functions ##
 
 
@@ -30,7 +31,7 @@ def parse_time_window(timewindow):
             date_parts = [int(i) for i in p.split('-')]
             return_list.append(date_parts)
     except:
-        print('error in calibplot.parse_time_window, while parsing timewindow. Timewindow must be in format 2011-09-01:2011-09-30. Ignoring timewindow')
+        print('error in calibplot.parse_time_window, while parsing timewindow. Timewindow must be in format yyyy-mm-dd:yyyy-mm-dd or yyyy-mm-dd hhmm:yyyy-mm-dd hhmm. Ignoring timewindow)
     return return_list
 
 
@@ -47,6 +48,9 @@ def tsplot(dflist, names, timewindow=None):
     Returns:
         Overlay: Overlay of Curve
     """
+    start_dt = None
+    end_dt = None
+    if dflist[0] is not None:
     start_dt = dflist[0].index.min()
     end_dt = dflist[0].index.max()
     if timewindow is not None:
@@ -102,8 +106,11 @@ def calculate_metrics(dflist, names, index_x=0):
     slopes, interceps, equations, r2s, pvals, stds = [], [], [], [], [], []
     mean_errors, mses, rmses, percent_biases, nses, rsrs = [], [], [], [], [], []
 
+    metrics_calculated = False
+    if len(x_series) > 0:
     for col in dfr.columns:
         y_series = dfr.loc[:, col]
+            if len(y_series) > 0:
         slope, intercep, rval, pval, std = stats.linregress(x_series, y_series)
         slopes.append(slope)
         interceps.append(intercep)
@@ -119,6 +126,13 @@ def calculate_metrics(dflist, names, index_x=0):
         percent_biases.append(tsmath.percent_bias(y_series, x_series))
         nses.append(tsmath.nash_sutcliffe(y_series, x_series))
         rsrs.append(tsmath.rsr(y_series, x_series))
+                metrics_calculated = True
+            else:
+                print('calibplot.calculate_metrics: no y_series data found. Metrics can not be calculated.\n')
+    else:
+        print('calibplot.calculate_metrics: no x_series data found. Metrics can not be calculated.\n')
+    dfmetrics = None
+    if metrics_calculated:
     dfmetrics = pd.concat([pd.DataFrame(arr)
                            for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, mses, rmses, percent_biases, \
                                nses, rsrs)], axis=1)
@@ -228,8 +242,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         dataframe: equations and statistics for all locations
     """
     pp = [postpro.PostProcessor(study, location, vartype) for study in studies]
+    all_data_found = True
     for p in pp:
-        p.load_processed(timewindow=timewindow)
+        success = p.load_processed(timewindow=timewindow)
+        if not success: all_data_found = False
+    if not all_data_found:
+        print('Not creating plots because data not found for location, vartype, timewindow = ' + str(location) +','+ str(vartype)+','+str(timewindow)+'\n')
+        return None, None
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
 
     # create axis titles with units (if specified), and modify titles and data if displaying flow data in 1000 CFS
@@ -243,10 +262,16 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # plot_data are scaled, if flow_in_thousands == True
     tsp_plot_data = [p.df for p in pp]
     gtsp_plot_data = [p.gdf for p in pp]
+    
+    splot_plot_data = None
+    splot_metrics_data = None
+    if p.gdf is not None:
     splot_plot_data = [p.gdf.resample('D').mean() for p in pp]
     splot_metrics_data = [p.gdf.resample('D').mean() for p in pp]
     if flow_in_thousands:
+        if p.df is not None:
         tsp_plot_data = [p.df/1000.0 for p in pp]
+        if p.gdf is not None:
         gtsp_plot_data = [p.gdf/1000.0 for p in pp]
         splot_plot_data = [p.gdf.resample('D').mean()/1000.0 for p in pp]
 
@@ -261,20 +286,29 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     #     tsp.opts(xlim=(datetime.datetime(s[0], s[1], s[1]), datetime.datetime(e[0],e[1],e[2])))
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
+    splot = None
+    if splot_plot_data is not None and splot_plot_data[0] is not None:    
     splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
         .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
         .opts(ylabel='Model', legend_position="top_left")\
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
 
     # calculate calibration metrics
+    slope_plots_dfmetrics = None
+    if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+    dfmetrics = None
+    if splot_metrics_data is not None:
     dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
-
+    dfmetrics_monthly = None
+    if p.gdf is not None:
     dfmetrics_monthly = calculate_metrics(
         [p.gdf.resample('M').mean() for p in pp], [p.study.name for p in pp])
 
     # add regression lines to scatter plot, and set x and y axis titles
+    slope_plots = None
+    if slope_plots_dfmetrics is not None:
     slope_plots = regression_line_plots(slope_plots_dfmetrics)
     cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
     cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
