@@ -13,6 +13,7 @@ from pydsm.functions import tsmath
 from pydsm import postpro
 import datetime
 import sys
+import logging
 ## - Generic Plotting Functions ##
 
 
@@ -31,7 +32,10 @@ def parse_time_window(timewindow):
             date_parts = [int(i) for i in p.split('-')]
             return_list.append(date_parts)
     except:
-        print('error in calibplot.parse_time_window, while parsing timewindow. Timewindow must be in format yyyy-mm-dd:yyyy-mm-dd or yyyy-mm-dd hhmm:yyyy-mm-dd hhmm. Ignoring timewindow)
+        errmsg = 'error in calibplot.parse_time_window, while parsing timewindow. Timewindow must be in format yyyy-mm-dd:yyyy-mm-dd or ' + \
+            'yyyy-mm-dd hhmm:yyyy-mm-dd hhmm. Ignoring timewindow'
+        print(errmsg)
+        logging.error(errmsg)
     return return_list
 
 
@@ -59,7 +63,9 @@ def tsplot(dflist, names, timewindow=None):
             start_dt = parts[0]
             end_dt = parts[1]
         except:
-            print("error in calibplot.tsplot")
+            errmsg = 'error in calibplot.tsplot'
+            print(errmsg)
+            logging.error(errmsg)
     plt = [df[start_dt:end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
            for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
@@ -128,9 +134,14 @@ def calculate_metrics(dflist, names, index_x=0):
         rsrs.append(tsmath.rsr(y_series, x_series))
                 metrics_calculated = True
             else:
-                print('calibplot.calculate_metrics: no y_series data found. Metrics can not be calculated.\n')
+                errmsg = 'calibplot.calculate_metrics: no y_series data found. Metrics can not be calculated.\n'
+                print(errmsg)
+                logging.info(errmsg)
+
     else:
-        print('calibplot.calculate_metrics: no x_series data found. Metrics can not be calculated.\n')
+        errmsg = 'calibplot.calculate_metrics: no x_series data found. Metrics can not be calculated.\n'
+        print(errmsg)
+        logging.info(errmsg)
     dfmetrics = None
     if metrics_calculated:
     dfmetrics = pd.concat([pd.DataFrame(arr)
@@ -247,7 +258,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         success = p.load_processed(timewindow=timewindow)
         if not success: all_data_found = False
     if not all_data_found:
-        print('Not creating plots because data not found for location, vartype, timewindow = ' + str(location) +','+ str(vartype)+','+str(timewindow)+'\n')
+        errmsg = 'Not creating plots because data not found for location, vartype, timewindow = ' + str(location) +','+ str(vartype)+','+str(timewindow)+'\n'
+        print(errmsg)
+        logging.info(errmsg)
         return None, None
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
 
