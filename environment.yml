@@ -28,6 +28,8 @@ dependencies:
   - ipyleaflet
   - ipywidgets
   - selenium
+  - firefox
+  - geckodriver
   # finally misc 
   - jupyter_contrib_nbextensions
   - ipysheet
