@@ -27,6 +27,7 @@ dependencies:
   - networkx
   - ipyleaflet
   - ipywidgets
+  - selenium
   # finally misc 
   - jupyter_contrib_nbextensions
   - ipysheet
