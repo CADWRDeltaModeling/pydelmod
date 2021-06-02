@@ -13,6 +13,8 @@ dependencies:
   - pydsm
   - pydelmod
   # then basics
+  - numba
+  - dask
   - xarray
   - netcdf4
   - scipy
@@ -20,6 +22,7 @@ dependencies:
   - shapely
   # then plot stuff
   - matplotlib
+  - geopandas
   - holoviews
   - hvplot
   - jupyter
