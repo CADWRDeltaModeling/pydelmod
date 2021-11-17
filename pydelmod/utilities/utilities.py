@@ -7,7 +7,7 @@ import pandas as pd
 import netCDF4 as nc
 import pyhecdss
 
-__all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types', 
+__all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types', 'read_calsim3_wateryear_types', 
            'read_calsim_sacvalley_table', 'read_regulations', 
            'read_D1641FWS_conditional', 'read_dss_to_df', 
            'generate_regulation_timeseries']    
@@ -15,6 +15,7 @@ __all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types',
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
           'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
 
+WaterYearTypes = {1:'W', 2:'AN', 3:'BN', 4:'D', 5:'C'}
 
 def read_hist_wateryear_types(fpath):
     """ Read a table containing water year types from a text file.
@@ -100,6 +101,35 @@ def read_calsim_sacvalley_table(fpath):
                      skiprows=4)
     return df
 
+def read_calsim3_wateryear_types(fpath,bparts_to_read='WYT_SAC_'):
+    """ Read Calsim3 output file dv.dss
+        'WYT_SAC_' as Sac Water Year Type
+        get May value as yearly WYT
+        
+        Parameters
+        ----------
+        fpath: string-like
+            a text file name to read
+            
+        Returns
+        -------
+        pandas.DataFrame
+            A Sac Valley index table. The column names are:
+            'wy', 'sac_yrtype'
+    """
+    # WaterYearTypes = {1:'W', 2:'AN', 3:'BN', 4:'D', 5:'C'}
+    
+    # df_c3wyt = pdmu.read_dss_to_df(fpath,bparts_to_read=bparts_to_read)
+    df_c3wyt = read_dss_to_df(fpath,bparts_to_read=bparts_to_read)
+    df_c3wyt = df_c3wyt.assign(year=lambda x: x['time'].map(lambda y: y.year),
+                               month=lambda x: x['time'].map(lambda y: y.month))
+    
+    df = df_c3wyt[df_c3wyt['month']==5]
+    df = df.assign(sac_yrtype=lambda x:x['value'].map(lambda y:WaterYearTypes[y]))
+    df = df.rename(columns={'year':'wy'})
+                   
+    return df
+    
 def read_regulations(fpath, df_wyt):
     """ Read regulations and create irregular time series DataFrame from them.
 
