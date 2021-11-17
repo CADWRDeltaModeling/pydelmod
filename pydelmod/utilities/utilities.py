@@ -306,6 +306,7 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
 def read_dss_to_df(fpath, bparts_to_read=None,
                    cparts_to_read=None,
                    eparts_to_read=None,
+                   fparts_to_read=None,
                    start_date_str=None, end_date_str=None,
                    with_metadata=False):
     """
@@ -317,6 +318,9 @@ def read_dss_to_df(fpath, bparts_to_read=None,
             path to the DSS File
         bparts_to_read: list, optional
             list of part B to read in.
+            If it is none, all available paths are read.
+        fparts_to_read: list, optional
+            list of part F to read in.
             If it is none, all available paths are read.
         start_date_str : str, optional
             this string should be a date in the format '%Y%m%d'
@@ -346,6 +350,8 @@ def read_dss_to_df(fpath, bparts_to_read=None,
         if cparts_to_read is not None and parts[3] not in cparts_to_read:
             continue
         if eparts_to_read is not None and parts[5] not in eparts_to_read:
+            continue
+        if fparts_to_read is not None and parts[6] not in fparts_to_read:
             continue
         data, cunits, ctype = dssfile.read_rts(path, start_date_str,
                                                end_date_str)
