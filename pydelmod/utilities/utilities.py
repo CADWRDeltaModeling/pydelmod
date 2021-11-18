@@ -10,7 +10,7 @@ import pyhecdss
 __all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types', 'read_calsim3_wateryear_types', 
            'read_calsim_sacvalley_table', 'read_regulations', 
            'read_D1641FWS_conditional', 'read_dss_to_df', 
-           'generate_regulation_timeseries']    
+           'generate_regulation_timeseries', 'generate_regulation_timeseries_calsim']    
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
           'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
@@ -117,9 +117,6 @@ def read_calsim3_wateryear_types(fpath,bparts_to_read='WYT_SAC_'):
             A Sac Valley index table. The column names are:
             'wy', 'sac_yrtype'
     """
-    # WaterYearTypes = {1:'W', 2:'AN', 3:'BN', 4:'D', 5:'C'}
-    
-    # df_c3wyt = pdmu.read_dss_to_df(fpath,bparts_to_read=bparts_to_read)
     df_c3wyt = read_dss_to_df(fpath,bparts_to_read=bparts_to_read)
     df_c3wyt = df_c3wyt.assign(year=lambda x: x['time'].map(lambda y: y.year),
                                month=lambda x: x['time'].map(lambda y: y.month))
@@ -370,3 +367,45 @@ def read_dss_to_df(fpath, bparts_to_read=None,
         raise ValueError('No timeseries is read')
     df = pd.concat(dfs)
     return df
+
+
+def generate_regulation_timeseries_calsim(fpath,freq='1MON'):
+    """ Generate regulation timeseries (monthly)
+        from Calsim output dv dss
+        only for Emmaton, Jersey, Rock Slough
+        
+        Parameters:
+        -----------
+        fpath : str
+            path to the DSS File
+            
+        Returns:
+        --------
+        pandas.DataFrame :
+            an irregular time series of regulations in DataFrame
+    """
+    # stations = np.array(['RSAC092','RSAN018'], dtype=object)
+    stations = np.array(['RSAC092','RSAN018','ROLD024'], dtype=object)
+    df_stds = read_dss_to_df(fpath, bparts_to_read=stations,
+                             cparts_to_read=['EC'], eparts_to_read=[freq])
+    
+    df_stds = df_stds[df_stds['time'] > '1922-9-30']
+    df_stds = df_stds[df_stds['time'] < '2015-10-1']
+
+    df_stds['station'] = df_stds['pathname'].str.split('/',expand=True)[2]
+    df_stds = df_stds.drop('pathname',1)
+
+    df_stds['variable'] = 'EC-MEAN-MONTHLY'
+    df_stds['scenario_name'] = 'D1641 Monthly'
+    
+    df_stds['value'] = np.where(df_stds['value'] > 99000-1, 0, df_stds['value']) #Calsim 3 uses 99000 for non-regulation period
+    df_stds['value'] = np.where(
+        (df_stds['station'] =='RSAN018') & (df_stds['time'].dt.month.isin([9,10,11,12,1,2,3])), 
+        0, df_stds['value']) #Calsim 3 has guidance standard for JER out of Apr-Aug
+    
+    ec_250chlr = df_stds[df_stds['station'] =='ROLD024']['value'].unique().max() #convert Chloride to EC
+    df_stds['value'] = np.where(
+        (df_stds['station'] =='ROLD024') , 
+        ec_250chlr, df_stds['value']) #only check standard of Chloride 250
+        
+    return df_stds
