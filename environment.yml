@@ -23,6 +23,7 @@ dependencies:
   # then plot stuff
   - matplotlib
   - geopandas
+  - geoviews
   - holoviews
   - hvplot
   - jupyter
