@@ -384,10 +384,12 @@ def generate_regulation_timeseries_calsim(fpath,freq='1MON'):
         pandas.DataFrame :
             an irregular time series of regulations in DataFrame
     """
-    # stations = np.array(['RSAC092','RSAN018'], dtype=object)
-    stations = np.array(['RSAC092','RSAN018','ROLD024'], dtype=object)
+    CALSIM_STD_STA = {'EM_EC_STD':'RSAC092',
+                      'RS_EC_STD':'ROLD024',
+                      'JP_EC_STD':'RSAN018'}
+    stations = np.array([key for key in CALSIM_STD_STA], dtype=object)
     df_stds = read_dss_to_df(fpath, bparts_to_read=stations,
-                             cparts_to_read=['EC'], eparts_to_read=[freq])
+                             cparts_to_read=['SALINITY'], eparts_to_read=[freq])
     
     df_stds = df_stds[df_stds['time'] > '1922-9-30']
     df_stds = df_stds[df_stds['time'] < '2015-10-1']
@@ -395,9 +397,12 @@ def generate_regulation_timeseries_calsim(fpath,freq='1MON'):
     df_stds['station'] = df_stds['pathname'].str.split('/',expand=True)[2]
     df_stds = df_stds.drop('pathname',1)
 
+    df_stds = df_stds.replace({"station": CALSIM_STD_STA})
+    
     df_stds['variable'] = 'EC-MEAN-MONTHLY'
     df_stds['scenario_name'] = 'D1641 Monthly'
     
+    # adjust values for notebook visualization
     df_stds['value'] = np.where(df_stds['value'] > 99000-1, 0, df_stds['value']) #Calsim 3 uses 99000 for non-regulation period
     df_stds['value'] = np.where(
         (df_stds['station'] =='RSAN018') & (df_stds['time'].dt.month.isin([9,10,11,12,1,2,3])), 
