@@ -12,6 +12,7 @@ dependencies:
   - vtools3
   - pydsm
   - pydelmod
+  - schimpy
   # then basics
   - numba
   - dask
@@ -20,6 +21,7 @@ dependencies:
   - scipy
   - gdal
   - shapely
+  - pytables
   # then plot stuff
   - matplotlib
   - geopandas
@@ -37,3 +39,4 @@ dependencies:
   # finally misc 
   - jupyter_contrib_nbextensions
   - ipysheet
+  - autopep8
