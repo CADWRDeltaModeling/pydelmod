@@ -22,6 +22,7 @@ dependencies:
   - gdal
   - shapely
   - pytables
+  - openpyxl
   # then plot stuff
   - matplotlib
   - geopandas
@@ -31,12 +32,13 @@ dependencies:
   - jupyter
   - plotly=3
   - networkx
+  # widgets
   - ipyleaflet
   - ipywidgets
+  # browsers
   - selenium
   - firefox
   - geckodriver
   # finally misc 
   - jupyter_contrib_nbextensions
-  - ipysheet
   - autopep8
