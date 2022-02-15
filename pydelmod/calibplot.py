@@ -56,8 +56,8 @@ def tsplot(dflist, names, timewindow=None):
     start_dt = None
     end_dt = None
     if dflist[0] is not None:
-    start_dt = dflist[0].index.min()
-    end_dt = dflist[0].index.max()
+        start_dt = dflist[0].index.min()
+        end_dt = dflist[0].index.max()
     if timewindow is not None:
         try:
             parts = timewindow.split(':')
