@@ -1,3 +1,4 @@
+from operator import add
 import panel as pn
 from scipy import stats
 import pandas as pd
@@ -228,7 +229,7 @@ def sanitize_name(name):
 
 
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
-                              inst_plot_timewindow=None, layout_nash_sutcliffe=False):
+                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True):
     """Builds calibration plot template
 
     Args:
@@ -247,16 +248,27 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         layout_nash_sutcliffe (bool, optional): if true, include Nash-Sutcliffe Efficiency in tables that are
             included in plot layouts. NSE will be included in summary tables--separate files containing only 
             the equations and statistics for all locations.
+        obs_data_included (bool, optional): If true, first study in studies list is assumed to be observed data.
+            calibration metrics will be calculated.
 
     Returns:
         panel: A template ready for rendering by display or save
         dataframe: equations and statistics for all locations
     """
-    pp = [postpro.PostProcessor(study, location, vartype) for study in studies]
+    # pp = [postpro.PostProcessor(study, location, vartype) for study in studies]
+    pp = []
     all_data_found = True
-    for p in pp:
+    for study in studies:
+        p = postpro.PostProcessor(study, location, vartype)
+        pp.append(p)
+    # this was commented out before
+    # for p in pp:
         success = p.load_processed(timewindow=timewindow)
-        if not success: all_data_found = False
+        if not success:
+            errmsg = 'unable to load data for study|location %s|%s' % (str(study), str(location))
+            print(errmsg)
+            logging.info(errmsg)
+            all_data_found = False
     if not all_data_found:
         errmsg = 'Not creating plots because data not found for location, vartype, timewindow = ' + str(location) +','+ str(vartype)+','+str(timewindow)+'\n'
         print(errmsg)
@@ -291,6 +303,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # create plots: instantaneous, godin, and scatter
     tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow).opts(
         ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
+    tsp = tsp.opts(opts.Curve(color=hv.Cycle('Category10')))
+
     # zoom in to desired timewindow: works, but doesn't zoom y axis, so need to fix later
     # if inst_plot_timewindow is not None:
     #     start_end_times = parse_time_window(inst_plot_timewindow)
@@ -299,6 +313,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     #     tsp.opts(xlim=(datetime.datetime(s[0], s[1], s[1]), datetime.datetime(e[0],e[1],e[2])))
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
+    gtsp = gtsp.opts(opts.Curve(color=hv.Cycle('Category10')))
+
     splot = None
     if splot_plot_data is not None and splot_plot_data[0] is not None:    
     splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
@@ -306,6 +322,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         .opts(ylabel='Model', legend_position="top_left")\
         .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
 
+    cplot = None
+    dfdisplayed_metrics = None
+    if obs_data_included:
     # calculate calibration metrics
     slope_plots_dfmetrics = None
     if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
@@ -430,6 +449,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         phase_diff_kde.opts(show_legend=False, title='(f)')
     kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
         opts.Distribution(height=200, width=300))
+    # end if obs_data_included
 
     # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
@@ -439,7 +459,12 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # end_dt = dflist[0].index.max()
 
     column = None
+    # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
+    add_toolbar = True
+    print('before creating column object (plot layout) for returning')
     if tidal_template:
+        if not add_toolbar:
+            if obs_data_included:
         column = pn.Column(
             header_panel,
             # tsp.opts(width=900, legend_position='right'),
@@ -449,10 +474,49 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
             pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')), \
             pn.Row(kdeplots.opts(toolbar=None)))
     else:
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, toolbar=None, title='(a)'),
+                    gtsp.opts(width=900, toolbar=None, title='(b)'))
+        else:
+            if obs_data_included:
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, title='(a)'),
+                    gtsp.opts(width=900, title='(b)'),
+                    # pn.Row(tsplots2),
+                    pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')))
+                    # pn.Row(kdeplots.opts(toolbar=None)))
+            else:
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, title='(a)'),
+                    gtsp.opts(width=900, title='(b)'))
+    else:
+        if not add_toolbar:
+            if obs_data_included:
         column = pn.Column(
             header_panel,
             pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)')),
             pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'), metrics_table.opts(title='(c)')))
+            else:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)')))
+
+        else:
+            if obs_data_included:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')),
+                    pn.Row(cplot.opts(shared_axes=False, title='(b)'), metrics_table.opts(title='(c)')))
+            else:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
     return column, dfdisplayed_metrics
 
 
