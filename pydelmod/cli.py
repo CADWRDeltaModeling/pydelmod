@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Console script for pydelmod."""
 from email.policy import default
-from pydelmod.dsm2ui import DSM2FlowlineMap
+from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 import sys
 import click
 import panel as pn
@@ -26,6 +26,15 @@ def map_channels_colored(flowline_shapefile, hydro_echo_file, colored_by):
     else:
         return pn.panel(mapui.show_map_colored_by_column(colored_by.upper())).show()
 
+@click.command()
+@click.argument("channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
+@click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
+@click.option("-v","--variable", type=click.Choice(['flow', 'stage'],case_sensitive=False), default='flow')
+def output_map_plotter(channel_shapefile, hydro_echo_file, variable):
+    plotter = build_output_plotter(channel_shapefile, hydro_echo_file, variable)
+    pn.serve(plotter.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
+
 main.add_command(map_channels_colored)
+main.add_command(output_map_plotter)
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

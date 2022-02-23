@@ -5,6 +5,7 @@ channels:
   - conda-forge
 dependencies:
   - python=3.7
+  - pip
   # first our packages
   - pyhecdss
   - vtools3
@@ -33,6 +34,7 @@ dependencies:
   - geoviews
   - holoviews
   - hvplot
+#  - jupyter_bokeh
   - jupyter
   - plotly-orca
   - plotly=3
@@ -51,5 +53,5 @@ dependencies:
   - pytest
   - pytest-runner
   - pdoc3
-  - pip :
-    - --no-deps -e .
+#  - pip : # not working with the no-deps option. Here for doc purposes. Run by hand
+#    - --no-deps -e .
