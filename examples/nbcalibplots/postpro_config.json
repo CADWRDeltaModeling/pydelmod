@@ -1,14 +1,13 @@
 {
     "options_dict": {
-	"output_folder": "./_output_8.2_vs_8.3/"
+	"output_folder": "./_output_8.2_vs_8.3/",
+	"include_kde_plots": true
     },
     "location_files_dict": {
-	"EC": "./location_info/calibration_ec_stations.csv",
-	"FLOW": "./location_info/calibration_flow_stations.csv",
-	"STAGE": "./location_info/calibration_stage_stations.csv"
+	"FLOW": "./location_info/calibration_flow_stations_test.csv",
+	"STAGE": "./location_info/calibration_stage_stations_test.csv"
     },
     "observed_files_dict": {
-	"EC": "./observed_data/cdec/ec_merged.dss",
 	"FLOW": "./observed_data/cdec/flow_merged.dss",
 	"STAGE": "./observed_data/cdec/stage_merged.dss"
     },
@@ -22,19 +21,18 @@
 	"STAGE": "2011-09-01:2011-09-30"
     },
     "timewindow_dict": {
-    "default_timewindow": "hydro_calibration",
+	"default_timewindow": "hydro_calibration",
 	"hydro_calibration": "01OCT2010 - 01OCT2012",
 	"qual_calibration": "01OCT2009 - 01OCT2017",
 	"hydro_validation": "01OCT2000 - 01OCT2017",
 	"qual_validation": "01OCT2000 - 01OCT2009"
     },
     "vartype_dict": {
-	"EC": "uS/cm",
-	"FLOW": "CFS",
-	"STAGE": "FEET"
+	"FLOW": "cfs",
+	"STAGE": "feet"
     },
     "process_vartype_dict": {
-	"EC": true,
+	"EC": false,
 	"FLOW": true,
 	"STAGE": true
     },
