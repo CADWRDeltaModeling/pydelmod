@@ -229,7 +229,7 @@ def sanitize_name(name):
 
 
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
-                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True):
+                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False):
     """Builds calibration plot template
 
     Args:
@@ -250,6 +250,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
             the equations and statistics for all locations.
         obs_data_included (bool, optional): If true, first study in studies list is assumed to be observed data.
             calibration metrics will be calculated.
+        include_kde_plots (bool): If true, kde plots will be included. This is temporary for debugging
 
     Returns:
         panel: A template ready for rendering by display or save
@@ -465,14 +466,23 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     if tidal_template:
         if not add_toolbar:
             if obs_data_included:
-                column = pn.Column(
-                    header_panel,
-                    # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, toolbar=None, title='(a)'),
-                    gtsp.opts(width=900, toolbar=None, title='(b)'),
-                    # pn.Row(tsplots2),
-                    pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')), \
-                    pn.Row(kdeplots.opts(toolbar=None)))
+                if include_kde_plots:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, toolbar=None, title='(a)'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)'),
+                        # pn.Row(tsplots2),
+                        pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')), \
+                        pn.Row(kdeplots))
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, toolbar=None, title='(a)'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)'),
+                        # pn.Row(tsplots2),
+                        pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')))
             else:
                 column = pn.Column(
                     header_panel,
@@ -481,14 +491,23 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                     gtsp.opts(width=900, toolbar=None, title='(b)'))
         else:
             if obs_data_included:
-                column = pn.Column(
-                    header_panel,
-                    # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, title='(a)'),
-                    gtsp.opts(width=900, title='(b)'),
-                    # pn.Row(tsplots2),
-                    pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')))
-                    # pn.Row(kdeplots.opts(toolbar=None)))
+                if include_kde_plots:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, title='(a)'),
+                        gtsp.opts(width=900, title='(b)'),
+                        # pn.Row(tsplots2),
+                        pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')),
+                        pn.Row(kdeplots))
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, title='(a)'),
+                        gtsp.opts(width=900, title='(b)'),
+                        # pn.Row(tsplots2),
+                        pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')))
             else:
                 column = pn.Column(
                     header_panel,
