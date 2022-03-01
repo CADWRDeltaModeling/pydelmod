@@ -14,8 +14,8 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = ['python', 'pandas', 'pyhecdss', 'pydsm',
-                'plotly', 'psutil', 'plotly-orca', 'netcdf4', 'qgrid']
+requirements = ['pandas', 'pyhecdss', 'pydsm',
+                'plotly', 'psutil']
 
 setup_requirements = ['pytest-runner', ]
 

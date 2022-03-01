@@ -1,0 +1,57 @@
+name: dev_pydelmod
+channels:
+  - cadwr-dms
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.7
+  - pip
+  # first our packages
+  - pyhecdss
+  - vtools3
+  - pydsm
+  # - pydelmod needs to pip install --no-deps -e
+  - schimpy
+  # then basics
+  - numba
+  - pandas
+  - dask
+  - xarray
+  - netcdf4
+  - scipy
+  - gdal
+  - shapely
+  # for different file formats
+  - fastparquet
+  - python-snappy
+  - pyarrow
+  - pytables
+  - openpyxl
+  # then plot stuff
+  - matplotlib
+  - descartes
+  - geopandas
+  - geoviews
+  - holoviews
+  - hvplot
+#  - jupyter_bokeh
+  - jupyter
+  - plotly-orca
+  - plotly=3
+  - networkx
+  # widgets
+  - ipyleaflet
+  - ipywidgets
+  # browsers
+  - selenium
+  - firefox
+  - geckodriver
+  # finally misc 
+  - jupyter_contrib_nbextensions
+  - autopep8
+  - sphinx
+  - pytest
+  - pytest-runner
+  - pdoc3
+#  - pip : # not working with the no-deps option. Here for doc purposes. Run by hand
+#    - --no-deps -e .
