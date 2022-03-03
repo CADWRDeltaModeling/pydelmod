@@ -2,6 +2,7 @@
 """Console script for pydelmod."""
 from email.policy import default
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
+from pydelmod import postpro_dsm2
 import sys
 import click
 import panel as pn
@@ -34,7 +35,17 @@ def output_map_plotter(channel_shapefile, hydro_echo_file, variable):
     plotter = build_output_plotter(channel_shapefile, hydro_echo_file, variable)
     pn.serve(plotter.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
 
+@click.command()
+@click.argument("process_name", type=click.Choice(['observed', 'model', 'plots'], case_sensitive=False), default='')
+@click.argument("json_config_file")
+@click.option("--dask/--no-dask", default=False)
+def exec_postpro_dsm2(process_name, json_config_file, dask):
+    print(process_name, dask,json_config_file)
+    postpro_dsm2.run_process(process_name, json_config_file, dask)
+
 main.add_command(map_channels_colored)
 main.add_command(output_map_plotter)
+main.add_command(exec_postpro_dsm2)
+
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
