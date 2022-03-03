@@ -1,4 +1,5 @@
 # Postpro-Model
+from distutils.command.config import config
 import os
 import pydsm
 from pydsm import postpro
@@ -120,16 +121,12 @@ def save_to_graphics_format(calib_plot_template,fname):
     #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
     calib_plot_template.save(fname)
 
-
-def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
+def build_plot(config_data, studies, location, vartype):
     options_dict = config_data['options_dict']
-    study_files_dict = config_data['study_files_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     inst_plot_timewindow = inst_plot_timewindow_dict[vartype.name]
     timewindow_dict = config_data['timewindow_dict']
     timewindow = timewindow_dict['default_timewindow']
-    output_plot_dir = config_data['options_dict']['output_folder']
-    print(str(location))
     flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
@@ -139,6 +136,28 @@ def build_and_save_plot(config_data, studies, location, vartype, write_html=Fals
     include_kde_plots = options_dict['include_kde_plots']
     calib_plot_template, metrics_df = calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots)
+    if calib_plot_template is None:
+        print('failed to create plots')
+    if metrics_df is None:
+        print('failed to create metrics')
+    if metrics_df is not None:
+        location_list = []
+        for r in range(metrics_df.shape[0]):
+            location_list.append(location)
+        metrics_df['Location'] = location_list
+        # move Location column to beginning
+        cols = list(metrics_df)
+        cols.insert(0, cols.pop(cols.index('Location')))
+        metrics_df = metrics_df.loc[:, cols]
+    return calib_plot_template, metrics_df
+
+
+def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
+    study_files_dict = config_data['study_files_dict']
+    output_plot_dir = config_data['options_dict']['output_folder']
+    output_plot_dir = config_data['options_dict']['output_folder']
+    print(str(location))    
+    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
     if calib_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
@@ -165,9 +184,7 @@ def build_and_save_plot(config_data, studies, location, vartype, write_html=Fals
             metrics_df[metrics_df.index == study].to_csv(
                 output_plot_dir + '0_summary_statistics_' + study + '_' + vartype.name + '_' + location.name + '.csv')
             # metrics_df[metrics_df.index==study].to_html(output_plot_dir+'0_summary_statistics_'+study+'_'+vartype.name+'_'+location.name+'.html')
-
-    return calib_plot_template, metrics_df
-
+    return
 
 # merge study statistics files
 def merge_statistics_files(vartype, config_data):
@@ -220,7 +237,8 @@ def postpro_plots(cluster, config_data, use_dask):
                 if use_dask:
                     print('using dask')
                     tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
-                                                    write_html=True,write_graphics=False) for location in locations]
+                                                    write_html=True,write_graphics=False,
+                                                    dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
                     dask.compute(tasks)
                 else:
                     print('not using dask')
