@@ -8,7 +8,7 @@ import shapely
 # our imports
 import pyhecdss
 import pydsm
-from pydsm.input import parser
+from pydsm.input import parser, network
 from pydsm import hydroh5
 from vtools.functions.filter import godin
 # viz imports
@@ -24,16 +24,31 @@ import panel as pn
 pn.extension()
 
 
+def load_echo_file(fname):
+    with open(fname, 'r') as file:
+        df = parser.parse(file.read())
+    return df
+
+#
+def get_in_out_edges(gc, nodeid):
+    out_edges = []
+    in_edges = []
+    for n in gc.successors(nodeid):
+        out_edges += list(gc[nodeid][n].values())
+    for n in gc.predecessors(nodeid):
+        in_edges += list(gc[n][nodeid].values())
+    return {'in': in_edges, 'out': out_edges}
+
+def get_in_out_channel_numbers(gc, nodeid):
+    ine, oute = get_in_out_edges(gc, nodeid).values()
+    ine, oute = [e['CHAN_NO'] for e in ine],[e['CHAN_NO'] for e in oute]
+    return ine, oute
+
 def load_dsm2_channelline_shapefile(channel_shapefile):
     return gpd.read_file(channel_shapefile).to_crs(epsg=3857)
 
 def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables):
     return dsm2_chan_lines.merge(tables['CHANNEL'], right_on='CHAN_NO', left_on='id')
-
-def load_echo_file(fname):
-    with open(fname, 'r') as file:
-        df = parser.parse(file.read())
-    return df
 
 def load_dsm2_flowline_shapefile(shapefile):
     dsm2_chans = gpd.read_file(shapefile).to_crs(epsg=3857)
@@ -43,6 +58,15 @@ def load_dsm2_flowline_shapefile(shapefile):
 
 def join_channels_info_with_shapefile(dsm2_chans, tables):
     return dsm2_chans.merge(tables['CHANNEL'], right_on='CHAN_NO', left_on='id')
+
+def load_dsm2_node_shapefile(node_shapefile):
+    return gpd.read_file(node_shapefile).to_crs(epsg=3857)
+
+def to_node_tuple_map(nodes):
+    nodes = nodes.set_index(nodes['id'])
+    nodes = nodes.drop(['geometry','id'],axis=1)
+    node_dict = nodes.to_dict(orient='index')
+    return {k:(node_dict[k]['x'],node_dict[k]['y']) for k in node_dict}
 
 def get_location_on_channel_line(channel_id, distance, dsm2_chan_lines):
     chan = dsm2_chan_lines[dsm2_chan_lines.CHAN_NO == channel_id]
@@ -203,3 +227,5 @@ class DSM2FlowlineMap:
 
     def show_map_colored_by_length(self):
         return self.show_map_colored_by_column('LENGTH')
+
+hv.Graph
