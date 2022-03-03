@@ -1,5 +1,5 @@
 # Postpro-Model
-
+import os
 import pydsm
 from pydsm import postpro
 import json
@@ -143,6 +143,7 @@ def build_and_save_plot(config_data, studies, location, vartype, write_html=Fals
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
+    os.makedirs(output_plot_dir, exist_ok=True)
     if calib_plot_template is not None and metrics_df is not None:
         if write_html: 
             calib_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
@@ -175,6 +176,7 @@ def merge_statistics_files(vartype, config_data):
     import glob, os
     print('merging statistics files')
     output_dir = options_dict['output_folder']
+    os.makedirs(output_dir, exist_ok=True)
     files = glob.glob(output_dir + '0_summary_statistics_*'+vartype.name+'*.csv')
     frames = []
     for f in files:
