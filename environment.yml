@@ -42,3 +42,6 @@ dependencies:
   # finally misc 
   - jupyter_contrib_nbextensions
   - autopep8
+  - click
+  - numpy
+  - pandas
