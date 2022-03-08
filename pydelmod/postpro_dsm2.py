@@ -50,15 +50,16 @@ def postpro_model(cluster, config_data, use_dask):
     #logging.basicConfig(filename='postpro-model.log', level=logging.DEBUG)
     vartype_dict = config_data['vartype_dict']
     process_vartype_dict = config_data['process_vartype_dict']
-    study_files_dict = config_data['study_files_dict']
+    # this specifies the files that are to be post-processed. Using study_files_dict resulted in all study files being post-processed.
+    postpro_model_dict = config_data['postpro_model_dict']
     location_files_dict = config_data['location_files_dict']
     try:
         for var_name in vartype_dict:
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
             if process_vartype_dict[vartype.name]:
                 print('processing model ' + vartype.name + ' data')
-                for study_name in study_files_dict:
-                    dssfile=study_files_dict[study_name]
+                for study_name in postpro_model_dict:
+                    dssfile=postpro_model_dict[study_name]
                     locationfile = location_files_dict[vartype.name]
                     units=vartype.units
                     observed=False
@@ -82,6 +83,7 @@ def postpro_observed(cluster, config_data, use_dask):
     process_vartype_dict = config_data['process_vartype_dict']
     observed_files_dict = config_data['observed_files_dict']
     location_files_dict = config_data['location_files_dict']
+    
     dask_options_dict = config_data['dask_options_dict']
     try:
         for vartype in vartype_dict:
@@ -126,7 +128,7 @@ def build_plot(config_data, studies, location, vartype):
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     inst_plot_timewindow = inst_plot_timewindow_dict[vartype.name]
     timewindow_dict = config_data['timewindow_dict']
-    timewindow = timewindow_dict['default_timewindow']
+    timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
     flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
@@ -207,14 +209,10 @@ def merge_statistics_files(vartype, config_data):
 def postpro_plots(cluster, config_data, use_dask):
     vartype_dict = config_data['vartype_dict']
     process_vartype_dict = config_data['process_vartype_dict']
-    dask_options_dict = config_data['dask_options_dict']
     location_files_dict = config_data['location_files_dict']
     observed_files_dict = config_data['observed_files_dict']
     study_files_dict = config_data['study_files_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
-    timewindow_dict = config_data['timewindow_dict']
-    timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
-    output_folder = config_data['options_dict']['output_folder']
 
     ## Set options and run processes. If using dask, create delayed tasks
     try:
