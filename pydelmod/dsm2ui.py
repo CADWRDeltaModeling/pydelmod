@@ -1,16 +1,6 @@
 # User interface components for DSM2 related information
-import os
-from functools import lru_cache
-import numpy as np
-import pandas as pd
-import geopandas as gpd
-import shapely
-# our imports
-import pyhecdss
-import pydsm
-from pydsm.input import parser, network
-from pydsm import hydroh5
-from vtools.functions.filter import godin
+from pandas import date_range
+from .dsm2study import *
 # viz imports
 import geoviews as gv
 import hvplot.pandas
@@ -23,68 +13,6 @@ import param
 import panel as pn
 pn.extension()
 
-
-def load_echo_file(fname):
-    with open(fname, 'r') as file:
-        df = parser.parse(file.read())
-    return df
-
-#
-def get_in_out_edges(gc, nodeid):
-    out_edges = []
-    in_edges = []
-    for n in gc.successors(nodeid):
-        out_edges += list(gc[nodeid][n].values())
-    for n in gc.predecessors(nodeid):
-        in_edges += list(gc[n][nodeid].values())
-    return {'in': in_edges, 'out': out_edges}
-
-def get_in_out_channel_numbers(gc, nodeid):
-    ine, oute = get_in_out_edges(gc, nodeid).values()
-    ine, oute = [e['CHAN_NO'] for e in ine],[e['CHAN_NO'] for e in oute]
-    return ine, oute
-
-def load_dsm2_channelline_shapefile(channel_shapefile):
-    return gpd.read_file(channel_shapefile).to_crs(epsg=3857)
-
-def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables):
-    return dsm2_chan_lines.merge(tables['CHANNEL'], right_on='CHAN_NO', left_on='id')
-
-def load_dsm2_flowline_shapefile(shapefile):
-    dsm2_chans = gpd.read_file(shapefile).to_crs(epsg=3857)
-    # dsm2_chans.geometry=dsm2_chans.geometry.simplify(tolerance=50)
-    dsm2_chans.geometry = dsm2_chans.geometry.buffer(250, cap_style=1, join_style=1)
-    return dsm2_chans
-
-def join_channels_info_with_shapefile(dsm2_chans, tables):
-    return dsm2_chans.merge(tables['CHANNEL'], right_on='CHAN_NO', left_on='id')
-
-def load_dsm2_node_shapefile(node_shapefile):
-    return gpd.read_file(node_shapefile).to_crs(epsg=3857)
-
-def to_node_tuple_map(nodes):
-    nodes = nodes.set_index(nodes['id'])
-    nodes = nodes.drop(['geometry','id'],axis=1)
-    node_dict = nodes.to_dict(orient='index')
-    return {k:(node_dict[k]['x'],node_dict[k]['y']) for k in node_dict}
-
-def get_location_on_channel_line(channel_id, distance, dsm2_chan_lines):
-    chan = dsm2_chan_lines[dsm2_chan_lines.CHAN_NO == channel_id]
-    # chan_line = chan.boundary # chan is from a polygon
-    try:
-        pt = chan.interpolate(distance/chan.LENGTH, normalized=True)
-    except: # if not a number always default to assuming its length
-        pt = chan.interpolate(1, normalized=True)
-    # chan.hvplot()*gpd.GeoDataFrame(geometry=pt).hvplot() # to check plot of point and line
-    return pt
-
-def get_runtime(tables):
-    scalars = tables['SCALAR']
-    rs=scalars[scalars['NAME'].str.contains('run')]
-    tmap = dict(zip(rs['NAME'],rs['VALUE']))
-    stime = tmap['run_start_date']+' '+tmap['run_start_time']
-    etime = tmap['run_end_date']+' '+tmap['run_end_time']
-    return pd.to_datetime(stime), pd.to_datetime(etime)
 
 def build_output_plotter(channel_shapefile, hydro_echo_file, variable='flow'):
     hydro_tables = load_echo_file(hydro_echo_file)
@@ -228,4 +156,92 @@ class DSM2FlowlineMap:
     def show_map_colored_by_length(self):
         return self.show_map_colored_by_column('LENGTH')
 
-hv.Graph
+class DSM2GraphNetworkMap(param.Parameterized):
+    selected = param.List(
+        default=[0], doc='Selected node indices to display in plot')
+    date_range = param.DateRange() # filter by date range
+    godin = param.Boolean() # godin filter and display
+    percent_ratios = param.Boolean() # show percent ratios instead of total flows
+
+    def __init__(self, node_shapefile, hydro_echo_file, **kwargs):
+        super().__init__(**kwargs)
+
+        nodes = load_dsm2_node_shapefile(node_shapefile)
+        nodes['x']=nodes.geometry.x
+        nodes['y']=nodes.geometry.y
+        node_map = to_node_tuple_map(nodes)
+
+        self.study = DSM2Study(hydro_echo_file)
+        stime, etime = self.study.get_runtime()
+        self.param.set_param('date_range',(etime - pd.Timedelta('10 days'), etime)) # tuple(map(pd.Timestamp,time_window.split('-')))
+        #self.param.set_default('date_range', (stime, etime)) # need to set bounds
+
+        # should work but doesn't yet
+        tiled_network = hv.element.tiles.CartoLight()* hv.Graph.from_networkx(self.study.gc, node_map).opts(
+            opts.Graph(directed=True, 
+                    arrowhead_length=0.001, 
+                    labelled=['index'],
+                    node_alpha=0.5, node_size=10
+                    )
+        )
+
+        selector = hv.streams.Selection1D(source = tiled_network.Graph.I.nodes)
+        selector.add_subscriber(self.set_selected)
+
+        self.nodes = nodes
+        self.tiled_network = tiled_network
+        # this second part of overlay needed only because of issue. 
+        # see https://discourse.holoviz.org/t/selection-on-graph-nodes-doesnt-work/3437
+        self.map_pane = self.tiled_network*(self.tiled_network.Graph.I.nodes.opts(alpha=0))
+
+    def set_selected(self, index):
+        if index is None or len(index) == 0:
+            pass  # keep the previous selections
+        else:
+            self.selected = index
+        
+    def display_node_map(self):
+        return hv.element.tiles.CartoLight()*self.nodes.hvplot()
+
+    def _date_range_to_twstr(self):
+        return '-'.join(map(lambda x: x.strftime("%d%b%Y %H%M"), self.date_range))
+
+    @param.depends('selected','date_range','percent_ratios')
+    def show_sankey(self):
+        nodeid = int(self.tiled_network.Graph.I.nodes.data.iloc[self.selected].values[0][2])
+
+        inflows, outflows = self.study.get_inflows_outflows(nodeid, self._date_range_to_twstr())
+        mean_inflows = [df.mean() for df in inflows]
+        mean_outflows = [df.mean() for df in outflows]
+        if self.percent_ratios:
+            total_inflows = sum([f.values[0] for f in mean_inflows])
+            total_outflows = sum([f.values[0] for f in mean_outflows])
+            mean_inflows = [df/total_inflows*100 for df in mean_inflows]
+            mean_outflows = [df/total_outflows*100 for df in mean_outflows]
+        inlist = [[x.index[0],str(nodeid),x[0]] for x in mean_inflows]
+        outlist = [[str(nodeid),x.index[0],x[0]] for x in mean_outflows]
+        edges = pd.DataFrame(inlist+outlist, columns=['from','to','value'])
+        sankey = hv.Sankey(edges, label=f'Flows in/out of {nodeid}')
+        sankey = sankey.opts(label_position='left', edge_fill_alpha=0.75, edge_fill_color='value', node_alpha=0.5, node_color='index', cmap='blues', colorbar=True)
+        return sankey.opts(frame_width=300, frame_height=300)  
+
+    @param.depends('selected', 'date_range', 'godin')
+    def show_ts(self):
+        nodeid = int(self.tiled_network.Graph.I.nodes.data.iloc[self.selected].values[0][2])
+        inflows, outflows = self.study.get_inflows_outflows(nodeid, self._date_range_to_twstr())
+        if godin:
+            inflows = [godin(df) for df in inflows]
+            outflows = [godin(df) for df in outflows]
+        tsin=[df.hvplot(label=df.columns[0]) for df in inflows]
+        tsout=[df.hvplot(label=df.columns[0]) for df in outflows]
+        return (hv.Overlay(tsin).opts(title='Inflows')+hv.Overlay(tsout).opts(title='Outflows')).cols(1)
+
+    def get_panel(self):
+        slider = pn.Param(self.param.date_range, widgets={
+                          'date_range': pn.widgets.DatetimeRangePicker})
+        godin_box = pn.Param(self.param.godin, widgets={'godin': pn.widgets.Checkbox})
+        percent_ratios_box = pn.Param(self.param.percent_ratios, widgets={'percent_ratios': pn.widgets.Checkbox})
+        self.sankey_pane = pn.Row(self.show_sankey)
+        self.ts_pane = pn.Row(self.show_ts)
+        return pn.Column(pn.Row(pn.Column(pn.pane.HoloViews(self.map_pane, linked_axes=False),
+            slider, godin_box, percent_ratios_box), self.sankey_pane), self.ts_pane)

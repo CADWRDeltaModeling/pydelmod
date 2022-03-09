@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Console script for pydelmod."""
 from email.policy import default
+from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2
 import sys
@@ -36,6 +37,13 @@ def output_map_plotter(channel_shapefile, hydro_echo_file, variable):
     pn.serve(plotter.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
 
 @click.command()
+@click.argument("node_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
+@click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
+def node_map_flow_splits(node_shapefile, hydro_echo_file):
+    netmap = dsm2ui.DSM2GraphNetworkMap(node_shapefile, hydro_echo_file)
+    pn.serve(netmap.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
+
+@click.command()
 @click.argument("process_name", type=click.Choice(['observed', 'model', 'plots'], case_sensitive=False), default='')
 @click.argument("json_config_file")
 @click.option("--dask/--no-dask", default=False)
@@ -44,6 +52,7 @@ def exec_postpro_dsm2(process_name, json_config_file, dask):
     postpro_dsm2.run_process(process_name, json_config_file, dask)
 
 main.add_command(map_channels_colored)
+main.add_command(node_map_flow_splits)
 main.add_command(output_map_plotter)
 main.add_command(exec_postpro_dsm2)
 
