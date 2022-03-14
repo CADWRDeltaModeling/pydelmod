@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 """Console script for pydelmod."""
-from email.policy import default
 from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2
@@ -21,8 +20,9 @@ def main():
 @click.argument("flowline_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
 @click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
 @click.option("-c","--colored-by", type=click.Choice(['MANNING', 'DISPERSION', 'LENGTH', 'ALL'],case_sensitive=False), default='MANNING')
-def map_channels_colored(flowline_shapefile, hydro_echo_file, colored_by):
-    mapui = DSM2FlowlineMap(flowline_shapefile, hydro_echo_file)
+@click.option("--base-file","-b", type=click.Path(dir_okay=False, exists=True, readable=True))
+def map_channels_colored(flowline_shapefile, hydro_echo_file, colored_by, base_file):
+    mapui = DSM2FlowlineMap(flowline_shapefile, hydro_echo_file, base_file)
     if colored_by == 'ALL':
         return pn.panel(pn.Column(*[mapui.show_map_colored_by_column(c.upper()) for c in ['MANNING','DISPERSION', 'LENGTH']])).show()
     else:
