@@ -258,15 +258,15 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None)
-    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None)
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None, inst_plot_timewindow=None)
+    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None)
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots = None
     if obs_data_included:
-        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None)
-        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
+        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None)
+        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=None,
                               layout_nash_sutcliffe=False)
         if include_kde_plots: 
             kdeplots = build_kde_plots(pp)
@@ -289,8 +289,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)'),
+                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'),
                         # pn.Row(tsplots2),
                         pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')), \
                         pn.Row(kdeplots))
@@ -298,24 +298,24 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)'),
+                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'),
                         # pn.Row(tsplots2),
                         pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')))
             else:
                 column = pn.Column(
                     header_panel,
                     # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, toolbar=None, title='(a)'),
-                    gtsp.opts(width=900, toolbar=None, title='(b)'))
+                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
         else:
             if obs_data_included:
                 if include_kde_plots:
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)'),
-                        gtsp.opts(width=900, title='(b)'),
+                        tsp.opts(width=900, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'),
                         # pn.Row(tsplots2),
                         pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')),
                         pn.Row(kdeplots))
@@ -323,27 +323,27 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)'),
-                        gtsp.opts(width=900, title='(b)'),
+                        tsp.opts(width=900, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'),
                         # pn.Row(tsplots2),
                         pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')))
             else:
                 column = pn.Column(
                     header_panel,
                     # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, title='(a)'),
-                    gtsp.opts(width=900, title='(b)'))
+                    tsp.opts(width=900, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, title='(b)', legend_position='right'))
     else:
         if not add_toolbar:
             if obs_data_included:
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)')),
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')),
                     pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'), metrics_table.opts(title='(c)')))
             else:
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)')))
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
 
         else:
             if obs_data_included:
@@ -411,13 +411,14 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     Returns:
         tsp: A plot
     """
-
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
     unit_string = get_units(flow_in_thousands, units)
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     # plot_data are scaled, if flow_in_thousands == True
     tsp_plot_data = [p.df for p in pp]
 
+    if flow_in_thousands:
+        tsp_plot_data = [p.df/1000.0 if p.df is not None else None for p in pp]
     # create plots: instantaneous, godin, and scatter
     tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow).opts(
         ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
@@ -447,7 +448,9 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None)
     # plot_data are scaled, if flow_in_thousands == True
     gtsp_plot_data = [p.gdf for p in pp]
 
-
+    # if p.gdf is not None:
+    if flow_in_thousands:
+        gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
     # zoom in to desired timewindow: works, but doesn't zoom y axis, so need to fix later
     # if inst_plot_timewindow is not None:
     #     start_end_times = parse_time_window(inst_plot_timewindow)
@@ -481,19 +484,14 @@ def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=No
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     godin_y_axis_label = 'Godin '+y_axis_label
     # plot_data are scaled, if flow_in_thousands == True
-    tsp_plot_data = [p.df for p in pp]
     gtsp_plot_data = [p.gdf for p in pp]
 
     splot_plot_data = None
     splot_metrics_data = None
 
-    # if p.gdf is not None:
     splot_plot_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp ]
     splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
     if flow_in_thousands:
-        # if p.df is not None:
-        tsp_plot_data = [p.df/1000.0 if p.df is not None else None for p in pp]
-        # if p.gdf is not None:
         gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
         splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
 
@@ -555,20 +553,14 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     godin_y_axis_label = 'Godin '+y_axis_label
     # plot_data are scaled, if flow_in_thousands == True
-    tsp_plot_data = [p.df for p in pp]
     gtsp_plot_data = [p.gdf for p in pp]
 
-    splot_plot_data = None
     splot_metrics_data = None
     # if p.gdf is not None:
-    splot_plot_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
     splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
     if flow_in_thousands:
-        # if p.df is not None:
-        tsp_plot_data = [p.df/1000.0 if p.gdf is not None else None for p in pp]
         # if p.gdf is not None:
         gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-        splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
 
     dfdisplayed_metrics = None
     column = None
