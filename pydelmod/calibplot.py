@@ -258,15 +258,15 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None, inst_plot_timewindow=None)
-    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None)
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow)
+    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units)
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots = None
     if obs_data_included:
-        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=None)
-        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=None,
+        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units)
+        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
                               layout_nash_sutcliffe=False)
         if include_kde_plots: 
             kdeplots = build_kde_plots(pp)
@@ -367,7 +367,7 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
         p = postpro.PostProcessor(study, location, vartype)
         pp.append(p)
     # this was commented out before
-    # for p in pp:
+    # for p in pp:ed
         success = p.load_processed(timewindow=timewindow)
         if not success:
             errmsg = 'unable to load data for study|location %s|%s' % (str(study), str(location))

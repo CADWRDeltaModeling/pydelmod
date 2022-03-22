@@ -84,16 +84,12 @@ def postpro_observed(cluster, config_data, use_dask):
     observed_files_dict = config_data['observed_files_dict']
     location_files_dict = config_data['location_files_dict']
     
-    dask_options_dict = config_data['dask_options_dict']
     try:
         for vartype in vartype_dict:
             if process_vartype_dict[vartype]:
                 print('processing observed ' + vartype + ' data')
                 dssfile = observed_files_dict[vartype]
                 location_file = location_files_dict[vartype]
-                # dssfile = './observed_data/cdec/ec_merged.dss'
-                # locationfile='./location_info/calibration_ec_stations.csv'
-                # units='uS/cm'
                 units = vartype_dict[vartype]
                 study_name='Observed'
                 observed=True
@@ -190,6 +186,9 @@ def build_and_save_plot(config_data, studies, location, vartype, write_html=Fals
 
 # merge study statistics files
 def merge_statistics_files(vartype, config_data):
+    """Statistics files are written for each individual run, which is necessary (?) with dask
+    This method merges all of them.
+    """
     options_dict = config_data['options_dict']
 
     import glob, os
