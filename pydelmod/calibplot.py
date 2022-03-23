@@ -40,7 +40,7 @@ def parse_time_window(timewindow):
     return return_list
 
 
-def tsplot(dflist, names, timewindow=None):
+def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
     """Time series overlay plots
 
     Handles missing DataFrame, just put None in the list
@@ -49,7 +49,7 @@ def tsplot(dflist, names, timewindow=None):
         dflist (List): Time-indexed DataFrame list
         names (List): Names list (same size as dflist)
         timewindow (str, optional): time window for plot. Must be in format: 'YYYY-MM-DD:YYYY-MM-DD'
-
+        zoom_inst_plot (bool): if true, display only data in timewindow for plot
     Returns:
         Overlay: Overlay of Curve
     """
@@ -58,7 +58,7 @@ def tsplot(dflist, names, timewindow=None):
     if dflist[0] is not None:
         start_dt = dflist[0].index.min()
         end_dt = dflist[0].index.max()
-    if timewindow is not None:
+    if zoom_inst_plot and (timewindow is not None):
         try:
             parts = timewindow.split(':')
             start_dt = parts[0]
@@ -228,7 +228,8 @@ def sanitize_name(name):
     return name.replace('.', ' ')
 
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
-                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False):
+                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
+                              zoom_inst_plot=False):
     """Builds calibration plot template
 
     Args:
@@ -250,6 +251,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         obs_data_included (bool, optional): If true, first study in studies list is assumed to be observed data.
             calibration metrics will be calculated.
         include_kde_plots (bool): If true, kde plots will be included. This is temporary for debugging
+        zoom_inst_plot (bool): If true, instantaneous plots will display on data in the inst_plot_timewindow
 
     Returns:
         panel: A template ready for rendering by display or save
@@ -258,7 +260,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow)
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units)
     cplot = None
     dfdisplayed_metrics = None
@@ -393,7 +395,7 @@ def get_units(flow_in_thousands=False, units=None):
     return unit_string
 
 
-def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None):
+def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None, zoom_inst_plot=False):
     """Builds calibration plot template
 
     Args:
@@ -420,7 +422,7 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     if flow_in_thousands:
         tsp_plot_data = [p.df/1000.0 if p.df is not None else None for p in pp]
     # create plots: instantaneous, godin, and scatter
-    tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow).opts(
+    tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot).opts(
         ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
     tsp = tsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return tsp
