@@ -10,7 +10,7 @@ import pyhecdss
 __all__ = ['read_hist_wateryear_types', 'read_calsim_wateryear_types', 'read_calsim3_wateryear_types', 
            'read_calsim_sacvalley_table', 'read_regulations', 
            'read_D1641FWS_conditional', 'read_dss_to_df', 
-           'generate_regulation_timeseries', 'generate_regulation_timeseries_calsim']    
+           'generate_regulation_timeseries', 'generate_regulation_timeseries_calsim','prep_df']    
 
 MONTHS = {'JAN': 1, 'FEB': 2, 'MAR': 3, 'APR': 4, 'MAY': 5,
           'JUN': 6, 'JUL': 7, 'AUG': 8, 'SEP': 9, 'OCT': 10, 'NOV': 11, 'DEC': 12}
@@ -414,3 +414,51 @@ def generate_regulation_timeseries_calsim(fpath,freq='1MON'):
         ec_250chlr, df_stds['value']) #only check standard of Chloride 250
         
     return df_stds
+
+
+def prep_df(scenarios,sta,var,intvl,df_wyt,period,src='ALL'):
+    """ Generate DataFrame of required station + variable + time interval + time period
+        from sets of DSM2 input or output or postprocess dss
+        associated with water year type info
+        
+        Returns:
+        --------
+        pandas.DataFrame :
+            a DataFrame containing all 
+    """
+    dfs = []
+    for scenario in scenarios:
+        fpath = scenario['fpath']
+        fparts=None
+        if (src!='ALL'):
+            with pyhecdss.DSSFile(fpath) as d:
+                catdf=d.read_catalog()
+            fparts = catdf.F[0].split('-')[0]+'-'+src
+            fparts = [fparts.upper()]
+        name = scenario['name']
+        df_sn = read_dss_to_df(fpath, bparts_to_read=sta,
+                               cparts_to_read=var, eparts_to_read=intvl,
+                               fparts_to_read=fparts,)
+        df_sn['scenario_name'] = name
+        dfs.append(df_sn)
+
+    df = pd.concat(dfs)
+    ds_parts = df['pathname'].map(lambda x: (x.split('/')))
+    df = df.assign(station=ds_parts.map(lambda x: x[2]),
+                   variable=ds_parts.map(lambda x: x[3]),
+                   interval=ds_parts.map(lambda x: x[5]),
+                   year=lambda x: x['time'].map(lambda y: y.year),
+                   month=lambda x: x['time'].map(lambda y: y.month))
+
+    # Add a wateryear type column
+    df = df.assign(wateryear=lambda x: x['year'])
+    mask = df['month'] > 9
+    df.loc[mask, 'wateryear'] += 1
+    # Join water year types
+    df = df.join(df_wyt.set_index('wy')['sac_yrtype'], on='wateryear')
+
+    df = df[df['time'] >= period[0]]
+    df = df[df['time'] <= period[1]]
+    
+    return df
+    
