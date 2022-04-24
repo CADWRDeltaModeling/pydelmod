@@ -90,9 +90,9 @@ dependencies:
   - prompt_toolkit=3.0.3
   - psutil=5.6.7
   - pycparser=2.19
-  - pydelmod=0.2.0
+  - pydelmod
   - pygments=2.5.2
-  - pyhecdss=0.3.0
+  - pyhecdss
   - pyopenssl=19.1.0
   - pyqt=5.9.2
   - pyrsistent=0.15.7
