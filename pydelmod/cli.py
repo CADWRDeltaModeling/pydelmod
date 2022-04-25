@@ -2,7 +2,8 @@
 """Console script for pydelmod."""
 from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
-from pydelmod import postpro_dsm2, dsm2_chan_mann_disp
+from pydelmod import postpro_dsm2
+from pydelmod import dsm2_chan_mann_disp
 import sys
 import click
 import panel as pn
@@ -57,7 +58,7 @@ def exec_postpro_dsm2(process_name, json_config_file, dask):
 @click.argument("dsm2_channels_input_filename", type=click.Path(dir_okay=False, exists=True, readable=True))
 @click.argument("dsm2_channels_output_filename", type=click.Path(dir_okay=False, exists=False, readable=False))
 def exec_dsm2_chan_mann_disp(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename):
-    dsm2_chan_mann_disp(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename)
+    dsm2_chan_mann_disp.prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename)
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
