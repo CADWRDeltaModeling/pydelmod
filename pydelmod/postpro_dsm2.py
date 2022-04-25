@@ -119,12 +119,15 @@ def save_to_graphics_format(calib_plot_template,fname):
     #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
     calib_plot_template.save(fname)
 
-def build_plot(config_data, studies, location, vartype):
+def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None):
+# def build_plot(config_data, studies, location, vartype):
     options_dict = config_data['options_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     inst_plot_timewindow = inst_plot_timewindow_dict[vartype.name]
     timewindow_dict = config_data['timewindow_dict']
     timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
+    zoom_inst_plot = options_dict['zoom_inst_plot']
+    gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
     flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
@@ -132,13 +135,20 @@ def build_plot(config_data, studies, location, vartype):
     flow_in_thousands = (vartype.name == 'FLOW')
     units = vartype.units
     include_kde_plots = options_dict['include_kde_plots']
-    calib_plot_template, metrics_df = calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
-        tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots)
+
+    calib_plot_template, metrics_df = \
+        calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
+            tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
+            zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
+    # calib_plot_template, metrics_df = \
+    #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
+    #         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
+    #         zoom_inst_plot=zoom_inst_plot)
     if calib_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
-    if metrics_df is not None:
+    else:
         location_list = []
         for r in range(metrics_df.shape[0]):
             location_list.append(location)
@@ -150,17 +160,21 @@ def build_plot(config_data, studies, location, vartype):
     return calib_plot_template, metrics_df
 
 
-def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
+def build_and_save_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, write_html=False, write_graphics=True, output_format='png'):
+# def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data['study_files_dict']
     output_plot_dir = config_data['options_dict']['output_folder']
     output_plot_dir = config_data['options_dict']['output_folder']
-    print(str(location))    
-    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
+    print('Building plot template for location: ' + str(location))    
+
+    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
+    # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
     if calib_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
     os.makedirs(output_plot_dir, exist_ok=True)
+    # save plot to html and/or png file
     if calib_plot_template is not None and metrics_df is not None:
         if write_html: 
             calib_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
@@ -212,9 +226,11 @@ def postpro_plots(cluster, config_data, use_dask):
     observed_files_dict = config_data['observed_files_dict']
     study_files_dict = config_data['study_files_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
-
+    gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
+    gate_location_file_dict = config_data['gate_location_file_dict'] if 'gate_location_file_dict' in config_data else None
     ## Set options and run processes. If using dask, create delayed tasks
     try:
+        gate_vartype = postpro.VarType('POS', '')
         for var_name in vartype_dict:
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
             print('vartype='+str(vartype))
@@ -226,22 +242,40 @@ def postpro_plots(cluster, config_data, use_dask):
                 locationfile=location_files_dict[vartype.name]
                 dfloc = postpro.load_location_file(locationfile)
                 locations = [postpro.Location(r['Name'],r['BPart'],r['Description']) for i,r in dfloc.iterrows()]
+
+                # now get gate data
+                gate_studies = None
+                gate_locations = None
+                if gate_file_dict is not None and gate_location_file_dict is not None:
+                    gate_locationfile=gate_location_file_dict['GATE']
+                    df_gate_loc = postpro.load_location_file(gate_locationfile, gate_data=True)
+                    print('df_gate_loc='+str(df_gate_loc))
+                    gate_locations = [postpro.Location(r['Name'],r['BPart'],r['Description']) for i,r in df_gate_loc.iterrows()]
+                    print('gate_locations: '+str(gate_locations))
+                    gate_studies = [postpro.Study('Gate',gate_file_dict[name]) for name in gate_file_dict]
+
                 # create list of postpro.Study objects, with observed Study followed by model Study objects
                 obs_study=postpro.Study('Observed',observed_files_dict[vartype.name])
                 model_studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
                 studies=[obs_study]+model_studies
+
+
                 # now run the processes
                 if use_dask:
                     print('using dask')
                     tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
-                                                    write_html=True,write_graphics=False,
+                                                    write_html=True,write_graphics=False, gate_studies = gate_studies, 
+                                                    gate_locations=gate_locations, gate_vartype=gate_vartype,
                                                     dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
+                    # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
+                    #                                 write_html=True,write_graphics=False,                                                     
+                    #                                 dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
                     dask.compute(tasks)
                 else:
                     print('not using dask')
                     for location in locations:
-                        build_and_save_plot(config_data, studies, location, vartype, 
-                                                    write_html=True,write_graphics=False)
+                        build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=False,
+                                            gate_studies = gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
                 merge_statistics_files(vartype, config_data)
     finally:
         if use_dask:

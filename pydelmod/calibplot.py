@@ -16,6 +16,7 @@ import datetime
 import sys
 import logging
 ## - Generic Plotting Functions ##
+import pyhecdss
 
 
 def parse_time_window(timewindow):
@@ -67,6 +68,8 @@ def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
             errmsg = 'error in calibplot.tsplot'
             print(errmsg)
             logging.error(errmsg)
+    # This doesn't work. Need to find a way to get this working.
+    # plt = [df[start_dt:end_dt].hvplot(label=name, x_range=(timewindow)) if df is not None else hv.Curve(None, label=name)
     plt = [df[start_dt:end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
         for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
@@ -111,7 +114,7 @@ def calculate_metrics(dflist, names, index_x=0):
     dfr = dfa.drop(columns=dfa.columns[index_x])
     names.remove(names[index_x])
     slopes, interceps, equations, r2s, pvals, stds = [], [], [], [], [], []
-    mean_errors, mses, rmses, percent_biases, nses, rsrs = [], [], [], [], [], []
+    mean_errors, nmean_errors, ses, nmses, mses, nmses, rmses, nrmses, percent_biases, nses, rsrs = [], [], [], [], [], [], [], [], [], [], []
 
     metrics_calculated = False
     if len(x_series) > 0:
@@ -128,8 +131,11 @@ def calculate_metrics(dflist, names, index_x=0):
                 pvals.append(pval)
                 stds.append(std)
                 mean_errors.append(tsmath.mean_error(y_series, x_series))
+                nmean_errors.append(tsmath.nmean_error(y_series, x_series))
                 mses.append(tsmath.mse(y_series, x_series))
+                nmses.append(tsmath.nmse(y_series, x_series))
                 rmses.append(tsmath.rmse(y_series, x_series))
+                nrmses.append(tsmath.nrmse(y_series, x_series))
                 percent_biases.append(tsmath.percent_bias(y_series, x_series))
                 nses.append(tsmath.nash_sutcliffe(y_series, x_series))
                 rsrs.append(tsmath.rsr(y_series, x_series))
@@ -146,11 +152,12 @@ def calculate_metrics(dflist, names, index_x=0):
     dfmetrics = None
     if metrics_calculated:
         dfmetrics = pd.concat([pd.DataFrame(arr)
-                            for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, mses, rmses, percent_biases, \
-                                nses, rsrs)], axis=1)
+                            for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, nmean_errors, mses, nmses, rmses, nrmses, \
+                                percent_biases, nses, rsrs)], axis=1)
         dfmetrics.columns = ['regression_slope', 'regression_intercep', 'regression_equation',
-                            'r2', 'pval', 'std', 'mean_error',
-                            'mse', 'rmse', 'percent_bias', 'nash_sutcliffe', 'rsr']
+                            'r2', 'pval', 'std', 'mean_error', 'nmean_error', 
+                            'mse', 'nmse', 'rmse', 'nrmse', 'percent_bias', 'nash_sutcliffe', 'rsr']
+
         dfmetrics.index = names
     return dfmetrics
 
@@ -227,9 +234,70 @@ def kdeplot(dflist, names, xlabel):
 def sanitize_name(name):
     return name.replace('.', ' ')
 
+class DataMaskingTimeSeries:
+    def __init__(self, gate_studies, gate_location, gate_vartype, timewindow):
+        #     ----------------------------------------------------------
+        # gate_studies, gate_locations,gate_vartype=
+        # ----------------------------------------------------------
+        # [Study(name='Gate', dssfile='../../../timeseries2019/gates-v8-201912.dss')]
+        # [Location(name='DLC', bpart='DLC', description='Delta Cross-Channel Gate')]
+        # VarType(name='POS', units='')
+        # ----------------------------------------------------------
+        self.dssfile = gate_studies[0].dssfile
+        self.location = gate_location
+        self.bpart = self.location.bpart.upper()
+        self.vartype = gate_vartype.name
+        self.timewindow = timewindow
+        self.gate_time_series_tuple = None
+        self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
+        # try:
+        #     # self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow)))
+        #     self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
+        #     print('DataMaskingTimeSeries constructor: type of df='+str(type(self.gate_time_series_tuple)))
+
+
+
+        # except StopIteration as e:
+        #     print('no data found for ' + self.dssfile + ',//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow))
+        #     logging.exception('pydsm.postpro.PostProCache.load: no data found')
+        self.time_series_df = self.get_time_series_df()
+
+    def get_time_series_df(self):
+        '''
+        for now, assume only one data set is being read
+        self.gate_time_series_tuple has 3 elements:
+        1. the dataframe
+        2. string = 'UNSPECIF' (probably units)
+        3. string = 'INST-VAL' (averaging)
+        '''
+        return_df = None
+        for t in self.gate_time_series_tuple:
+            if isinstance(t, pd.DataFrame):
+                return_df = t
+        return return_df
+
+
+
+
+
+
+    def get_gate_value(self, location, datetime):
+        '''
+        returns the value of the gate time series at or before given date.
+        reference: https://kanoki.org/2022/02/09/how-to-find-closest-date-in-dataframe-for-a-given-date/
+        '''
+        gate_value_index = self.gate_time_series_df.get_loc(datetime) - 1
+        return self.gate_time_series_df[[gate_value_index]]['POS']
+
+
+
+
+
+
+
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
                               inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
-                              zoom_inst_plot=False):
+                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None):
     """Builds calibration plot template
 
     Args:
@@ -260,16 +328,54 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
+
+    print('build_calib_plot_template')
+    gate_pp = []
+    print('----------------------------------------------------------')
+    print('gate_studies, gate_locations,gate_vartype=')
+    print('----------------------------------------------------------')
+    print(str(gate_studies))
+    print(str(gate_locations))
+    print(str(gate_vartype))
+    print('----------------------------------------------------------')
+
+    data_masking_time_series_dict= {}
+    data_masking_df_dict = {}
+    if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+        for gate_location in gate_locations:
+            dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
+            data_masking_time_series_dict.update({gate_location.name: dmts})
+            data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
+    else:
+        print('Not using gate information for plots/metrics data masking because insufficient information provided.')
+
     tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units)
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots = None
+
     if obs_data_included:
         cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units)
-        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
-                              layout_nash_sutcliffe=False)
+
+        df_displayed_metrics_dict = {}
+        metrics_table_dict = {}
+        if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+            dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True)
+            dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False)
+            df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
+            df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
+            metrics_table_dict.update({'open': metrics_table_open})
+            metrics_table_dict.update({'closed': metrics_table_closed})
+        else:
+            dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
+                                layout_nash_sutcliffe=False)
+            df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
+            metrics_table_dict.update({'all': metrics_table})
+
         if include_kde_plots: 
             kdeplots = build_kde_plots(pp)
     
@@ -292,18 +398,31 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
                         tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
                         # pn.Row(tsplots2),
-                        pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')), \
-                        pn.Row(kdeplots))
+                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+                    column.append(pn.Row(kdeplots))
                 else:
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
                         tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
                         # pn.Row(tsplots2),
-                        pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'), metrics_table.opts(title='(d)')))
+                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
@@ -317,18 +436,30 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
                         tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'))
                         # pn.Row(tsplots2),
-                        pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')),
-                        pn.Row(kdeplots))
+                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+                    column.append(pn.Row(kdeplots))
                 else:
                     column = pn.Column(
                         header_panel,
                         # tsp.opts(width=900, legend_position='right'),
                         tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'))
                         # pn.Row(tsplots2),
-                        pn.Row(cplot.opts(shared_axes=False, title='(c)'), metrics_table.opts(title='(d)')))
+                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
@@ -340,8 +471,14 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
             if obs_data_included:
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')),
-                    pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'), metrics_table.opts(title='(c)')))
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+                    # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
@@ -351,13 +488,40 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
             if obs_data_included:
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')),
-                    pn.Row(cplot.opts(shared_axes=False, title='(b)'), metrics_table.opts(title='(c)')))
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+                    # pn.Row(cplot.opts(shared_axes=False, title='(b)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
                     pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
-    return column, dfdisplayed_metrics
+
+    # now merge all metrics dataframes, adding a column identifying the gate status
+    return_metrics_df = None
+    df_index = 0
+    for metrics_df_name in df_displayed_metrics_dict:
+        metrics_df_name_list = []
+        metrics_df = df_displayed_metrics_dict[metrics_df_name]
+        for r in range(metrics_df.shape[0]):
+            metrics_df_name_list.append(metrics_df_name)
+        metrics_df['Gate Pos'] = metrics_df_name_list
+        # move Gate Pos column to beginning
+        cols = list(metrics_df)
+        cols.insert(0, cols.pop(cols.index('Gate Pos')))
+        metrics_df = metrics_df.loc[:, cols]
+        # merge df into return_metrics_df
+        if df_index == 0:
+            return_metrics_df = metrics_df
+        else:
+            return_metrics_df.append(metrics_df)
+        df_index += 1
+    return column, return_metrics_df
+
 
 def load_data_for_plotting(studies, location, vartype, timewindow):
     """Loads data used for creating plots and metrics
@@ -464,7 +628,8 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None)
     gtsp = gtsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return gtsp
 
-def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None):
+def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None):
+# def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None):
     """Builds calibration plot template
 
     Args:
@@ -529,7 +694,7 @@ def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=No
     return cplot
 
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
-                              layout_nash_sutcliffe=False):
+                              layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True):
     """Builds calibration plot template
 
     Args:
@@ -546,9 +711,15 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         layout_nash_sutcliffe (bool, optional): if true, include Nash-Sutcliffe Efficiency in tables that are
             included in plot layouts. NSE will be included in summary tables--separate files containing only
             the equations and statistics for all locations.
+        gate_dss_file (str): path to DSS file with gate data, to be used for creating metrics tables separately 
+            for gate open/closed conditions. This will only be done for a given location if a DSS path is
+            specified in the location file in the gate_time_series field.
+        data_masking_df_dict (dict of df): contains gate time series used for data masking.
+        gate_open (bool): if true, calculate metrics for gate open condition (gate pos > 0) only.
 
     Returns:
-        a table object
+        a list containing one or more table object(s). Will contain more then one object if a DSS path is specified
+            in the location file in the gate_time_series field.
     """
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
     unit_string = get_units(flow_in_thousands, units)
@@ -563,6 +734,21 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     if flow_in_thousands:
         # if p.gdf is not None:
         gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
+
+
+
+
+    # use data_masking_df_dict to mask data (remove rows if gate open/closed)
+    # for location in data_masking_df_dict:
+        
+
+
+
+
+
+
+
+
 
     dfdisplayed_metrics = None
     column = None
@@ -598,60 +784,63 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     metrics_table = None
     if tidal_template:
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            'regression_equation', 'r2', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
         dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
 
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns = ['Equation', 'R Squared',
-                                    'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
-
+                                    'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
         a = dfdisplayed_metrics['Equation'].to_list()
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
-        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
-        d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
-        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
-        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
-        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
-        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
+        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['N Mean Error'].to_list()]
+        d = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
+        e = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
+        f = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        g = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
+        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
         if layout_nash_sutcliffe:
             metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', \
+                                    'Study', 'Equation', 'R Squared', 'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
                                         'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
         else:
-            metrics_table = hv.Table((study_list, a, b, c, d, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
+            metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i), [
+                                    'Study', 'Equation', 'R Squared', 'N Mean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                        'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
     else:
+        # template for nontidal (EC) data
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            'regression_equation', 'r2', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics = pd.concat(
-            [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['mean_error', 'rmse']]], axis=1)
+            [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns = ['Equation', 'R Squared',
-                                    'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
-        format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'Mean Error': '{:,.2f}', 'RMSE': '{:,.2}',
+                                    'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
+        format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'NMean Error': '{:,.2f}', 'NMSE': '{:,.2}', 'NRMSE': '{:,.2}',
                     'Amp Avg %Err': '{:,.2f}', 'Avg Phase Err': '{:,.2f}', 'NSE': '{:,.2f}', 'PBIAS': '{:,.2f}', 'RSR': '{:,.2f}'}
         dfdisplayed_metrics.style.format(format_dict)
         # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
         # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
         a = dfdisplayed_metrics['Equation'].to_list()
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
-        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
-        d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RMSE'].to_list()]
-        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
-        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
-        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
-        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
+        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMean Error'].to_list()]
+        d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
+        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
+        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        h = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
+        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
         if layout_nash_sutcliffe:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'NSE', 'PBIAS', 'RSR', \
+            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i, j), [
+                                    'Study', 'Equation', 'R Squared', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
                                         'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
         else:
-            metrics_table = hv.Table((study_list, a, b, c, d, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'RMSE', 'Mnly Mean Err', \
-                                        'Mnly RMSE']).opts(width=580, fontscale=.8)
+            metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i, j), [
+                                    'Study', 'Equation', 'R Squared', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                        'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
     return dfdisplayed_metrics, metrics_table
 
 def build_kde_plots(pp, amp_title='(e)', phase_title='(f)'):
