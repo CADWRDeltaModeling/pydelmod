@@ -3,7 +3,7 @@ import numpy as np
 import os
 
 
-def dsm2_chan_mann_disp(cg_filename, cg_mann_disp_filename, ci_filename, outfile_name):
+def prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename):
     '''
     read 3 files
     cg_filename (chngrp_8_3_.csv)
@@ -19,14 +19,14 @@ def dsm2_chan_mann_disp(cg_filename, cg_mann_disp_filename, ci_filename, outfile
     # cg_mann_disp_filename = 'chan_mann_disp.csv'
     # ci_filename = '../geom/'+ci_filename_prefix+'.inp'
     # outfile_name = '../geom/'+ci_filename_prefix+'_new.inp'
-    outfile = open(outfile_name, 'w')
+    outfile = open(dsm2_channels_output_filename, 'w')
     cd_dir = '//cnrastore-bdo/Delta_Mod/Share/DSM2/full_calibration_8_3/delta/dsm2v8.3/studies/'
 
-    channel_group_df = pd.read_csv(cg_filename)
-    channel_mann_disp_df = pd.read_csv(cg_mann_disp_filename)
+    channel_group_df = pd.read_csv(chan_to_group_filename)
+    channel_mann_disp_df = pd.read_csv(chan_group_mann_disp_filename)
 
     # ci_filename = '//cnrastore-bdo/Delta_Mod/Share/DSM2/full_calibration_8_3/channel_groups/channel_std_delta_grid_from_CSDP_NAVD.inp'
-    ci_file = open(ci_filename)
+    ci_file = open(dsm2_channels_input_filename)
     # outfile = open('//cnrastore-bdo/Delta_Mod/Share/DSM2/full_calibration_8_3/channel_groups/new_channel_std_delta_grid.inp', 'w')
     # assume that CHANNEL section will be first input section in file. Other sections will be copied without modification
     # to the new file
