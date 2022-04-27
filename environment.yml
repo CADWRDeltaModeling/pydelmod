@@ -1,12 +1,11 @@
 name: pydelmod
 channels:
   - cadwr-dms
-  - pyviz
   - defaults
-  - plotly
   - conda-forge
 dependencies:
   - python=3.7
+  - pip
   # first our packages
   - pyhecdss
   - vtools3
@@ -14,23 +13,32 @@ dependencies:
   - pydelmod
   - schimpy
   # then basics
+  - click
+  - aiohttp
   - numba
+  - pandas
   - dask
   - xarray
   - netcdf4
   - scipy
+  # geo stuff
   - gdal
   - shapely
+  - geopandas
+  # for different file formats
+  - fastparquet
+  - python-snappy
+  - pyarrow
   - pytables
   - openpyxl
   # then plot stuff
   - matplotlib
-  - geopandas
   - geoviews
   - holoviews
   - hvplot
   - jupyter
-  - plotly=3
+  - plotly-orca
+  - plotly
   - networkx
   # widgets
   - ipyleaflet
@@ -42,6 +50,3 @@ dependencies:
   # finally misc 
   - jupyter_contrib_nbextensions
   - autopep8
-  - click
-  - numpy
-  - pandas
