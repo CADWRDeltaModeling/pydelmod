@@ -1,7 +1,9 @@
 name: pydelmod
 channels:
   - cadwr-dms
+  - pyviz
   - defaults
+  - plotly
   - conda-forge
 dependencies:
   - python=3.7
