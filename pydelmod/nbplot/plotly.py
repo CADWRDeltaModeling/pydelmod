@@ -397,11 +397,14 @@ class PlotExceedanceBase(PlotNotebookBase):
         self.filter_data()
         data = []
         title = self.generate_title()
+        xaxis_name = self.options.get('xaxis_name',
+                                      'Probability of Exceedance (%)')
         yaxis_name = self.options.get('yaxis_name',
                                       'EC (micromhos/cm)')
         self.layout = go.Layout(template='seaborn',
                                 title=dict(text=title),
                                 yaxis=dict(title=yaxis_name),
+                                xaxis=dict(title=xaxis_name),
                                 height=self.height,
                                 margin=self.margin)
         for case in self.cases:
@@ -752,7 +755,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
         data = []
         title = self.generate_title()
         xaxis_name = self.options.get('xaxis_name',
-                                      'Probability of Compliance (%)')
+                                      'Probability of Meeting D-1641 Water Quality Objective (%)')
         yaxis_name = self.options.get('yaxis_name',
                                       'Difference in EC (micromhos/cm)')
         self.layout = go.Layout(template='seaborn',
@@ -764,7 +767,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                                 xaxis=dict(title=xaxis_name),
                                 height=self.height,
                                 margin=self.margin)
-        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride
+        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC 150 Chloride
             results = {'Scenario': [],
                        '# of Years Standards are Applicable': [],
                        '# of Years Exceeded': [],
@@ -820,7 +823,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
 
     def update(self):
         self.fig.layout.title.text = self.generate_title()
-        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride, count under standard
+        if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC 150 Chloride, count under standard
             results = {'Scenario': [],
                        '# of Years Standards are Applicable': [],
                        '# of Years Exceeded': [],
@@ -838,7 +841,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
             n = yval.count()
             xval = np.arange(1, n + 1) / n * 100.
             results['Scenario'].append(case)
-            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC Chloride, count under standard
+            if (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'): # CCC 150 Chloride, count under standard
                 results['# of Years Standards are Applicable'].append(n)
                 n_exceeded = yval[yval < 0.].count()
                 results['# of Years Exceeded'].append(n_exceeded)
