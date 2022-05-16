@@ -571,7 +571,7 @@ class PlotStepWithRegulationBase(PlotNotebookBase):
                         df = self.df[mask].set_index('time').resample('1m')[
                              'value'].mean().reset_index()
                         df[self.colname_variable] = variable + '-MAVG'
-                    elif (self.df_reg['scenario_name'].unique() in ['D1641 MI 250','D1641 MI 150']):
+                    elif (self.df_reg['scenario_name'].unique() in ['D1641 MI 250','D1641 MI 150','D1641 Monthly']):
                         df = self.df[mask].set_index('time').reset_index()
                         df[self.colname_variable] = variable
                     else: 
@@ -731,7 +731,7 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                         ds_diff = ds.reindex(ds_reg.index) - ds_reg
                         df = ds_diff.to_frame().reset_index()
                         df[self.colname_variable] = variable + '-DIFF'
-                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 150'):
+                    elif (self.df_reg['scenario_name'].unique() == 'D1641 MI 150','D1641 Monthly'):
                         ds = self.df[mask].set_index('time')['value']
                         ds_diff = ds.reindex(ds_reg.index) - ds_reg
                         df = ds_diff.to_frame().reset_index()
@@ -772,6 +772,11 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                        '# of Years Standards are Applicable': [],
                        '# of Years Exceeded': [],
                        r'% of Years Exceeded': []}
+        elif (self.df_reg['scenario_name'].unique() == 'D1641 Monthly'): # Calsim Monthly, EMM/JER/RSU
+            results = {'Scenario': [],
+                       '# of Months Standards are Applicable': [],
+                       '# of Months Exceeded': [],
+                       r'% of Months Exceeded': []}
         else:
             results = {'Scenario': [],
                        '# of Days Standards are Applicable': [],
@@ -793,6 +798,12 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                 n_exceeded = yval[yval < 0.].count()
                 results['# of Years Exceeded'].append(n_exceeded)
                 results[r'% of Years Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
+            elif (self.df_reg['scenario_name'].unique() == 'D1641 Monthly'): # Calsim Monthly, EMM/JER/RSU
+                results['# of Months Standards are Applicable'].append(n)
+                n_exceeded = yval[yval > 0.].count()
+                results['# of Months Exceeded'].append(n_exceeded)
+                results[r'% of Months Exceeded'].append(
                     f'{n_exceeded / n * 100.:.2f}')
             else: # most cases, count over standard
                 results['# of Days Standards are Applicable'].append(n)
@@ -828,6 +839,11 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                        '# of Years Standards are Applicable': [],
                        '# of Years Exceeded': [],
                        r'% of Years Exceeded': []}
+        elif (self.df_reg['scenario_name'].unique() == 'D1641 Monthly'): # Calsim Monthly, EMM/JER/RSU
+            results = {'Scenario': [],
+                       '# of Months Standards are Applicable': [],
+                       '# of Months Exceeded': [],
+                       r'% of Months Exceeded': []}
         else:
             results = {'Scenario': [],
                        '# of Days Standards are Applicable': [],
@@ -846,6 +862,12 @@ class PlotExceedanceWithRegulationBase(PlotNotebookBase):
                 n_exceeded = yval[yval < 0.].count()
                 results['# of Years Exceeded'].append(n_exceeded)
                 results[r'% of Years Exceeded'].append(
+                    f'{n_exceeded / n * 100.:.2f}')
+            elif(self.df_reg['scenario_name'].unique() == 'D1641 Monthly'): # Calsim Monthly, EMM/JER/RSU
+                results['# of Months Standards are Applicable'].append(n)
+                n_exceeded = yval[yval > 0.].count()
+                results['# of Months Exceeded'].append(n_exceeded)
+                results[r'% of Months Exceeded'].append(
                     f'{n_exceeded / n * 100.:.2f}')
             else: # most cases, count over standard
                 results['# of Days Standards are Applicable'].append(n)
