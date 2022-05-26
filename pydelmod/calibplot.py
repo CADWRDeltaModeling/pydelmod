@@ -328,7 +328,6 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-
     print('build_calib_plot_template')
     gate_pp = []
     print('----------------------------------------------------------')
@@ -784,62 +783,65 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     metrics_table = None
     if tidal_template:
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
         dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
 
         dfdisplayed_metrics.index.name = 'DSM2 Run'
-        dfdisplayed_metrics.columns = ['Equation', 'R Squared',
+        dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
                                     'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
         a = dfdisplayed_metrics['Equation'].to_list()
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
-        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['N Mean Error'].to_list()]
-        d = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
-        e = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
-        f = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        g = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
-        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
-        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
-        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
+        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
+        d = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['N Mean Error'].to_list()]
+        e = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
+        f = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
+        g = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        h = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
+        k = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
         if layout_nash_sutcliffe:
             metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
+                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
                                         'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
         else:
             metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i), [
-                                    'Study', 'Equation', 'R Squared', 'N Mean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'N Mean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
                                         'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
     else:
         # template for nontidal (EC) data
         dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
         dfdisplayed_metrics = pd.concat(
             [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
         dfdisplayed_metrics.index.name = 'DSM2 Run'
-        dfdisplayed_metrics.columns = ['Equation', 'R Squared',
+        dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
                                     'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
-        format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'NMean Error': '{:,.2f}', 'NMSE': '{:,.2}', 'NRMSE': '{:,.2}',
+        format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'Mean Error': '{:,.2f}', 'NMean Error': '{:,.2f}', 'NMSE': '{:,.2}', 'NRMSE': '{:,.2}',
                     'Amp Avg %Err': '{:,.2f}', 'Avg Phase Err': '{:,.2f}', 'NSE': '{:,.2f}', 'PBIAS': '{:,.2f}', 'RSR': '{:,.2f}'}
         dfdisplayed_metrics.style.format(format_dict)
         # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
         # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
         a = dfdisplayed_metrics['Equation'].to_list()
         b = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['R Squared'].to_list()]
-        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMean Error'].to_list()]
-        d = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
-        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
-        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
-        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
-        h = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
-        i = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
-        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
+        c = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mean Error'].to_list()]
+        d = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['NMean Error'].to_list()]
+        e = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NMSE'].to_list()]
+        f = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NRMSE'].to_list()]
+        g = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['NSE'].to_list()]
+        h = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['PBIAS'].to_list()]
+        i = ['{:.2E}'.format(item) for item in dfdisplayed_metrics['RSR'].to_list()]
+        j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly Mean Err'].to_list()]
+        k = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Mnly RMSE'].to_list()]
+
         if layout_nash_sutcliffe:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i, j), [
-                                    'Study', 'Equation', 'R Squared', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
+            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i, j, k), [
+                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
                                         'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
         else:
             metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i, j), [
-                                    'Study', 'Equation', 'R Squared', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                    'Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
                                         'Mnly Mean Err', 'Mnly RMSE']).opts(width=580, fontscale=.8)
     return dfdisplayed_metrics, metrics_table
 
