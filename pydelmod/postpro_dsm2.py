@@ -164,7 +164,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
 # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data['study_files_dict']
     output_plot_dir = config_data['options_dict']['output_folder']
-    output_plot_dir = config_data['options_dict']['output_folder']
+    print('build and save plot: output_plot_dir = ' + output_plot_dir)
     print('Building plot template for location: ' + str(location))    
 
     calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
@@ -177,6 +177,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     # save plot to html and/or png file
     if calib_plot_template is not None and metrics_df is not None:
         if write_html: 
+            print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
             calib_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
         if write_graphics:
             save_to_graphics_format(calib_plot_template,f'{output_plot_dir}{location}_{vartype.name}.png')
@@ -241,7 +242,8 @@ def postpro_plots(cluster, config_data, use_dask):
                 #The .csv file should have atleast 'Name','BPart' and 'Description' columns
                 locationfile=location_files_dict[vartype.name]
                 dfloc = postpro.load_location_file(locationfile)
-                locations = [postpro.Location(r['Name'],r['BPart'],r['Description']) for i,r in dfloc.iterrows()]
+                print('about to read location file: '+ locationfile)
+                locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
 
                 # now get gate data
                 gate_studies = None
