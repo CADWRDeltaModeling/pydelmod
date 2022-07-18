@@ -280,8 +280,6 @@ class DataMaskingTimeSeries:
         #     self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
         #     print('DataMaskingTimeSeries constructor: type of df='+str(type(self.gate_time_series_tuple)))
 
-
-
         # except StopIteration as e:
         #     print('no data found for ' + self.dssfile + ',//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow))
         #     logging.exception('pydsm.postpro.PostProCache.load: no data found')
@@ -841,11 +839,11 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         j = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Amp Avg %Err'].to_list()]
         k = ['{:.2f}'.format(item) for item in dfdisplayed_metrics['Avg Phase Err'].to_list()]
         if layout_nash_sutcliffe:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i), [
+            metrics_table = hv.Table((study_list, a, b, c, d, e, f, g, h, i, j, k), [
                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'N Mean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
                                         'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
         else:
-            metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i), [
+            metrics_table = hv.Table((study_list, a, b, c, d, e, g, h, i, j, k), [
                                     'Study', 'Equation', 'R Squared', 'Mean Error', 'N Mean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
                                         'Amp Avg %Err', 'Avg Phase Err']).opts(width=580, fontscale=.8)
     else:
