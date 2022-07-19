@@ -67,6 +67,8 @@ def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'
         else:
             df = df.sub(df[base_column],axis=0).div(df[base_column],axis=0)*100
     mm = max(abs(df.max().max()),abs(df.min().min()))
+    if base_column is not None and base_diff_type != 'abs':
+        mm = min(mm,50) # for percent more than 50% difference is too much ...   
     heatmap = df.hvplot.heatmap(title=title+' Metric: '+metric,
                                 cmap='RdBu',
                                 #cnorm='eq_hist',
