@@ -49,7 +49,7 @@ def read_summary_stats(fname, station_order_df):
     dfp['names'] = names
     return dfp.set_index('names')
 
-def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'):
+def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs-diff'):
     """
 
     heatmap by selecting the column metric (for multi indexed data frame this could result in multiple columns)
@@ -59,9 +59,16 @@ def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'
     df = df[metric]
     if base_column is not None:
         if base_diff_type == 'abs':
+            print('calculating abs')
             df = df.sub(df[base_column],axis=0)
+        elif base_diff_type == 'abs-diff':
+            print('calculating abs diff')
+            df = abs(df).sub(abs(df[base_column]),axis=0)
         else:
+            print('calculating percent diff')
             df = df.sub(df[base_column],axis=0).div(df[base_column],axis=0)*100
+    else:
+        print('calib_heatmap.heatmap_for_metric: base_column not specified, not subtracting.')
     mm = max(abs(df.max().max()),abs(df.min().min()))
     if base_column is not None and base_diff_type != 'abs':
         mm = min(mm,50) # for percent more than 50% difference is too much ...   
@@ -76,7 +83,7 @@ def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'
 
 
 def create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
-    heatmap_width = 800, heatmap_height=1000,process_vartype_dict=None):
+    heatmap_width = 800, heatmap_height=1000,process_vartype_dict=None, base_diff_type='abs-diff'):
     station_order_df = pd.read_csv(station_order_file)
 
     for constituent in calib_metric_csv_filenames_dict:
@@ -96,10 +103,14 @@ def create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, ba
                 len_south = len(df_south.index)
                 len_west = len(df_west.index)
 
-                h_central = heatmap_for_metric(df_central, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
-                h_north = heatmap_for_metric(df_north, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
-                h_south = heatmap_for_metric(df_south, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
-                h_west = heatmap_for_metric(df_west, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
+                h_central = heatmap_for_metric(df_central, metric, 'Central Delta ' + constituent + \
+                    ' summary status from run '+run_name +' :: ', base_column=base_run_name, base_diff_type=base_diff_type).opts(width=heatmap_width, height=heatmap_height)
+                h_north = heatmap_for_metric(df_north, metric, 'North Delta ' + constituent + \
+                    ' summary status from run '+run_name +' :: ', base_column=base_run_name, base_diff_type=base_diff_type).opts(width=heatmap_width, height=heatmap_height)
+                h_south = heatmap_for_metric(df_south, metric, 'South Delta ' + constituent + \
+                    ' summary status from run '+run_name +' :: ', base_column=base_run_name, base_diff_type=base_diff_type).opts(width=heatmap_width, height=heatmap_height)
+                h_west = heatmap_for_metric(df_west, metric, 'Western Delta ' + constituent + \
+                    ' summary status from run '+run_name +' :: ', base_column=base_run_name, base_diff_type=base_diff_type).opts(width=heatmap_width, height=heatmap_height)
 
                 heatmap_layout = (h_north+h_central+h_south+h_west).opts(shared_axes=False)
                 heatmap_column = pn.Column()

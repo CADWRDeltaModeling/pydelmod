@@ -8,7 +8,8 @@
 	"base_run": "v8_2_1",
 	"alt_run": "v8_3_run23",
 	"metrics_list": ["NRMSE"],
-	"station_order_file": "../../../postprocessing/location_info/calibrationHeatMapStationOrderCombined.csv"
+	"station_order_file": "../../../postprocessing/location_info/calibrationHeatMapStationOrderCombined.csv",
+	"base_diff_type": "abs-diff"
     },
     "process_heatmap_vartype_dict": {
 		"EC": true,

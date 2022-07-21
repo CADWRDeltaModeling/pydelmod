@@ -230,10 +230,11 @@ def postpro_heatmaps(cluster, config_data, use_dask):
     base_run_name = heatmap_options_dict['base_run']
     run_name = heatmap_options_dict['alt_run']
     metrics_list = heatmap_options_dict['metrics_list']
+    base_diff_type = heatmap_options_dict['base_diff_type']
     process_heatmap_vartype_dict = config_data['process_heatmap_vartype_dict']
 
     calib_heatmap.create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
-        process_vartype_dict=process_heatmap_vartype_dict)
+        process_vartype_dict=process_heatmap_vartype_dict, base_diff_type=base_diff_type)
 
 
 def postpro_plots(cluster, config_data, use_dask):
