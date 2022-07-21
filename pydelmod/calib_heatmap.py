@@ -3,9 +3,23 @@ import pandas as pd
 
 import holoviews as hv
 import hvplot.pandas
+import panel as pn
 
+central=['RSAC101','RVB','SRV','STI','RSMKL008','MOK','SAL','RSAN032','TSL','SLTRM004','EMM','RSAC092',
+        'PRI','RSAN037','FAL','JER','RSAN018','HOL','DSJ','SLDUT007','HLT','TRN','RSL','SLRCK005','OBI',
+        'ROLD024','BAC','RRI','RSAN058','OH4','ROLD034']
+north= ['FPT','RSAC155','SUT','HWB','SSS','BKS','SLBAR002','RSAC128','RSAC128-RSAC123','SDC','CHDCC000','DLC',
+        'SDC-GES','RSAC123','GES','GSS','Georg_SL']
+south=['SJG','RSAN063','CHVCT000','VCU','BDT','RSAN072','CHSWP003','CLC','UNI','OLD_MID','GCT','CHGRL009','CHDMC006',
+       'DMC','OH1','ROLD074','OAD','ROLD047','ROLD059','OLD','MSD','RSAN087','VER','RSAN112']
+west=['BDL','SLMZU011','SNC','SLCBN002','VOL','SLSUS012','NSL','SLMZU025','CLL','RSAC081','PCT','RSAC064','RSAC075',
+      'MAL','MRZ','RSAC054','ANH','RSAN007','ANC']
 
-def read_summary_stats(fname):
+def format_location(x):
+    parts = x.split("'")
+    return parts[1]+'/'+parts[3]
+
+def read_summary_stats(fname, station_order_df):
     '''
 
     Reads the 1_summary*csv file format and extracts the name from the Location column to us as index.add()
@@ -22,36 +36,18 @@ def read_summary_stats(fname):
     >>> df['NRMSE']
     '''
     df = pd.read_csv(fname)
+    # # This should sort the rows using station_order_df, but it doesn't work with the pivot table for some reason.
+    # df['Location'] = df.apply(lambda x: format_location(x['Location']), axis=1)
+    # # add index to use for sorting by region, northing, easting
+    # df = df.merge(station_order_df, on=["Location"], how='left')
+    # df = df.sort_values('station_index')
+    # df=df[['Region']].reset_index().drop_duplicates()
+
     dfp = df.pivot('Location', columns='DSM2 Run')
     names = dfp.index.to_series().str.split('name=', expand=True).iloc[:, 1].str.split(
         ',', expand=True).iloc[:, 0].str.replace("'", "").values
     dfp['names'] = names
     return dfp.set_index('names')
-
-def heatmap_for_alt_run(df, title, alt_column, base_column, base_diff_type='diff-abs'):
-    """
-
-    heatmap by selecting the alternative run (for multi indexed data frame this could result in multiple columns)
-    if base_column is specified, uses that to do an absolute or percent diff calculation
-    if base_diff_type is abs then subtract absolute value otherwise calculate percent diffs
-    """
-    df = df[(base_column, alt_column)]
-    if base_column is not None:
-        if base_diff_type == 'diff-abs':
-            # df = df.sub(df[base_column],axis=0)
-            df = abs(df).sub(abs(df[base_column]))
-        else:
-            df = df.sub(df[base_column],axis=0).div(df[base_column],axis=0)*100
-    df = df[alt_column]
-    mm = max(abs(df.max().max()),abs(df.min().min()))
-    heatmap = df.hvplot.heatmap(title=title+' Diff-Abs',
-                                cmap='RdBu',
-                                #cnorm='eq_hist',
-                                grid=True,
-                                xaxis='top',
-                                clim=(mm,-mm),
-                                rot=0).opts(margin=10)
-    return heatmap*(hv.Labels(heatmap).opts(text_color='black', text_font_size='8pt'))
 
 def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'):
     """
@@ -78,45 +74,53 @@ def heatmap_for_metric(df, metric, title, base_column=None, base_diff_type='abs'
                                 rot=0).opts(margin=10)
     return heatmap*(hv.Labels(heatmap).opts(text_color='black', text_font_size='8pt'))
 
-folder_name = 'run22'
-run_name = 'v8_3_run22'
-plots_folder = 'X:/Share/DSM2/full_calibration_8_3/delta/dsm2v8.3/studies/' + folder_name + '/postprocessing/plots/'
-location_info_folder = 'X:/Share/DSM2/full_calibration_8_3/delta/dsm2v8.3/postprocessing/location_info/'
 
-def format_location(x):
-    parts = x.split("'")
-    return parts[1]+'/'+parts[3]
+def create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
+    heatmap_width = 800, heatmap_height=1000,process_vartype_dict=None):
+    station_order_df = pd.read_csv(station_order_file)
 
+    for constituent in calib_metric_csv_filenames_dict:
+        f = calib_metric_csv_filenames_dict[constituent]
+        df = read_summary_stats(f, station_order_df)
 
+        title = 'Run ' + run_name +'- '+base_run_name
+        heatmap_list = []
+        if process_vartype_dict is None or constituent.upper() in process_vartype_dict:
+            for metric in metrics_list:
+                df_central = df[df.index.isin(central)]
+                df_north = df[df.index.isin(north)]
+                df_south = df[df.index.isin(south)]
+                df_west = df[df.index.isin(west)]
+                len_central = len(df_central.index)
+                len_north = len(df_north.index)
+                len_south = len(df_south.index)
+                len_west = len(df_west.index)
+
+                h_central = heatmap_for_metric(df_central, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
+                h_north = heatmap_for_metric(df_north, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
+                h_south = heatmap_for_metric(df_south, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
+                h_west = heatmap_for_metric(df_west, metric, 'Central Delta ' + constituent + ' summary status from run '+run_name +' :: ').opts(width=heatmap_width, height=heatmap_height)
+
+                heatmap_layout = (h_north+h_central+h_south+h_west).opts(shared_axes=False)
+                heatmap_column = pn.Column()
+                heatmap_column.append(heatmap_layout)
+                heatmap_column.save(f'plots/HeatMaps/heatmap_{constituent}_{metric}.png')
+ 
 def main():
-    station_order_file = 'd:/documents/calibrationHeatMapStationOrderCombined.csv'
-
-    location_files_dict = {'Flow': location_info_folder + 'calibration_flow_stations.csv',
-        'Stage': location_info_folder + 'calibration_stage_stations.csv',
-        'EC': location_info_folder + 'calibration_ec_stations.csv'
-    }
+    folder_name = 'run22'
+    run_name = 'v8_3_run22'
+    cal_folder = 'X:/Share/DSM2/full_calibration_8_3/delta/dsm2v8.3/'
+    plots_folder = cal_folder + 'studies/' + folder_name + '/postprocessing/plots/'
+    location_info_folder = cal_folder + 'postprocessing/location_info/'
+    station_order_file = location_info_folder + 'calibrationHeatMapStationOrderCombined.csv'
     calib_metric_csv_filenames_dict = {'Flow':plots_folder + '1_summary_statistics_all_FLOW.csv',
         'Stage': plots_folder + '1_summary_statistics_all_STAGE.csv',
         'EC': plots_folder + '1_summary_statistics_all_EC.csv'
     }
 
     base_run_name = 'v8_2_1'
-    alt_run_name_list = ['v8_2_0', run_name]
-
-    dfp_dict = {}
-    heatmap_dict = {}
-    for constituent in calib_metric_csv_filenames_dict:
-        l=location_files_dict[constituent]
-        f = calib_metric_csv_filenames_dict[constituent]
-        df = read_summary_stats(f)
-        df.to_csv('e:/temp/'+constituent+'_test_df.csv')
-        dfp_dict.update({constituent: df})
-        # heatmap = heatmap(df, metric, title, base_column=None, base_diff_type='abs')
-        # heatmap_for_alt_run(df, title, alt_column, base_column, base_diff_type='diff-abs'):
-        heatmap = heatmap_for_alt_run(df, 'Run ' + run_name +'- v8_2_1', run_name, 'v8_2_1', 'diff-abs')
-        heatmap_dict.update({constituent: heatmap})
-
-        # create_heatmaps(constituent, l, f, base_run_name, alt_run_name_list, station_order_file)
+    metrics_list = ['NRMSE', 'NMSE']
+    create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list)
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,5 @@
 # Postpro-Model
+from cmath import e
 from distutils.command.config import config
 import os
 import pydsm
@@ -14,6 +15,7 @@ import sys
 import dask
 from dask.distributed import Client, LocalCluster
 from pydelmod import calibplot
+from pydelmod import calib_heatmap
 import panel as pn
 import pandas as pd
 import holoviews as hv
@@ -70,7 +72,7 @@ def postpro_model(cluster, config_data, use_dask):
                     else:
                         for p in processors:
                             postpro.run_processor(p)
-    except:
+    except e:
         print('exception caught in postpro-model.py.run_processes. exiting.')
     finally:
         # Always shut down the cluster when done.
@@ -220,6 +222,20 @@ def merge_statistics_files(vartype, config_data):
     for f in files:
         os.remove(f)
 
+def postpro_heatmaps(cluster, config_data, use_dask):
+    options_dict = config_data['options_dict']
+    heatmap_options_dict = config_data['heatmap_options_dict']
+    calib_metric_csv_filenames_dict = config_data['calib_metric_csv_filenames_dict']
+    station_order_file = heatmap_options_dict['station_order_file']
+    base_run_name = heatmap_options_dict['base_run']
+    run_name = heatmap_options_dict['alt_run']
+    metrics_list = heatmap_options_dict['metrics_list']
+    process_heatmap_vartype_dict = config_data['process_heatmap_vartype_dict']
+
+    calib_heatmap.create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
+        process_vartype_dict=process_heatmap_vartype_dict)
+
+
 def postpro_plots(cluster, config_data, use_dask):
     vartype_dict = config_data['vartype_dict']
     process_vartype_dict = config_data['process_vartype_dict']
@@ -309,6 +325,8 @@ def run_process(process_name, config_filename, use_dask):
         postpro_observed(cluster, config_data, use_dask)
     elif process_name.lower() == 'plots':
         postpro_plots(cluster, config_data, use_dask)
+    elif process_name.lower() == 'heatmaps':
+        postpro_heatmaps(cluster, config_data, use_dask)
     else:
         print('Error in pydelmod.postpro: process_name unrecognized: '+process_name)
 

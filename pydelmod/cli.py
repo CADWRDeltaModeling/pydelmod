@@ -45,7 +45,7 @@ def node_map_flow_splits(node_shapefile, hydro_echo_file):
     pn.serve(netmap.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
 
 @click.command()
-@click.argument("process_name", type=click.Choice(['observed', 'model', 'plots'], case_sensitive=False), default='')
+@click.argument("process_name", type=click.Choice(['observed', 'model', 'plots', 'heatmaps'], case_sensitive=False), default='')
 @click.argument("json_config_file")
 @click.option("--dask/--no-dask", default=False)
 def exec_postpro_dsm2(process_name, json_config_file, dask):
@@ -59,6 +59,7 @@ def exec_postpro_dsm2(process_name, json_config_file, dask):
 @click.argument("dsm2_channels_output_filename", type=click.Path(dir_okay=False, exists=False, readable=False))
 def exec_dsm2_chan_mann_disp(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename):
     dsm2_chan_mann_disp.prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename)
+
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
