@@ -17,7 +17,7 @@ import sys
 import logging
 ## - Generic Plotting Functions ##
 import pyhecdss
-
+import numpy as np
 
 def parse_time_window(timewindow):
     """
@@ -111,7 +111,10 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
             for tw in time_window_exclusion_list:
                 if len(tw)>0:
                     start_dt_str, end_dt_str = tw.split('_')
-                    df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
+                    # This is the old way: not good for plotting, because it becomes an ITS
+                    # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
+                    df[start_dt_str:end_dt_str] = np.nan
+
     return df
 
 def calculate_metrics(dflist, names, index_x=0, time_window_exclusion_list=None, location=None):
@@ -131,7 +134,7 @@ def calculate_metrics(dflist, names, index_x=0, time_window_exclusion_list=None,
     dfa = dfa.dropna()
 
     dfa = remove_data_for_time_windows(dfa, time_window_exclusion_list, location)
-
+    dfa.dropna(inplace=True) # this is necessary for metrics
     # x_series contains observed data
     # y_series contains model output for each of the studies
     x_series = dfa.iloc[:, index_x]
