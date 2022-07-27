@@ -106,8 +106,7 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
     time_window_exclusion_list = None
     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
         time_window_exclusion_list = time_window_exclusion_list_str.split(',')
-    if time_window_exclusion_list is not None:
-        if df is not None and time_window_exclusion_list is not None and len(time_window_exclusion_list)>0:
+    if time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None:
             for tw in time_window_exclusion_list:
                 if len(tw)>0:
                     start_dt_str, end_dt_str = tw.split('_')
@@ -354,15 +353,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    print('build_calib_plot_template')
     gate_pp = []
-    print('----------------------------------------------------------')
-    print('gate_studies, gate_locations,gate_vartype=')
-    print('----------------------------------------------------------')
-    print(str(gate_studies))
-    print(str(gate_locations))
-    print(str(gate_vartype))
-    print('----------------------------------------------------------')
 
     data_masking_time_series_dict= {}
     data_masking_df_dict = {}
@@ -385,7 +376,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
 
-        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units,
+        cplot = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
             time_window_exclusion_list = time_window_exclusion_list)
 
         df_displayed_metrics_dict = {}
@@ -473,6 +464,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
                     metrics_table_column = pn.Column()
                     for metrics_table_name in metrics_table_dict:
                         metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+
                     scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
                     scatter_and_metrics_row.append(metrics_table_column)
                     column.append(scatter_and_metrics_row)
@@ -664,8 +656,8 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     gtsp = gtsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return gtsp
 
-def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
-# def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None):
+# def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
+def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
     """Builds calibration plot template
 
     Args:
@@ -684,10 +676,19 @@ def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=No
     gridstyle = {'grid_line_alpha': 1, 'grid_line_color': 'lightgrey'}
     unit_string = get_units(flow_in_thousands, units)
 
-    y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
-    godin_y_axis_label = 'Godin '+y_axis_label
+    # y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
+    # godin_y_axis_label = 'Godin '+y_axis_label
     # plot_data are scaled, if flow_in_thousands == True
-    gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list) for p in pp]
+    # This is the old way:
+    # gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list) for p in pp]
+    # For some reason, this does not work, so the solution is below:
+    # gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list).dropna(inplace=True) for p in pp]
+
+    gtsp_plot_data = []
+    for p in pp:
+        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list)
+        gpd.dropna(inplace=True)
+        gtsp_plot_data.append(gpd)
 
     splot_plot_data = None
     splot_metrics_data = None
@@ -705,11 +706,10 @@ def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=No
             .opts(ylabel='Model', legend_position="top_left")\
             .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
 
-    cplot = None
     dfdisplayed_metrics = None
     # calculate calibration metrics
     slope_plots_dfmetrics = None
-    if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
+    if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
         slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
     dfmetrics = None
@@ -722,6 +722,7 @@ def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=No
 
     # add regression lines to scatter plot, and set x and y axis titles
     slope_plots = None
+    cplot = None
     if slope_plots_dfmetrics is not None:
         slope_plots = regression_line_plots(slope_plots_dfmetrics)
         cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
@@ -773,21 +774,8 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     if flow_in_thousands:
         # if p.gdf is not None:
         gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-
-
-
-
     # use data_masking_df_dict to mask data (remove rows if gate open/closed)
     # for location in data_masking_df_dict:
-        
-
-
-
-
-
-
-
-
 
     dfdisplayed_metrics = None
     column = None
