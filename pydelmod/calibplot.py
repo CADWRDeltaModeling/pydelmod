@@ -93,13 +93,14 @@ def scatterplot(dflist, names, index_x=0):
     dfa = dfa.resample('D').mean()
     return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols='all')
 
-def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_str, location_name=None):
+def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False):
     """removes data from dataframe that is within time windows in the time_window_exclusion_list
 
     Args:
         df (DataFrame): The DataFrame from which to remove data
-        time_window_exclusion_list (List, optional): A list of strings, each specifying a time window, using the format 'yyyy-mm-dd_yyyy-mm-dd'
-            Data in each of the specified time windows will be excluded from the metrics calculations
+        time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window 
+        using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
+        invert_selection (bool): If True, keep data in the time windows rather than removing it.
     Returns:
         DataFrame: DataFrame with data removed
     """
@@ -107,24 +108,38 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
         time_window_exclusion_list = time_window_exclusion_list_str.split(',')
     if time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None:
+            tw_index = 0
+            last_tw = None
             for tw in time_window_exclusion_list:
                 if len(tw)>0:
                     start_dt_str, end_dt_str = tw.split('_')
-                    # This is the old way: not good for plotting, because it becomes an ITS
-                    # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
-                    df[start_dt_str:end_dt_str] = np.nan
+                    if not invert_selection:
+                        # remove data in the time windows
+                        # This is the old way: not good for plotting, because it becomes an ITS
+                        # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
+                        df[start_dt_str:end_dt_str] = np.nan
+                    else:
+                        # keep data in the timewindows, and remove all other data.
+                        if tw_index > 0:
+                            last_start_dt_str, last_end_dt_str = last_tw.split('_')
+                            df[last_end_dt_str:start_dt_str] = np.nan
+                    last_tw = tw
+                tw_index += 1
+            # now remove the data after the end of the last timewindow
+            if invert_selection and last_tw is not None and len(last_tw)>0:
+                last_start_dt_str, last_end_dt_str = last_tw.split('_')
+                df[last_end_dt_str:] = np.nan
 
     return df
 
-def calculate_metrics(dflist, names, index_x=0, time_window_exclusion_list=None, location=None):
+def calculate_metrics(dflist, names, index_x=0, location=None):
     """Calculate metrics between the index_x column and other columns
 
     Args:
         dflist (List): DataFrame list
         names (List): Names list
         index_x (int, optional): Index of base DataFrame. Defaults to 0.
-        time_window_exclusion_list (List, optional): A list of strings, each specifying a time window, using the format 'yyyy-mm-dd_yyyy-mm-dd'
-            Data in each of the specified time windows will be excluded from the metrics calculations
+        time_window_exclusion_list is not required here because the methods that call this method can remove data first.
         location (str): optional, for debugging. If specified, data frame before and after will be written to a file.
     Returns:
         DataFrame: DataFrame of metrics
@@ -132,7 +147,7 @@ def calculate_metrics(dflist, names, index_x=0, time_window_exclusion_list=None,
     dfa = pd.concat(dflist, axis=1)
     dfa = dfa.dropna()
 
-    dfa = remove_data_for_time_windows(dfa, time_window_exclusion_list, location)
+    # dfa = remove_data_for_time_windows(dfa, time_window_exclusion_list, location, invert_selection=invert_timewindow_exclusion)
     dfa.dropna(inplace=True) # this is necessary for metrics
     # x_series contains observed data
     # y_series contains model output for each of the studies
@@ -262,6 +277,10 @@ def sanitize_name(name):
     return name.replace('.', ' ')
 
 class DataMaskingTimeSeries:
+    '''
+    This class is not working yet. It is intended to be used to mask data based on DSS gate data.
+    Maybe easier to just use the data exclusion time windows in the input files.
+    '''
     def __init__(self, gate_studies, gate_location, gate_vartype, timewindow):
         #     ----------------------------------------------------------
         # gate_studies, gate_locations,gate_vartype=
@@ -314,15 +333,9 @@ class DataMaskingTimeSeries:
         gate_value_index = self.gate_time_series_df.get_loc(datetime) - 1
         return self.gate_time_series_df[[gate_value_index]]['POS']
 
-
-
-
-
-
-
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
                               inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
-                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None):
+                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False):
     """Builds calibration plot template
 
     Args:
@@ -353,21 +366,22 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    gate_pp = []
 
-    data_masking_time_series_dict= {}
-    data_masking_df_dict = {}
-    if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-        for gate_location in gate_locations:
-            dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
-            data_masking_time_series_dict.update({gate_location.name: dmts})
-            data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
-    else:
-        print('Not using gate information for plots/metrics data masking because insufficient information provided.')
+    # data masking using gate data is not fully implemented yet.
+    # gate_pp = []
+    # data_masking_time_series_dict= {}
+    # data_masking_df_dict = {}
+    # if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+    #     for gate_location in gate_locations:
+    #         dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
+    #         data_masking_time_series_dict.update({gate_location.name: dmts})
+    #         data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
+    # else:
+    #     print('Not using gate information for plots/metrics data masking because insufficient information provided.')
 
     tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
-        time_window_exclusion_list=location.time_window_exclusion_list)
+        time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
@@ -377,26 +391,27 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         time_window_exclusion_list = location.time_window_exclusion_list
 
         cplot = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
-            time_window_exclusion_list = time_window_exclusion_list)
+            time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
-        if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-            dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True,
-                time_window_exclusion_list = time_window_exclusion_list)
-            dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False,
-                time_window_exclusion_list=time_window_exclusion_list)
-            df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
-            df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
-            metrics_table_dict.update({'open': metrics_table_open})
-            metrics_table_dict.update({'closed': metrics_table_closed})
-        else:
-            dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
-                                layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list)
-            df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
-            metrics_table_dict.update({'all': metrics_table})
+        # if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+        #     dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+        #         flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True,
+        #         time_window_exclusion_list = time_window_exclusion_list)
+        #     dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+        #         flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False,
+        #         time_window_exclusion_list=time_window_exclusion_list)
+        #     df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
+        #     df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
+        #     metrics_table_dict.update({'open': metrics_table_open})
+        #     metrics_table_dict.update({'closed': metrics_table_closed})
+        # else:
+
+        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
+                            layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
+        df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
+        metrics_table_dict.update({'all': metrics_table})
 
         if include_kde_plots: 
             kdeplots = build_kde_plots(pp)
@@ -614,7 +629,7 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     tsp = tsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return tsp
 
-def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None):
+def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None, invert_timewindow_exclusion=False):
     """Builds calibration plot template
 
     Args:
@@ -626,7 +641,8 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
             2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
         units (str, optional): a string representing the units of the data. examples: CFS, FEET, UMHOS/CM.
             Included in axis titles if specified.
-
+        time_window_exclusion_list (str): a string containing timewindows separated by commas.
+        invert_timewindow_exclusion (bool): if true, data in time_window_exclusion_list will be kept and all other data removed.
     Returns:
         gtsp: A plot
     """
@@ -649,7 +665,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
 
     # remove data for specified time window for all time series
     gtsp_plot_data = [remove_data_for_time_windows(p, time_window_exclusion_list_str=time_window_exclusion_list, 
-        location_name=location.name) if p is not None else None for p in gtsp_plot_data]
+        invert_selection=invert_timewindow_exclusion) if p is not None else None for p in gtsp_plot_data]
 
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
@@ -657,7 +673,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     return gtsp
 
 # def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
-def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
+def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None, invert_timewindow_exclusion=False):
     """Builds calibration plot template
 
     Args:
@@ -669,7 +685,8 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
             2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
         units (str, optional): a string representing the units of the data. examples: CFS, FEET, UMHOS/CM.
             Included in axis titles if specified.
-
+        time_window_exclusion_list (str): a string containing timewindows separated by commas.
+        invert_timewindow_exclusion (bool): if true, data in time_window_exclusion_list will be kept and all other data removed.
     Returns:
         a plot object
     """
@@ -686,9 +703,10 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
     gtsp_plot_data = []
     for p in pp:
-        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list)
+        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
+    # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
 
     splot_plot_data = None
     splot_metrics_data = None
@@ -732,7 +750,7 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
-                              time_window_exclusion_list=None):
+                              time_window_exclusion_list=None, invert_timewindow_exclusion=False):
     """Builds calibration plot template
 
     Args:
@@ -766,7 +784,13 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     godin_y_axis_label = 'Godin '+y_axis_label
     # plot_data are scaled, if flow_in_thousands == True
-    gtsp_plot_data = [p.gdf for p in pp]
+    # gtsp_plot_data = [p.gdf for p in pp]
+    gtsp_plot_data = []
+    for p in pp:
+        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+        gpd.dropna(inplace=True)
+        gtsp_plot_data.append(gpd)
+    # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
 
     splot_metrics_data = None
     # if p.gdf is not None:
@@ -782,11 +806,11 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # calculate calibration metrics
     slope_plots_dfmetrics = None
     if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
-        slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp], time_window_exclusion_list=time_window_exclusion_list, location=location.name)
+        slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp], location=location.name)
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
     dfmetrics = None
     if splot_metrics_data is not None:
-        dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp], time_window_exclusion_list=time_window_exclusion_list)
+        dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
     dfmetrics_monthly = None
     # if p.gdf is not None:
     dfmetrics_monthly = calculate_metrics(
