@@ -1,6 +1,8 @@
 from .postpro_dsm2 import merge_statistics_files
+from .calibplot import *
 from pydsm import postpro
 import sys
+import os
 
 def build_checklist_plot_template(studies, location, vartype, 
                                   timewindow,
@@ -45,7 +47,7 @@ def build_checklist_plot_template(studies, location, vartype,
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
     if not all_data_found:
         return None, None
-    print('build_calib_plot_template')
+    print('build_checklist_plot_template')
     gate_pp = []
     print('----------------------------------------------------------')
     print('gate_studies, gate_locations,gate_vartype=')
@@ -261,10 +263,10 @@ def build_checklist_plot(config_data, studies, location, vartype):
 
     checklist_plot_template, metrics_df = \
         build_checklist_plot_template(studies, location, vartype, timewindow, \
-            tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow,
+            tidal_template=True, flow_in_thousands=True, units=units,inst_plot_timewindow=inst_plot_timewindow,
             zoom_inst_plot=zoom_inst_plot)
 
-    if calib_plot_template is None:
+    if checklist_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
@@ -277,7 +279,7 @@ def build_checklist_plot(config_data, studies, location, vartype):
         cols = list(metrics_df)
         cols.insert(0, cols.pop(cols.index('Location')))
         metrics_df = metrics_df.loc[:, cols]
-    return calib_plot_template, metrics_df
+    return checklist_plot_template, metrics_df
 
 def build_and_save_checklist_plot(config_data, studies, location, vartype,
                                   write_html=False, write_graphics=True,
@@ -290,35 +292,34 @@ def build_and_save_checklist_plot(config_data, studies, location, vartype,
 
     checklist_plot_template, metrics_df = build_checklist_plot(config_data, studies, location, vartype)
 
-    sys.exit()
-    # if calib_plot_template is None:
-    #     print('failed to create plots')
-    # if metrics_df is None:
-    #     print('failed to create metrics')
-    # os.makedirs(output_plot_dir, exist_ok=True)
-    # # save plot to html and/or png file
-    # if calib_plot_template is not None and metrics_df is not None:
-    #     if write_html:
-    #         print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
-    #         calib_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
-    #     if write_graphics:
-    #         save_to_graphics_format(calib_plot_template,f'{output_plot_dir}{location}_{vartype.name}.png')
-    # #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
-    # if metrics_df is not None:
-    #     location_list = []
-    #     for r in range(metrics_df.shape[0]):
-    #         location_list.append(location)
-    #     metrics_df['Location'] = location_list
-    #     # move Location column to beginning
-    #     cols = list(metrics_df)
-    #     cols.insert(0, cols.pop(cols.index('Location')))
-    #     metrics_df = metrics_df.loc[:, cols]
+    if checklist_plot_template is None:
+        print('failed to create plots')
+    if metrics_df is None:
+        print('failed to create metrics')
+    os.makedirs(output_plot_dir, exist_ok=True)
+    # save plot to html and/or png file
+    if checklist_plot_template is not None and metrics_df is not None:
+        if write_html:
+            print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
+            checklist_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
+        if write_graphics:
+            save_to_graphics_format(checklist_plot_template,f'{output_plot_dir}{location}_{vartype.name}.png')
+    #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
+    if metrics_df is not None:
+        location_list = []
+        for r in range(metrics_df.shape[0]):
+            location_list.append(location)
+        metrics_df['Location'] = location_list
+        # move Location column to beginning
+        cols = list(metrics_df)
+        cols.insert(0, cols.pop(cols.index('Location')))
+        metrics_df = metrics_df.loc[:, cols]
 
-    #     # files for individual studies
-    #     for study in study_files_dict:
-    #         metrics_df[metrics_df.index == study].to_csv(
-    #             output_plot_dir + '0_summary_statistics_' + study + '_' + vartype.name + '_' + location.name + '.csv')
-    #         # metrics_df[metrics_df.index==study].to_html(output_plot_dir+'0_summary_statistics_'+study+'_'+vartype.name+'_'+location.name+'.html')
+        # files for individual studies
+        for study in study_files_dict:
+            metrics_df[metrics_df.index == study].to_csv(
+                output_plot_dir + '0_summary_statistics_' + study + '_' + vartype.name + '_' + location.name + '.csv')
+            # metrics_df[metrics_df.index==study].to_html(output_plot_dir+'0_summary_statistics_'+study+'_'+vartype.name+'_'+location.name+'.html')
     return
 
 def checklist_plots(cluster, config_data, use_dask):
