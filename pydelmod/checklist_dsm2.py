@@ -2,6 +2,249 @@ from .postpro_dsm2 import merge_statistics_files
 from pydsm import postpro
 import sys
 
+def build_checklist_plot_template(studies, location, vartype, 
+                                  timewindow,
+                                  tidal_template=False,
+                                  flow_in_thousands=False,
+                                  units=None,
+                                  inst_plot_timewindow=None,
+                                  layout_nash_sutcliffe=False,
+                                  obs_data_included=True,
+                                  include_kde_plots=False,
+                                  zoom_inst_plot=False,
+                                  gate_studies=None,
+                                  gate_locations=None,
+                                  gate_vartype=None):
+    """Builds calibration plot template
+
+    Args:
+        studies (List): Studies (name,dssfile)
+        location (Location): name,bpart,description
+        vartype (VarType): name,units
+        timewindow (str): timewindow as start_date_str "-" end_date_str or "" for full availability
+        tidal_template (bool, optional): If True include tidal plots. Defaults to False.
+        flow_in_thousands (bool, optional): If True, template is for flow data, and
+            1) y axis title will include the string '(1000 CFS)', and
+            2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
+        units (str, optional): a string representing the units of the data. examples: CFS, FEET, UMHOS/CM.
+            Included in axis titles if specified.
+        inst_plot_timewindow (str, optional): Defines a separate timewindow to use for the instantaneous plot.
+            Must be in format 'YYYY-MM-DD:YYYY-MM-DD'
+        layout_nash_sutcliffe (bool, optional): if true, include Nash-Sutcliffe Efficiency in tables that are
+            included in plot layouts. NSE will be included in summary tables--separate files containing only
+            the equations and statistics for all locations.
+        obs_data_included (bool, optional): If true, first study in studies list is assumed to be observed data.
+            calibration metrics will be calculated.
+        include_kde_plots (bool): If true, kde plots will be included. This is temporary for debugging
+        zoom_inst_plot (bool): If true, instantaneous plots will display on data in the inst_plot_timewindow
+        time_window_exclusion_list (list of time window strings in format yyyy-mm-dd hh:mm:ss_yyyy-mm-dd hh:mm:ss)
+    Returns:
+        panel: A template ready for rendering by display or save
+        dataframe: equations and statistics for all locations
+    """
+    all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
+    if not all_data_found:
+        return None, None
+    print('build_calib_plot_template')
+    gate_pp = []
+    print('----------------------------------------------------------')
+    print('gate_studies, gate_locations,gate_vartype=')
+    print('----------------------------------------------------------')
+    print(str(gate_studies))
+    print(str(gate_locations))
+    print(str(gate_vartype))
+    print('----------------------------------------------------------')
+
+    data_masking_time_series_dict= {}
+    data_masking_df_dict = {}
+    if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+        for gate_location in gate_locations:
+            dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
+            data_masking_time_series_dict.update({gate_location.name: dmts})
+            data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
+    else:
+        print('Not using gate information for plots/metrics data masking because insufficient information provided.')
+
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
+    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
+        time_window_exclusion_list=location.time_window_exclusion_list)
+    cplot = None
+    dfdisplayed_metrics = None
+    metrics_table = None
+    kdeplots = None
+
+    if obs_data_included:
+        time_window_exclusion_list = location.time_window_exclusion_list
+
+        cplot = build_scatter_plots(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units,
+            time_window_exclusion_list = time_window_exclusion_list)
+
+        df_displayed_metrics_dict = {}
+        metrics_table_dict = {}
+        if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
+            dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True,
+                time_window_exclusion_list = time_window_exclusion_list)
+            dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
+                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False,
+                time_window_exclusion_list=time_window_exclusion_list)
+            df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
+            df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
+            metrics_table_dict.update({'open': metrics_table_open})
+            metrics_table_dict.update({'closed': metrics_table_closed})
+        else:
+            dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
+                                layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list)
+            df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
+            metrics_table_dict.update({'all': metrics_table})
+
+        if include_kde_plots: 
+            kdeplots = build_kde_plots(pp)
+    
+    # # create plot/metrics template
+    header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
+    # # do this if you want to link the axes
+    # # tsplots2 = (tsp.opts(width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
+    # # start_dt = dflist[0].index.min()
+    # # end_dt = dflist[0].index.max()
+
+    column = None
+    # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
+    add_toolbar = True
+    print('before creating column object (plot layout) for returning')
+    if tidal_template:
+        if not add_toolbar:
+            if obs_data_included:
+                if include_kde_plots:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                        # pn.Row(tsplots2),
+                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+                    column.append(pn.Row(kdeplots))
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                        # pn.Row(tsplots2),
+                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+            else:
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+        else:
+            if obs_data_included:
+                if include_kde_plots:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'))
+                        # pn.Row(tsplots2),
+                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+                    column.append(pn.Row(kdeplots))
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'))
+                        # pn.Row(tsplots2),
+                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                    metrics_table_column = pn.Column()
+                    for metrics_table_name in metrics_table_dict:
+                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                    scatter_and_metrics_row.append(metrics_table_column)
+                    column.append(scatter_and_metrics_row)
+            else:
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, title='(b)', legend_position='right'))
+    else:
+        if not add_toolbar:
+            if obs_data_included:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+                    # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
+            else:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+
+        else:
+            if obs_data_included:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+                    # pn.Row(cplot.opts(shared_axes=False, title='(b)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
+            else:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+
+    # now merge all metrics dataframes, adding a column identifying the gate status
+    return_metrics_df = None
+    df_index = 0
+    for metrics_df_name in df_displayed_metrics_dict:
+        metrics_df_name_list = []
+        metrics_df = df_displayed_metrics_dict[metrics_df_name]
+        for r in range(metrics_df.shape[0]):
+            metrics_df_name_list.append(metrics_df_name)
+        metrics_df['Gate Pos'] = metrics_df_name_list
+        # move Gate Pos column to beginning
+        cols = list(metrics_df)
+        cols.insert(0, cols.pop(cols.index('Gate Pos')))
+        metrics_df = metrics_df.loc[:, cols]
+        # merge df into return_metrics_df
+        if df_index == 0:
+            return_metrics_df = metrics_df
+        else:
+            return_metrics_df.append(metrics_df)
+        df_index += 1
+    return column, return_metrics_df
+
+
 def build_checklist_plot(config_data, studies, location, vartype):
 # def build_plot(config_data, studies, location, vartype):
 
@@ -13,16 +256,11 @@ def build_checklist_plot(config_data, studies, location, vartype):
     timewindow_dict = config_data['timewindow_dict']
     timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
     zoom_inst_plot = options_dict['zoom_inst_plot']
-    flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
-    if location=='RSAC128-RSAC123':
-        print('cross-delta flow')
-        flow_or_stage = False
-    flow_in_thousands = (vartype.name == 'FLOW')
-    units = vartype.units
-    include_kde_plots = options_dict['include_kde_plots']
 
-    calib_plot_template, metrics_df = \
-        calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
+    units = vartype.units
+
+    checklist_plot_template, metrics_df = \
+        build_checklist_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow,
             zoom_inst_plot=zoom_inst_plot)
 
