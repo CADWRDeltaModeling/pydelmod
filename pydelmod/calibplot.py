@@ -120,7 +120,9 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
                         df[start_dt_str:end_dt_str] = np.nan
                     else:
                         # keep data in the timewindows, and remove all other data.
-                        if tw_index > 0:
+                        if tw_index == 0:
+                            df[:start_dt_str] = np.nan
+                        else:
                             last_start_dt_str, last_end_dt_str = last_tw.split('_')
                             df[last_end_dt_str:start_dt_str] = np.nan
                     last_tw = tw
@@ -129,7 +131,6 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
             if invert_selection and last_tw is not None and len(last_tw)>0:
                 last_start_dt_str, last_end_dt_str = last_tw.split('_')
                 df[last_end_dt_str:] = np.nan
-
     return df
 
 def calculate_metrics(dflist, names, index_x=0, location=None):
@@ -276,49 +277,49 @@ def kdeplot(dflist, names, xlabel):
 def sanitize_name(name):
     return name.replace('.', ' ')
 
-class DataMaskingTimeSeries:
-    '''
-    This class is not working yet. It is intended to be used to mask data based on DSS gate data.
-    Maybe easier to just use the data exclusion time windows in the input files.
-    '''
-    def __init__(self, gate_studies, gate_location, gate_vartype, timewindow):
-        #     ----------------------------------------------------------
-        # gate_studies, gate_locations,gate_vartype=
-        # ----------------------------------------------------------
-        # [Study(name='Gate', dssfile='../../../timeseries2019/gates-v8-201912.dss')]
-        # [Location(name='DLC', bpart='DLC', description='Delta Cross-Channel Gate')]
-        # VarType(name='POS', units='')
-        # ----------------------------------------------------------
-        self.dssfile = gate_studies[0].dssfile
-        self.location = gate_location
-        self.bpart = self.location.bpart.upper()
-        self.vartype = gate_vartype.name
-        self.timewindow = timewindow
-        self.gate_time_series_tuple = None
-        self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
-        # try:
-        #     # self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow)))
-        #     self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
-        #     print('DataMaskingTimeSeries constructor: type of df='+str(type(self.gate_time_series_tuple)))
+# class DataMaskingTimeSeries:
+#     '''
+#     This class is not working yet. It is intended to be used to mask data based on DSS gate data.
+#     Maybe easier to just use the data exclusion time windows in the input files.
+#     '''
+#     def __init__(self, gate_studies, gate_location, gate_vartype, timewindow):
+#         #     ----------------------------------------------------------
+#         # gate_studies, gate_locations,gate_vartype=
+#         # ----------------------------------------------------------
+#         # [Study(name='Gate', dssfile='../../../timeseries2019/gates-v8-201912.dss')]
+#         # [Location(name='DLC', bpart='DLC', description='Delta Cross-Channel Gate')]
+#         # VarType(name='POS', units='')
+#         # ----------------------------------------------------------
+#         self.dssfile = gate_studies[0].dssfile
+#         self.location = gate_location
+#         self.bpart = self.location.bpart.upper()
+#         self.vartype = gate_vartype.name
+#         self.timewindow = timewindow
+#         self.gate_time_series_tuple = None
+#         self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
+#         # try:
+#         #     # self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow)))
+#         #     self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
+#         #     print('DataMaskingTimeSeries constructor: type of df='+str(type(self.gate_time_series_tuple)))
 
-        # except StopIteration as e:
-        #     print('no data found for ' + self.dssfile + ',//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow))
-        #     logging.exception('pydsm.postpro.PostProCache.load: no data found')
-        self.time_series_df = self.get_time_series_df()
+#         # except StopIteration as e:
+#         #     print('no data found for ' + self.dssfile + ',//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow))
+#         #     logging.exception('pydsm.postpro.PostProCache.load: no data found')
+#         self.time_series_df = self.get_time_series_df()
 
-    def get_time_series_df(self):
-        '''
-        for now, assume only one data set is being read
-        self.gate_time_series_tuple has 3 elements:
-        1. the dataframe
-        2. string = 'UNSPECIF' (probably units)
-        3. string = 'INST-VAL' (averaging)
-        '''
-        return_df = None
-        for t in self.gate_time_series_tuple:
-            if isinstance(t, pd.DataFrame):
-                return_df = t
-        return return_df
+#     def get_time_series_df(self):
+#         '''
+#         for now, assume only one data set is being read
+#         self.gate_time_series_tuple has 3 elements:
+#         1. the dataframe
+#         2. string = 'UNSPECIF' (probably units)
+#         3. string = 'INST-VAL' (averaging)
+#         '''
+#         return_df = None
+#         for t in self.gate_time_series_tuple:
+#             if isinstance(t, pd.DataFrame):
+#                 return_df = t
+#         return return_df
 
 
 
