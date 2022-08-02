@@ -13,7 +13,6 @@ def build_checklist_plot(config_data, studies, location, vartype):
     timewindow_dict = config_data['timewindow_dict']
     timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
     zoom_inst_plot = options_dict['zoom_inst_plot']
-    gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
     flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
@@ -24,12 +23,9 @@ def build_checklist_plot(config_data, studies, location, vartype):
 
     calib_plot_template, metrics_df = \
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
-            tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
-            zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
-    # calib_plot_template, metrics_df = \
-    #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
-    #         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
-    #         zoom_inst_plot=zoom_inst_plot)
+            tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow,
+            zoom_inst_plot=zoom_inst_plot)
+
     if calib_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
