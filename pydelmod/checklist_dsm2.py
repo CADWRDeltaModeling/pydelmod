@@ -12,10 +12,7 @@ def build_checklist_plot_template(studies, location, vartype,
                                   inst_plot_timewindow=None,
                                   layout_nash_sutcliffe=False,
                                   obs_data_included=True,
-                                  zoom_inst_plot=False,
-                                  gate_studies=None,
-                                  gate_locations=None,
-                                  gate_vartype=None):
+                                  zoom_inst_plot=False):
     """Builds calibration plot template
 
     Args:
@@ -47,24 +44,9 @@ def build_checklist_plot_template(studies, location, vartype,
     if not all_data_found:
         return None, None
     print('build_checklist_plot_template')
-    gate_pp = []
-    print('----------------------------------------------------------')
-    print('gate_studies, gate_locations,gate_vartype=')
-    print('----------------------------------------------------------')
-    print(str(gate_studies))
-    print(str(gate_locations))
-    print(str(gate_vartype))
-    print('----------------------------------------------------------')
 
     data_masking_time_series_dict= {}
     data_masking_df_dict = {}
-    if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-        for gate_location in gate_locations:
-            dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
-            data_masking_time_series_dict.update({gate_location.name: dmts})
-            data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
-    else:
-        print('Not using gate information for plots/metrics data masking because insufficient information provided.')
 
     tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
@@ -81,23 +63,12 @@ def build_checklist_plot_template(studies, location, vartype,
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
-        if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-            dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True,
-                time_window_exclusion_list = time_window_exclusion_list)
-            dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-                flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False,
-                time_window_exclusion_list=time_window_exclusion_list)
-            df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
-            df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
-            metrics_table_dict.update({'open': metrics_table_open})
-            metrics_table_dict.update({'closed': metrics_table_closed})
-        else:
-            dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
-                                layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list)
-            df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
-            metrics_table_dict.update({'all': metrics_table})
-    
+
+        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
+                            layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list)
+        df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
+        metrics_table_dict.update({'all': metrics_table})
+
     # # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
     # # do this if you want to link the axes
@@ -196,11 +167,7 @@ def build_checklist_plot_template(studies, location, vartype,
         metrics_df = df_displayed_metrics_dict[metrics_df_name]
         for r in range(metrics_df.shape[0]):
             metrics_df_name_list.append(metrics_df_name)
-        metrics_df['Gate Pos'] = metrics_df_name_list
-        # move Gate Pos column to beginning
-        cols = list(metrics_df)
-        cols.insert(0, cols.pop(cols.index('Gate Pos')))
-        metrics_df = metrics_df.loc[:, cols]
+
         # merge df into return_metrics_df
         if df_index == 0:
             return_metrics_df = metrics_df
