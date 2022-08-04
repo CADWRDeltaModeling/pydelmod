@@ -328,15 +328,20 @@ def checklist_plots(cluster, config_data, use_dask):
     location_files_dict = config_data['location_files_dict']
     observed_files_dict = config_data['observed_files_dict']
     study_files_dict = config_data['study_files_dict']
+
+    checklist_dict = config_data['checklist_dict']
+    checklist_vartype_dict = config_data['checklist_vartype_dict']
+
     ## Set options and run processes. If using dask, create delayed tasks
     try:
-        for var_name in vartype_dict:
+        for checklist_item in checklist_dict:
+            var_name = checklist_vartype_dict [checklist_item]
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
             print('vartype='+str(vartype))
             if process_vartype_dict[vartype.name]:
                 ## Load locations from a .csv file, and create a list of postpro.Location objects
                 #The .csv file should have atleast 'Name','BPart' and 'Description' columns
-                locationfile=location_files_dict[vartype.name]
+                locationfile=location_files_dict[checklist_item]
                 dfloc = postpro.load_location_file(locationfile)
                 print('about to read location file: '+ locationfile)
                 locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
