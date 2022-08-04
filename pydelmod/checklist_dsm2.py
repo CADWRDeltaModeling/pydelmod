@@ -12,7 +12,6 @@ def build_checklist_plot_template(studies, location, vartype,
                                   inst_plot_timewindow=None,
                                   layout_nash_sutcliffe=False,
                                   obs_data_included=True,
-                                  include_kde_plots=False,
                                   zoom_inst_plot=False,
                                   gate_studies=None,
                                   gate_locations=None,
@@ -73,7 +72,6 @@ def build_checklist_plot_template(studies, location, vartype,
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
-    kdeplots = None
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
@@ -99,9 +97,6 @@ def build_checklist_plot_template(studies, location, vartype,
                                 layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list)
             df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
             metrics_table_dict.update({'all': metrics_table})
-
-        if include_kde_plots: 
-            kdeplots = build_kde_plots(pp)
     
     # # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
@@ -117,36 +112,20 @@ def build_checklist_plot_template(studies, location, vartype,
     if tidal_template:
         if not add_toolbar:
             if obs_data_included:
-                if include_kde_plots:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-                    column.append(pn.Row(kdeplots))
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                    # pn.Row(tsplots2),
+                    # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
 
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
@@ -155,35 +134,19 @@ def build_checklist_plot_template(studies, location, vartype,
                     gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
         else:
             if obs_data_included:
-                if include_kde_plots:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-                    column.append(pn.Row(kdeplots))
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
+                column = pn.Column(
+                    header_panel,
+                    # tsp.opts(width=900, legend_position='right'),
+                    tsp.opts(width=900, title='(a)', legend_position='right'),
+                    gtsp.opts(width=900, title='(b)', legend_position='right'))
+                    # pn.Row(tsplots2),
+                    # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                metrics_table_column = pn.Column()
+                for metrics_table_name in metrics_table_dict:
+                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                scatter_and_metrics_row.append(metrics_table_column)
+                column.append(scatter_and_metrics_row)
             else:
                 column = pn.Column(
                     header_panel,
