@@ -11,7 +11,7 @@ def build_checklist_plot_template(studies, location, vartype,
                                   units=None,
                                   inst_plot_timewindow=None,
                                   layout_nash_sutcliffe=False,
-                                  obs_data_included=True,
+                                  obs_data_included=False,
                                   zoom_inst_plot=False):
     """Builds calibration plot template
 
@@ -161,23 +161,25 @@ def build_checklist_plot_template(studies, location, vartype,
 
     # now merge all metrics dataframes, adding a column identifying the gate status
     return_metrics_df = None
-    df_index = 0
-    for metrics_df_name in df_displayed_metrics_dict:
-        metrics_df_name_list = []
-        metrics_df = df_displayed_metrics_dict[metrics_df_name]
-        for r in range(metrics_df.shape[0]):
-            metrics_df_name_list.append(metrics_df_name)
 
-        # merge df into return_metrics_df
-        if df_index == 0:
-            return_metrics_df = metrics_df
-        else:
-            return_metrics_df.append(metrics_df)
-        df_index += 1
+    if obs_data_included:
+        df_index = 0
+        for metrics_df_name in df_displayed_metrics_dict:
+            metrics_df_name_list = []
+            metrics_df = df_displayed_metrics_dict[metrics_df_name]
+            for r in range(metrics_df.shape[0]):
+                metrics_df_name_list.append(metrics_df_name)
+
+            # merge df into return_metrics_df
+            if df_index == 0:
+                return_metrics_df = metrics_df
+            else:
+                return_metrics_df.append(metrics_df)
+            df_index += 1
     return column, return_metrics_df
 
 
-def build_checklist_plot(config_data, studies, location, vartype):
+def build_checklist_plot(config_data, studies, location, vartype, obs_data_included):
 # def build_plot(config_data, studies, location, vartype):
 
     print("build_checklist_plot")
@@ -194,12 +196,12 @@ def build_checklist_plot(config_data, studies, location, vartype):
     checklist_plot_template, metrics_df = \
         build_checklist_plot_template(studies, location, vartype, timewindow, \
             tidal_template=True, flow_in_thousands=True, units=units,inst_plot_timewindow=inst_plot_timewindow,
-            zoom_inst_plot=zoom_inst_plot)
+            obs_data_included=obs_data_included, zoom_inst_plot=zoom_inst_plot)
 
     if checklist_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
-        print('failed to create metrics')
+        print('failed to create metrics: build_checklist_plot')
     else:
         location_list = []
         for r in range(metrics_df.shape[0]):
@@ -212,6 +214,7 @@ def build_checklist_plot(config_data, studies, location, vartype):
     return checklist_plot_template, metrics_df
 
 def build_and_save_checklist_plot(config_data, studies, location, vartype,
+                                  obs_data_included,
                                   write_html=False, write_graphics=True,
                                   output_format='png'):
 
@@ -220,15 +223,15 @@ def build_and_save_checklist_plot(config_data, studies, location, vartype,
     print('build and save plot: output_plot_dir = ' + output_plot_dir)
     print('Building plot template for location: ' + str(location))
 
-    checklist_plot_template, metrics_df = build_checklist_plot(config_data, studies, location, vartype)
+    checklist_plot_template, metrics_df = build_checklist_plot(config_data, studies, location, vartype, obs_data_included)
 
     if checklist_plot_template is None:
         print('failed to create plots')
     if metrics_df is None:
-        print('failed to create metrics')
+        print('failed to create metrics: build_and_save_checklist_plot')
     os.makedirs(output_plot_dir, exist_ok=True)
     # save plot to html and/or png file
-    if checklist_plot_template is not None and metrics_df is not None:
+    if checklist_plot_template is not None:
         if write_html:
             print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
             checklist_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
@@ -261,12 +264,22 @@ def checklist_plots(cluster, config_data, use_dask):
 
     checklist_dict = config_data['checklist_dict']
     checklist_vartype_dict = config_data['checklist_vartype_dict']
-
+    compare_with_obs_dict = config_data["compare_with_obs_dict"]
+    
     ## Set options and run processes. If using dask, create delayed tasks
     try:
         for checklist_item in checklist_dict:
             var_name = checklist_vartype_dict [checklist_item]
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
+
+            # Compare with observation            
+            if compare_with_obs_dict[checklist_item]:
+                if os.path.exists(observed_files_dict[checklist_item]):
+                    obs_data_included = True
+                else:
+                    print("Observation file does not exist.")
+                    sys.exit()
+
             print('vartype='+str(vartype))
             if process_vartype_dict[vartype.name]:
                 ## Load locations from a .csv file, and create a list of postpro.Location objects
@@ -277,15 +290,19 @@ def checklist_plots(cluster, config_data, use_dask):
                 locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
 
                 # create list of postpro.Study objects, with observed Study followed by model Study objects
-                obs_study=postpro.Study('Observed',observed_files_dict[vartype.name])
-                model_studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
-                studies=[obs_study]+model_studies
-
+                # obs_study=postpro.Study('Observed',observed_files_dict[checklist_item])
+                # model_studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
+                # studies=[obs_study]+model_studies
+                studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
+                if (obs_data_included == True):
+                    obs_study=postpro.Study('Observed',observed_files_dict[checklist_item])
+                    studies = [studies] + obs_study
 
                 # now run the processes
                 if use_dask:
                     print('using dask')
-                    tasks = [dask.delayed(build_and_save_checklist_plot)(config_data, studies, location, vartype, 
+                    tasks = [dask.delayed(build_and_save_checklist_plot)(config_data, studies, location, vartype,
+                                                    obs_data_included=obs_data_included,
                                                     write_html=True,write_graphics=False,
                                                     dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
                     # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
@@ -295,8 +312,12 @@ def checklist_plots(cluster, config_data, use_dask):
                 else:
                     print('not using dask')
                     for location in locations:
-                        build_and_save_checklist_plot(config_data, studies, location, vartype, write_html=True,write_graphics=False)
-                merge_statistics_files(vartype, config_data)
+                        build_and_save_checklist_plot(config_data, studies, location, vartype, 
+                                                      obs_data_included=obs_data_included,
+                                                      write_html=True,write_graphics=False)
+                        
+                if obs_data_included == True:
+                    merge_statistics_files(vartype, config_data)
     finally:
         if use_dask:
             cluster.stop_local_cluster()
