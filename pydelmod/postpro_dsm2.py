@@ -195,7 +195,6 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         # data removed from the masked time periods on the right,
         # and the data removed from outside the masked time periods on the left
         output_template = pn.Row(calib_plot_template, calib_plot_template_masked_time_period)
-        calib_plot_template_masked_time_period.save(f'{output_plot_dir}test_dlc.png')
 
 
     os.makedirs(output_plot_dir, exist_ok=True)
@@ -221,7 +220,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         # files for individual studies
         for study in study_files_dict:
             metrics_df[metrics_df.index == study].to_csv(
-                output_plot_dir + '0_summary_statistics_' + study + '_' + vartype.name + '_' + location.name + '.csv')
+                output_plot_dir + '0_summary_statistics_unmasked_' + study + '_' + vartype.name + '_' + location.name + '.csv')
             # metrics_df[metrics_df.index==study].to_html(output_plot_dir+'0_summary_statistics_'+study+'_'+vartype.name+'_'+location.name+'.html')
 
     if metrics_df_masked_time_period is not None:
@@ -249,17 +248,22 @@ def merge_statistics_files(vartype, config_data):
 
     import glob, os
     print('merging statistics files')
-    output_dir = options_dict['output_folder']
-    os.makedirs(output_dir, exist_ok=True)
-    files = glob.glob(output_dir + '0_summary_statistics_*'+vartype.name+'*.csv')
-    frames = []
-    for f in files:
-        frames.append(pd.read_csv(f))
-    result_df = pd.concat(frames)
-    result_df.sort_values(by=['Location', 'DSM2 Run'], inplace=True, ascending=True)
-    result_df.to_csv(output_dir + '1_summary_statistics_all_'+vartype.name+'.csv', index=False)
-    for f in files:
-        os.remove(f)
+    filename_prefix_list=['summary_statistics_masked_time_period_', 'summary_statistics_unmasked_']
+    for fp in filename_prefix_list:
+        output_dir = options_dict['output_folder']
+        os.makedirs(output_dir, exist_ok=True)
+        files = glob.glob(output_dir + '0_'+fp+'*'+vartype.name+'*.csv')
+        # files = glob.glob(output_dir + '0_summary_statistics_*'+vartype.name+'*.csv')
+        frames = []
+        for f in files:
+            frames.append(pd.read_csv(f))
+        if len(frames)>0:
+            result_df = pd.concat(frames)
+            result_df.sort_values(by=['Location', 'DSM2 Run'], inplace=True, ascending=True)
+            # result_df.to_csv(output_dir + '1_summary_statistics_all_'+vartype.name+'.csv', index=False)
+            result_df.to_csv(output_dir + '1_' + fp + 'all_'+vartype.name+'.csv', index=False)
+            for f in files:
+                os.remove(f)
 
 def postpro_heatmaps(cluster, config_data, use_dask):
     options_dict = config_data['options_dict']
