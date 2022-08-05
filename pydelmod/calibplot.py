@@ -846,6 +846,10 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # using a Table object because the dataframe object, when added to a layout, doesn't always display all the values.
     # This could have something to do with inconsistent types.
     metrics_table = None
+    format_dict = {'Equation': '{:s}', 'R Squared': '{:.2f}', 'Mean Error': '{:.1f}', 'NMean Error': '{:.3f}', 'NMSE': '{:.1}', 'NRMSE': '{:.4}',
+            'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
+            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}'}
+
     if tidal_template:
         dfdisplayed_metrics = dfmetrics.loc[:, [
             'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
@@ -862,7 +866,8 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
             if m is 'Equation':
                 metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
             else:
-                metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
         metrics_list_for_hv_table = None
         if layout_nash_sutcliffe:
             metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
@@ -881,8 +886,6 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         dfdisplayed_metrics.index.name = 'DSM2 Run'
         dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
                                     'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
-        format_dict = {'Equation': '{:,.2f}', 'R Squared': '{:,.2f}', 'Mean Error': '{:,.2f}', 'NMean Error': '{:,.2f}', 'NMSE': '{:,.2}', 'NRMSE': '{:,.2}',
-                    'Amp Avg %Err': '{:,.2f}', 'Avg Phase Err': '{:,.2f}', 'NSE': '{:,.2f}', 'PBIAS': '{:,.2f}', 'RSR': '{:,.2f}'}
         dfdisplayed_metrics.style.format(format_dict)
         # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
         # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
@@ -892,7 +895,7 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
             if m is 'Equation':
                 metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
             else:
-                metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
             
         # now create a holoviews table object displaying the metrics
         metrics_list_for_hv_table = None
