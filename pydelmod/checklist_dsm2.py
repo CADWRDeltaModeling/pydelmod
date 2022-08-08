@@ -1,5 +1,8 @@
+import panel as pn
 from .postpro_dsm2 import merge_statistics_files
-from .calibplot import *
+from .calibplot import load_data_for_plotting,build_inst_plot, \
+                       build_godin_plot, build_scatter_plots, \
+                       build_metrics_table
 from pydsm import postpro
 import sys
 import os
@@ -292,15 +295,13 @@ def checklist_plots(cluster, config_data, use_dask):
                 locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
 
                 # create list of postpro.Study objects, with observed Study followed by model Study objects
-                # obs_study=postpro.Study('Observed',observed_files_dict[checklist_item])
-                # model_studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
-                # studies=[obs_study]+model_studies
-                studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
+                studies = []
+                for name in study_files_dict:
+                    studies = studies + [postpro.Study(name,study_files_dict[name])]
+
                 if (obs_data_included == True):
-                    print(observed_files_dict[checklist_item])
-                    obs_study=postpro.Study('Observed',observed_files_dict[checklist_item])
-                    print(type(obs_study))
-                    studies = studies + [obs_study]
+                    obs_study = [postpro.Study('Observed',observed_files_dict[checklist_item])]
+                    studies = obs_study + studies
 
                 # now run the processes
                 if use_dask:
