@@ -279,6 +279,8 @@ def checklist_plots(cluster, config_data, use_dask):
                 else:
                     print("Observation file does not exist.")
                     sys.exit()
+            else:
+                obs_data_included = False
 
             print('vartype='+str(vartype))
             if process_vartype_dict[vartype.name]:
@@ -295,8 +297,10 @@ def checklist_plots(cluster, config_data, use_dask):
                 # studies=[obs_study]+model_studies
                 studies=[postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
                 if (obs_data_included == True):
+                    print(observed_files_dict[checklist_item])
                     obs_study=postpro.Study('Observed',observed_files_dict[checklist_item])
-                    studies = [studies] + obs_study
+                    print(type(obs_study))
+                    studies = studies + [obs_study]
 
                 # now run the processes
                 if use_dask:
