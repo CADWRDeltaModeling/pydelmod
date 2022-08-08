@@ -297,7 +297,15 @@ def checklist_plots(cluster, config_data, use_dask):
                 # create list of postpro.Study objects, with observed Study followed by model Study objects
                 studies = []
                 for name in study_files_dict:
-                    studies = studies + [postpro.Study(name,study_files_dict[name])]
+
+                    # temporarily attach "_calib_postpro" to file name,
+                    #   for integration with pydsm.
+                    [fname, ext] = os.path.splitext(study_files_dict[name])
+
+                    studies = studies + [postpro.Study(name,fname+ext)]
+
+                    fname_new = fname+"_calib_postpro"
+                    os.rename(fname+ext, fname_new+ext)
 
                 if (obs_data_included == True):
                     obs_study = [postpro.Study('Observed',observed_files_dict[checklist_item])]
@@ -320,9 +328,16 @@ def checklist_plots(cluster, config_data, use_dask):
                         build_and_save_checklist_plot(config_data, studies, location, vartype, 
                                                       obs_data_included=obs_data_included,
                                                       write_html=True,write_graphics=False)
-                        
+
                 if obs_data_included == True:
                     merge_statistics_files(vartype, config_data)
+
+                # Change file names back
+                for name in study_files_dict:
+
+                    [fname, ext] = os.path.splitext(study_files_dict[name])
+                    os.rename(fname+"_calib_postpro"+ext, fname+ext)
+
     finally:
         if use_dask:
             cluster.stop_local_cluster()
