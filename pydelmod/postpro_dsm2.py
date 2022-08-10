@@ -121,7 +121,7 @@ def save_to_graphics_format(calib_plot_template,fname):
     #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
     calib_plot_template.save(fname)
 
-def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None):
+def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False):
 # def build_plot(config_data, studies, location, vartype):
     options_dict = config_data['options_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
@@ -141,7 +141,9 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     calib_plot_template, metrics_df = \
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
-            zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
+            zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
+                invert_timewindow_exclusion=invert_timewindow_exclusion)
+
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
     #         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
@@ -175,15 +177,36 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
+    output_template = calib_plot_template    
+
+    time_window_exclusion_list = location.time_window_exclusion_list
+    calib_plot_template_masked_time_period = None
+    metrics_df_masked_time_period = None
+    create_second_panel = True if (time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) else False
+    if create_second_panel:
+        calib_plot_template_masked_time_period, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
+            gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True)
+        # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
+        if calib_plot_template_masked_time_period is None:
+            print('failed to create plots for masked time period')
+        if metrics_df_masked_time_period is None:
+            print('failed to create metrics for masked time period')
+        # This puts the two calib plots templates side by side, with the 
+        # data removed from the masked time periods on the right,
+        # and the data removed from outside the masked time periods on the left
+        output_template = pn.Row(calib_plot_template, calib_plot_template_masked_time_period)
+
+
     os.makedirs(output_plot_dir, exist_ok=True)
     # save plot to html and/or png file
     if calib_plot_template is not None and metrics_df is not None:
         if write_html: 
             print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
-            calib_plot_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
+            output_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
         if write_graphics:
-            save_to_graphics_format(calib_plot_template,f'{output_plot_dir}{location}_{vartype.name}.png')
+            save_to_graphics_format(output_template,f'{output_plot_dir}{location}_{vartype.name}.png')
     #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
+
     if metrics_df is not None:
         location_list = []
         for r in range(metrics_df.shape[0]):
@@ -197,8 +220,23 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         # files for individual studies
         for study in study_files_dict:
             metrics_df[metrics_df.index == study].to_csv(
-                output_plot_dir + '0_summary_statistics_' + study + '_' + vartype.name + '_' + location.name + '.csv')
+                output_plot_dir + '0_summary_statistics_unmasked_' + study + '_' + vartype.name + '_' + location.name + '.csv')
             # metrics_df[metrics_df.index==study].to_html(output_plot_dir+'0_summary_statistics_'+study+'_'+vartype.name+'_'+location.name+'.html')
+
+    if metrics_df_masked_time_period is not None:
+        location_list = []
+        for r in range(metrics_df_masked_time_period.shape[0]):
+            location_list.append(location)
+        metrics_df_masked_time_period['Location'] = location_list
+        # move Location column to beginning
+        cols = list(metrics_df_masked_time_period)
+        cols.insert(0, cols.pop(cols.index('Location')))
+        metrics_df_masked_time_period = metrics_df_masked_time_period.loc[:, cols]
+
+        #files for individual studies
+        for study in study_files_dict:
+            metrics_df_masked_time_period[metrics_df_masked_time_period.index == study].to_csv(
+                output_plot_dir + '0_summary_statistics_masked_time_period_' + study + '_' + vartype.name + '_' + location.name + '.csv')
     return
 
 # merge study statistics files
@@ -210,17 +248,22 @@ def merge_statistics_files(vartype, config_data):
 
     import glob, os
     print('merging statistics files')
-    output_dir = options_dict['output_folder']
-    os.makedirs(output_dir, exist_ok=True)
-    files = glob.glob(output_dir + '0_summary_statistics_*'+vartype.name+'*.csv')
-    frames = []
-    for f in files:
-        frames.append(pd.read_csv(f))
-    result_df = pd.concat(frames)
-    result_df.sort_values(by=['Location', 'DSM2 Run'], inplace=True, ascending=True)
-    result_df.to_csv(output_dir + '1_summary_statistics_all_'+vartype.name+'.csv', index=False)
-    for f in files:
-        os.remove(f)
+    filename_prefix_list=['summary_statistics_masked_time_period_', 'summary_statistics_unmasked_']
+    for fp in filename_prefix_list:
+        output_dir = options_dict['output_folder']
+        os.makedirs(output_dir, exist_ok=True)
+        files = glob.glob(output_dir + '0_'+fp+'*'+vartype.name+'*.csv')
+        # files = glob.glob(output_dir + '0_summary_statistics_*'+vartype.name+'*.csv')
+        frames = []
+        for f in files:
+            frames.append(pd.read_csv(f))
+        if len(frames)>0:
+            result_df = pd.concat(frames)
+            result_df.sort_values(by=['Location', 'DSM2 Run'], inplace=True, ascending=True)
+            # result_df.to_csv(output_dir + '1_summary_statistics_all_'+vartype.name+'.csv', index=False)
+            result_df.to_csv(output_dir + '1_' + fp + 'all_'+vartype.name+'.csv', index=False)
+            for f in files:
+                os.remove(f)
 
 def postpro_heatmaps(cluster, config_data, use_dask):
     options_dict = config_data['options_dict']
