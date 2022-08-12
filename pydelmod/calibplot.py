@@ -756,13 +756,12 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
         spd_metrics = gpd.resample('D').mean() if gpd is not None else None
         if flow_in_thousands:
             gpd = gpd/1000.0 if gpd is not None else None
-            spd_plot = gpd.resample('D').mean()/1000.0 if gpd is not None else None
-        else:
-            spd_plot = gpd.resample('D').mean() if gpd is not None else None
+        spd_plot = gpd.resample('D').mean() if gpd is not None else None
 
         gtsp_plot_data.append(gpd)
         splot_plot_data.append(spd_plot)
         splot_metrics_data.append(spd_metrics)
+
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
 
     splot = None
@@ -774,15 +773,15 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
     dfdisplayed_metrics = None
     # calculate calibration metrics
-    slope_plots_dfmetrics = None
-    if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
-        slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
+    # slope_plots_dfmetrics = None
+    # if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
+    #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
 
     # not using this any more
-    # dfmetrics = None
-    # if splot_metrics_data is not None:
-    #     dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
+    dfmetrics = None
+    if splot_metrics_data is not None:
+        dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
     # dfmetrics_monthly = None
     # # if p.gdf is not None:
     # dfmetrics_monthly = calculate_metrics(
@@ -791,8 +790,8 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
     # add regression lines to scatter plot, and set x and y axis titles
     slope_plots = None
     cplot = None
-    if slope_plots_dfmetrics is not None:
-        slope_plots = regression_line_plots(slope_plots_dfmetrics)
+    if dfmetrics is not None:
+        slope_plots = regression_line_plots(dfmetrics)
         cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
         cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
             .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
@@ -857,7 +856,7 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
-    splot_metrics_data = [g.resample('D').mean() if g is not None else None for g in gtsp_plot_data]
+    splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
     # splot_metrics_data = None
     # if p.gdf is not None:
     # splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
