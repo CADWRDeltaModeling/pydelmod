@@ -4,18 +4,154 @@ from .postpro_dsm2 import merge_statistics_files, \
 from pydsm import postpro
 import sys
 import os
+import pyhecdss
+import pandas as pd
+
+def resample_to_15min(config_data):
+    resample_switch_dict = config_data["resample_switch_dict"]
+    resample_file_dict = config_data["resample_file_dict"]
+
+    for data_source in resample_switch_dict:
+        if resample_switch_dict[data_source] == True:
+
+            print("resampling for: ", data_source)
+
+            fpath_in = resample_file_dict[data_source]
+
+            # create new file for resampled data
+            # close the file immediately to avoid any memory issues
+            [fname, ext] = os.path.splitext(fpath_in)
+            fpath_out = fname + "_resampled" + ext
+            newdss = pyhecdss.DSSFile(fpath_out, create_new = True)
+            newdss.close()
+
+            # select time series with desired location and variable
+            with pyhecdss.DSSFile(fpath_in) as dss_in:
+                catdf = dss_in.read_catalog()
+                paths = dss_in.get_pathnames()
+
+                for p in paths:
+
+                    print("processing:", p)
+
+                    # extract time series, whether regular or irregular
+                    try:
+                        dfr, unit0, type0 = dss_in.read_rts(p)
+
+                    except:
+                        dfr, unit0, type0 = dss_in.read_its(p)
+
+                    # resample to 15min interval
+                    dfr = dfr.resample(rule="15min").interpolate()
+
+                    # write to new file
+                    with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                        newdss.write_rts(p, dfr, unit0, type0)
+
+            print("Resampled time series saved to" + fpath_out)
+
+    print("Done")
+
+def checklist_station_extract(config_data):
+
+    extract_switch_dict = config_data["extract_switch_dict"]
+    extract_file_dict = config_data["extract_file_dict"]
+    extract_station_dict = config_data["extract_station_dict"]
+
+    for data_source in extract_switch_dict:
+        if extract_switch_dict[data_source] == True:
+
+            # obtain path of file containing original time series data
+            #   (e.g., DSM2 output or observation)
+            fpath_in = extract_file_dict[data_source]
+
+            print("extracting station data for:", data_source)
+            print("source:", fpath_in)
+
+            # create new file for extracted data
+            # close the file immediately to avoid any memory issues
+            [fname, ext] = os.path.splitext(fpath_in)
+            fpath_out = fname + "_checklist" + ext
+            newdss = pyhecdss.DSSFile(fpath_out, create_new = True)
+            newdss.close()
+
+            # obtain dictionary of checklist station name (e.g., SAC)
+            station_checklist = extract_station_dict[data_source]
+
+            for station_out in station_checklist:
+
+                print("   checklist station:", station_out)
+                print("   origin station(s):", station_checklist[station_out])
+
+                for vartype in ["FLOW", "STAGE", "EC"]:
+
+                    print("      processing ", vartype)
+
+                    # list of time series
+                    list_dfr = []
+
+                    # for given checklist station (e.g., SWP),
+                    #   loop through the constituting stations
+                    for station_source in station_checklist[station_out]:
+
+                        # time series values are reversed when specified by "-"
+                        sign = +1.
+                        if ("-" in station_source):
+                            sign = -1.
+                            station_source = station_source.replace("-", "")
+
+                        # select time series with desired location and variable
+                        with pyhecdss.DSSFile(fpath_in) as dss_in:
+                            catdf = dss_in.read_catalog()
+                            pathi = dss_in.get_pathnames(
+                                    catdf[(catdf.B == station_source) &
+                                          (catdf.C == vartype)])
+
+                        # extract time series
+                        try:
+                            dfr, unit0, type0 = dss_in.read_rts(pathi[0])
+
+                        except:
+                            dfr, unit0, type0 = dss_in.read_its(pathi[0])
+
+                        # write original data to new file for sanity check
+                        with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                            newdss.write_rts(pathi[0], dfr, unit0, type0)
+
+                        # append to the list of dfr
+                        list_dfr.append(dfr*sign)
+
+                        dfr_checklist = pd.concat(list_dfr, axis=1)
+
+                    # replace the station name to checklist convention
+                    #   using the last known path is acceptable,
+                    #   because only Part B (location) is different.
+                    substr = pathi[0].split("/")
+                    substr[2] = station_out
+                    path_new = "/".join(substr)
+
+                    # write to new file using checklist alias
+                    dfr_checklist = dfr_checklist.sum(axis=1)
+                    with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                        newdss.write_rts(path_new, dfr_checklist, unit0, type0)
+
+            print("Extracted time series saved to" + fpath_out)
+    print("Done")
 
 def checklist_plots(cluster, config_data, use_dask):
     vartype_dict = config_data['vartype_dict']
-    study_files_dict = config_data['study_files_dict']
 
     checklist_dict = config_data['checklist_dict']
     checklist_vartype_dict = config_data['checklist_vartype_dict']
     checklist_location_files_dict = config_data['checklist_location_files_dict']
+    checklist_study_files_dict = config_data['checklist_study_files_dict']
     checklist_observed_files_dict = config_data['checklist_observed_files_dict']
-    
+
     # Store main output folder
     output_folder_main = config_data["options_dict"]["output_folder"]
+
+    # store checklist dictionary as postprocessor dictionary for compatibility
+    config_data["study_files_dict"] = checklist_study_files_dict
 
     ## Set options and run processes. If using dask, create delayed tasks
     try:
@@ -38,10 +174,10 @@ def checklist_plots(cluster, config_data, use_dask):
             print('about to read location file: '+ locationfile)
             locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
 
-            # create list of postpro.Study objects, with observed Study followed by model Study objects
+            # create list of postpro.
             obs_study = postpro.Study('Observed',checklist_observed_files_dict[checklist_item])
-            model_studies = [postpro.Study(name,study_files_dict[name]) for name in study_files_dict]
-            studies = [obs_study] + model_studies
+            model_studies = [postpro.Study(name,checklist_study_files_dict[name]) for name in checklist_study_files_dict]
+            studies = model_studies + [obs_study]
 
             # now run the processes
             if use_dask:
@@ -57,7 +193,7 @@ def checklist_plots(cluster, config_data, use_dask):
             else:
                 # print('not using dask')
                 for location in locations:
-                    build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=False,
+                    build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=True,
                                         gate_studies=None, gate_locations=None, gate_vartype=None)
 
             merge_statistics_files(vartype, config_data)
