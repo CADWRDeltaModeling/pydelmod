@@ -142,6 +142,18 @@ def checklist_station_extract(config_data):
                         with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
                             newdss.write_rts(pathi[0], dfr*sign, unit0, type0)
 
+                        # if the original and new station names are same
+                        #   with exception of the sign, the original time series
+                        #   is indicated accordingly. Otherwise, it is confusing
+                        #   what the "raw" data contained.
+                        if station_source == station_out:
+                            substr = pathi[0].split("/")
+                            substr[2] = station_source + "(original)"
+                            pathi[0] = "/".join(substr)
+
+                        with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                            newdss.write_rts(pathi[0], dfr, unit0, type0)
+
                         # append to the list of dfr
                         list_dfr.append(dfr*sign)
 
