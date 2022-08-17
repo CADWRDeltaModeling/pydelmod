@@ -133,8 +133,14 @@ def checklist_station_extract(config_data):
                             dfr, unit0, type0 = dss_in.read_its(pathi[0])
 
                         # write original data to new file for sanity check
+                        # if sign is reversed, the sign-reversed data is saved.
+                        if sign == -1.:
+                            substr = pathi[0].split("/")
+                            substr[2] = "-" + station_source
+                            pathi[0] = "/".join(substr)
+
                         with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                            newdss.write_rts(pathi[0], dfr, unit0, type0)
+                            newdss.write_rts(pathi[0], dfr*sign, unit0, type0)
 
                         # append to the list of dfr
                         list_dfr.append(dfr*sign)
