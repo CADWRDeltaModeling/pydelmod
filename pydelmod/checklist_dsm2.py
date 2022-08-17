@@ -6,6 +6,7 @@ import sys
 import os
 import pyhecdss
 import pandas as pd
+import shutil
 
 def resample_to_15min(config_data):
     resample_switch_dict = config_data["resample_switch_dict"]
@@ -57,6 +58,7 @@ def checklist_station_extract(config_data):
     extract_switch_dict = config_data["extract_switch_dict"]
     extract_file_dict = config_data["extract_file_dict"]
     extract_station_dict = config_data["extract_station_dict"]
+    extract_copy_all_dict = config_data["extract_copy_all_dict"]
 
     for data_source in extract_switch_dict:
         if extract_switch_dict[data_source] == True:
@@ -68,12 +70,28 @@ def checklist_station_extract(config_data):
             print("extracting station data for:", data_source)
             print("source:", fpath_in)
 
-            # create new file for extracted data
-            # close the file immediately to avoid any memory issues
+            # Path of the new file to be generated.
+            # Remove existing file if exists.
             [fname, ext] = os.path.splitext(fpath_in)
             fpath_out = fname + "_" + data_source + ext
-            newdss = pyhecdss.DSSFile(fpath_out, create_new = True)
-            newdss.close()
+            try:
+                os.remove(fpath_out)
+            except:
+                pass
+
+            if extract_copy_all_dict == True:
+                # The resulting file will contain all time series of original.
+                # Instead of copying time series one by one,
+                #   simply make a copy of the original.
+                shutil.copy(fpath_in, fpath_out)
+                newdss = pyhecdss.DSSFile(fpath_out, create_new = False)
+                newdss.close()
+
+            else:
+                # create new file for extracted data
+                # close the file immediately to avoid any memory issues
+                newdss = pyhecdss.DSSFile(fpath_out, create_new = True)
+                newdss.close()
 
             # obtain dictionary of checklist station name (e.g., SAC)
             station_checklist = extract_station_dict[data_source]
@@ -96,9 +114,9 @@ def checklist_station_extract(config_data):
 
                         # time series values are reversed when specified by "-"
                         sign = +1.
-                        if ("-" in station_source):
+                        if (station_source[0] == "-"):
                             sign = -1.
-                            station_source = station_source.replace("-", "")
+                            station_source = station_source[1:]
 
                         # select time series with desired location and variable
                         with pyhecdss.DSSFile(fpath_in) as dss_in:
