@@ -71,7 +71,7 @@ def checklist_station_extract(config_data):
             # create new file for extracted data
             # close the file immediately to avoid any memory issues
             [fname, ext] = os.path.splitext(fpath_in)
-            fpath_out = fname + "_checklist" + ext
+            fpath_out = fname + "_" + data_source + ext
             newdss = pyhecdss.DSSFile(fpath_out, create_new = True)
             newdss.close()
 
