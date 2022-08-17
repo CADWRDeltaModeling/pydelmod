@@ -115,6 +115,7 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
     Returns:
         DataFrame: DataFrame with data removed
     """
+    # df = df.copy()
     cols = df.columns
     if threshold_value is None:
         threshold_value = 999999
@@ -140,11 +141,10 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
             for tw in time_window_exclusion_list:
                 start_dt_str, end_dt_str = tw.split('_')
                 df.loc[((df.index>=start_dt_str) & (df.index<end_dt_str)), 'outside_all_tw'] = False
-                df.loc[(df[cols[0]]>=threshold_value), 'above_threshold'] = True
-            df.loc[((df['outside_all_tw']==True) | (df['above_threshold']==True)), 'keep_inverted'] = True
+            df.loc[(df[cols[0]]>=threshold_value), 'above_threshold'] = True
+            df.loc[((df['outside_all_tw']==False) | (df['above_threshold']==True)), 'keep_inverted'] = True
             df.loc[df['keep_inverted']==False, cols[0]] = np.nan
             df.drop(columns=['outside_all_tw', 'above_threshold', 'keep_inverted'], inplace=True)
-
             # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
             # conditions = [ (df.index >= pd.Timestamp(s)) & (df.index <= pd.Timestamp(e)) for s,e in array_of_tuples] # [(3,5), (19, 38)]
             # functools.reduce
@@ -183,7 +183,7 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
                 # else:
                 #     # keep data in the timewindows, and remove all other data, except those that are above the threshold
                 #     if tw_index == 0:
-                #         df_new[(df_new.index<=pd.Timestamp(start_dt_str)) & (df_new[cols[0]]<threshold_value)] = np.nan
+                #         df[(df.index<=pd.Timestamp(start_dt_str)) & (df[cols[0]]<threshold_value)] = np.nan
                 #     else:
                 #         # if in any time window
                 #         last_start_dt_str, last_end_dt_str = last_tw.split('_')
@@ -192,12 +192,12 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
                 #         # df[(all((df.index < start_dt) | (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)) & df>=threshold_value] = np.nan
 
                 #         # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
-                last_tw = tw
+                # last_tw = tw
             tw_index += 1
         # now remove the data after the end of the last timewindow
-        if invert_selection and last_tw is not None and len(last_tw)>0:
-            last_start_dt_str, last_end_dt_str = last_tw.split('_')
-            df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
+        # if invert_selection and last_tw is not None and len(last_tw)>0:
+        #     last_start_dt_str, last_end_dt_str = last_tw.split('_')
+        #     df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
     elif threshold_value is not None:
         if not invert_selection:
             df[df>=threshold_value] = np.nan
