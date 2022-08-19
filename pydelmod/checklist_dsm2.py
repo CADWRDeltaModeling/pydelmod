@@ -49,9 +49,9 @@ def resample_to_15min(config_data):
                     with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
                         newdss.write_rts(p, dfr, unit0, type0)
 
-            print("Resampled time series saved to" + fpath_out)
+            print("Resampled time series saved to " + fpath_out)
 
-    print("Done")
+    print("Done\n")
 
 def checklist_station_extract(config_data):
 
@@ -172,9 +172,10 @@ def checklist_station_extract(config_data):
                         newdss.write_rts(path_new, dfr_checklist, unit0, type0)
 
             print("Extracted time series saved to" + fpath_out)
-    print("Done")
+    print("Done\n")
 
 def checklist_plots(cluster, config_data, use_dask):
+
     vartype_dict = config_data['vartype_dict']
 
     checklist_dict = config_data['checklist_dict']
@@ -188,53 +189,54 @@ def checklist_plots(cluster, config_data, use_dask):
     ## Set options and run processes. If using dask, create delayed tasks
     try:
         for checklist_item in checklist_dict:
-            print("checklist_item:", checklist_item)
-            for var_name in checklist_vartype_dict[checklist_item]:
-                vartype = postpro.VarType(var_name, vartype_dict[var_name])
+            if (checklist_dict[checklist_item] == True):
+                print("checklist_item:", checklist_item)
+                for var_name in checklist_vartype_dict[checklist_item]:
+                    vartype = postpro.VarType(var_name, vartype_dict[var_name])
 
-                print('vartype='+str(vartype))
+                    print('vartype='+str(vartype))
 
-                checklist_study_files_dict = config_data['checklist_study_files_dict'][checklist_item]
+                    checklist_study_files_dict = config_data['checklist_study_files_dict'][checklist_item]
 
-                # store checklist dictionary as postprocessor dictionary for compatibility
-                config_data["study_files_dict"] = checklist_study_files_dict
+                    # store checklist dictionary as postprocessor dictionary for compatibility
+                    config_data["study_files_dict"] = checklist_study_files_dict
 
-                # Specify output subfolder for each checklist item
-                output_folder_sub = os.path.join(output_folder_main, checklist_item+"/")
-                config_data["options_dict"]["output_folder"] = output_folder_sub
+                    # Specify output subfolder for each checklist item
+                    output_folder_sub = os.path.join(output_folder_main, checklist_item+"/")
+                    config_data["options_dict"]["output_folder"] = output_folder_sub
 
-                ## Load locations from a .csv file, and create a list of postpro.Location objects
-                #The .csv file should have atleast 'Name','BPart' and 'Description' columns
-                locationfile=checklist_location_files_dict[checklist_item]
-                dfloc = postpro.load_location_file(locationfile)
-                print('about to read location file: '+ locationfile)
-                locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
+                    ## Load locations from a .csv file, and create a list of postpro.Location objects
+                    #The .csv file should have atleast 'Name','BPart' and 'Description' columns
+                    locationfile=checklist_location_files_dict[checklist_item]
+                    dfloc = postpro.load_location_file(locationfile)
+                    print('about to read location file: '+ locationfile)
+                    locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
 
-                # create list of postpro.
-                obs_study = postpro.Study('Observed',checklist_observed_files_dict[checklist_item])
-                model_studies = [postpro.Study(name,checklist_study_files_dict[name]) for name in checklist_study_files_dict]
-                studies = model_studies + [obs_study]
+                    # create list of postpro.
+                    obs_study = postpro.Study('Observed',checklist_observed_files_dict[checklist_item])
+                    model_studies = [postpro.Study(name,checklist_study_files_dict[name]) for name in checklist_study_files_dict]
+                    studies = model_studies + [obs_study]
 
-                # now run the processes
-                if use_dask:
-                    # print('using dask')
-                    tasks = [dask.delayed(build_and_save_checklist_plot)(config_data, studies, location, vartype,
-                                                                         write_html=True,write_graphics=False,
-                                                                         gate_studies=None, gate_locations=None, gate_vartype=None,
-                                                    dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
-                    # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype,
-                    #                                 write_html=True,write_graphics=False,
-                    #                                 dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
-                    dask.compute(tasks)
-                else:
-                    # print('not using dask')
-                    for location in locations:
-                        build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=True,
-                                            gate_studies=None, gate_locations=None, gate_vartype=None)
+                    # now run the processes
+                    if use_dask:
+                        # print('using dask')
+                        tasks = [dask.delayed(build_and_save_checklist_plot)(config_data, studies, location, vartype,
+                                                                             write_html=True,write_graphics=False,
+                                                                             gate_studies=None, gate_locations=None, gate_vartype=None,
+                                                        dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
+                        # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype,
+                        #                                 write_html=True,write_graphics=False,
+                        #                                 dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
+                        dask.compute(tasks)
+                    else:
+                        # print('not using dask')
+                        for location in locations:
+                            build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=True,
+                                                gate_studies=None, gate_locations=None, gate_vartype=None)
 
-                merge_statistics_files(vartype, config_data)
+                    merge_statistics_files(vartype, config_data)
 
-                print("Completed:", checklist_item)
+                    print("Completed:", checklist_item, "\n")
 
     finally:
         if use_dask:
