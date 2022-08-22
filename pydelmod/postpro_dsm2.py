@@ -121,7 +121,8 @@ def save_to_graphics_format(calib_plot_template,fname):
     #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
     calib_plot_template.save(fname)
 
-def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False):
+def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, \
+    invert_timewindow_exclusion=False, remove_data_above_threshold=True):
 # def build_plot(config_data, studies, location, vartype):
     options_dict = config_data['options_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
@@ -142,7 +143,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
-                invert_timewindow_exclusion=invert_timewindow_exclusion)
+                invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold)
 
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
@@ -164,14 +165,16 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     return calib_plot_template, metrics_df
 
 
-def build_and_save_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, write_html=False, write_graphics=True, output_format='png'):
+def build_and_save_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, \
+    write_html=False, write_graphics=True, output_format='png'):
 # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data['study_files_dict']
     output_plot_dir = config_data['options_dict']['output_folder']
     print('build and save plot: output_plot_dir = ' + output_plot_dir)
     print('Building plot template for location: ' + str(location))    
 
-    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
+    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
+        gate_locations=gate_locations, gate_vartype=gate_vartype)
     # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
     if calib_plot_template is None:
         print('failed to create plots')
@@ -185,7 +188,8 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     create_second_panel = True if (time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) else False
     if create_second_panel:
         calib_plot_template_masked_time_period, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
-            gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True)
+            gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
+                remove_data_above_threshold=False)
         # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
         if calib_plot_template_masked_time_period is None:
             print('failed to create plots for masked time period')
@@ -303,7 +307,7 @@ def postpro_plots(cluster, config_data, use_dask):
                 locationfile=location_files_dict[vartype.name]
                 dfloc = postpro.load_location_file(locationfile)
                 print('about to read location file: '+ locationfile)
-                locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
+                locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list'], r['threshold_value']) for i,r in dfloc.iterrows()]
 
                 # now get gate data
                 gate_studies = None

@@ -93,7 +93,16 @@ def scatterplot(dflist, names, index_x=0):
     dfa = dfa.resample('D').mean()
     return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols='all')
 
-def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False):
+
+# def test_function(df, start_dt_list, end_dt_list):
+#     return_value = True
+#     for start_dt, end_dt in zip(start_dt_list, end_dt_list):
+#         [((df.index<start_dt) or (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)]
+#     results = (all((df.index < start_dt) or (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list))
+#     return results
+
+# THIS method, if it worked, would, for the right hand side plots/metrics, include data specified in time windows, and inside time windows.
+def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False, threshold_value=None):
     """removes data from dataframe that is within time windows in the time_window_exclusion_list
 
     Args:
@@ -101,37 +110,101 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window 
         using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
         invert_selection (bool): If True, keep data in the time windows rather than removing it.
+        threshold_value (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR 
+            datetime is outside all specified timewindows.
     Returns:
         DataFrame: DataFrame with data removed
     """
+    # df = df.copy()
+    cols = df.columns
+    if threshold_value is None:
+        threshold_value = 999999
+    else:
+        if(len(str(threshold_value))>0):
+            threshold_value = float(threshold_value)
+        else:
+            threshold_value = 999999
+
     time_window_exclusion_list = None
     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
         time_window_exclusion_list = time_window_exclusion_list_str.split(',')
-    if time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None:
-            tw_index = 0
-            last_tw = None
+    if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None):
+        tw_index = 0
+        last_tw = None
+
+        if invert_selection:
+            # set all values NOT in any timewindow to nan.
+            cols = df.columns
+            df['outside_all_tw'] = True
+            df['above_threshold'] = False
+            df['keep_inverted'] = False
             for tw in time_window_exclusion_list:
-                if len(tw)>0:
-                    start_dt_str, end_dt_str = tw.split('_')
-                    if not invert_selection:
-                        # remove data in the time windows
-                        # This is the old way: not good for plotting, because it becomes an ITS
-                        # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
-                        df[start_dt_str:end_dt_str] = np.nan
-                    else:
-                        # keep data in the timewindows, and remove all other data.
-                        if tw_index == 0:
-                            df[:start_dt_str] = np.nan
-                        else:
-                            last_start_dt_str, last_end_dt_str = last_tw.split('_')
-                            df[last_end_dt_str:start_dt_str] = np.nan
-                    last_tw = tw
-                tw_index += 1
-            # now remove the data after the end of the last timewindow
-            if invert_selection and last_tw is not None and len(last_tw)>0:
-                last_start_dt_str, last_end_dt_str = last_tw.split('_')
-                df[last_end_dt_str:] = np.nan
+                start_dt_str, end_dt_str = tw.split('_')
+                df.loc[((df.index>=start_dt_str) & (df.index<end_dt_str)), 'outside_all_tw'] = False
+            df.loc[(df[cols[0]]>=threshold_value), 'above_threshold'] = True
+            df.loc[((df['outside_all_tw']==False) | (df['above_threshold']==True)), 'keep_inverted'] = True
+            df.loc[df['keep_inverted']==False, cols[0]] = np.nan
+            df.drop(columns=['outside_all_tw', 'above_threshold', 'keep_inverted'], inplace=True)
+            # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
+            # conditions = [ (df.index >= pd.Timestamp(s)) & (df.index <= pd.Timestamp(e)) for s,e in array_of_tuples] # [(3,5), (19, 38)]
+            # functools.reduce
+            # c=conditions[0]
+            # for c2 in conditions[1:]: 
+            #  c = c | c2
+            # df[c] = np.nan
+            # date_range_list = []
+            # start_dt_list = []
+            # end_dt_list = []
+            # for tw in time_window_exclusion_list:
+            #     start_dt_str, end_dt_str = tw.split('_')
+            #     # date_range_list.append(pd.date_range(start=pd.Timestamp(start_dt_str), end=pd.Timestamp(end_dt_str, freq='15T')))
+            #     start_dt_list.append(start_dt_str)
+            #     end_dt_list.append(end_dt_str)        
+            # print('*****************************************************************************************')
+            # print('lengths of start, end date lists='+str(len(start_dt_list))+','+str(len(end_dt_list)))
+            # print('*****************************************************************************************')
+            # # if the timestamp is outside every time window, AND is above the threshold
+            # df[(all((df.index < start_dt) | (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)) & df>=threshold_value] = np.nan
+            # # df[all(df.index not in date_range for date_range in date_range_list) & (df[cols[0]] < threshold_value)] = np.nan
+            # # df[test_function(df, start_dt_list, end_dt_list) & df>=threshold_value] = np.nan
+
+
+
+
+        for tw in time_window_exclusion_list:
+            if len(tw)>0:
+                start_dt_str, end_dt_str = tw.split('_')
+                if not invert_selection:
+                    # remove data in the time windows
+                    # This is the old way: not good for plotting, because it becomes an ITS
+                    # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
+                    # df[start_dt_str:end_dt_str] = np.nan
+                    df[((df.index>pd.Timestamp(start_dt_str)) & (df.index<=pd.Timestamp(end_dt_str))) | (df[cols[0]]>=threshold_value)] = np.nan
+                # else:
+                #     # keep data in the timewindows, and remove all other data, except those that are above the threshold
+                #     if tw_index == 0:
+                #         df[(df.index<=pd.Timestamp(start_dt_str)) & (df[cols[0]]<threshold_value)] = np.nan
+                #     else:
+                #         # if in any time window
+                #         last_start_dt_str, last_end_dt_str = last_tw.split('_')
+                #         # df[last_end_dt_str:start_dt_str | df < threshold_value] = np.nan
+                #         #     # if the timestamp is outside every time window, AND is above the threshold
+                #         # df[(all((df.index < start_dt) | (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)) & df>=threshold_value] = np.nan
+
+                #         # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
+                # last_tw = tw
+            tw_index += 1
+        # now remove the data after the end of the last timewindow
+        # if invert_selection and last_tw is not None and len(last_tw)>0:
+        #     last_start_dt_str, last_end_dt_str = last_tw.split('_')
+        #     df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
+    elif threshold_value is not None:
+        if not invert_selection:
+            df[df>=threshold_value] = np.nan
+        else:
+            df[df<threshold_value] = np.nan
     return df
+
 
 def calculate_metrics(dflist, names, index_x=0, location=None):
     """Calculate metrics between the index_x column and other columns
@@ -336,7 +409,8 @@ def sanitize_name(name):
 
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
                               inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
-                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False):
+                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False,
+                              remove_data_above_threshold=True):
     """Builds calibration plot template
 
     Args:
@@ -382,7 +456,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
-        time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
+        time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
+        threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
+
     cplot = None
     dfdisplayed_metrics = None
     metrics_table = None
@@ -390,9 +466,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
-
         cplot = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
-            time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
+            time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
+            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
@@ -410,7 +486,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         # else:
 
         dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
-                            layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion)
+                            layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
+                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
         df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
         metrics_table_dict.update({'all': metrics_table})
 
@@ -630,7 +707,8 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     tsp = tsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return tsp
 
-def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None, invert_timewindow_exclusion=False):
+def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None, \
+    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True):
     """Builds calibration plot template
 
     Args:
@@ -644,6 +722,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
             Included in axis titles if specified.
         time_window_exclusion_list (str): a string containing timewindows separated by commas.
         invert_timewindow_exclusion (bool): if true, data in time_window_exclusion_list will be kept and all other data removed.
+        remove_data_above_threshold (bool): if true, data above specified threshold value will be removed
     Returns:
         gtsp: A plot
     """
@@ -652,11 +731,13 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     godin_y_axis_label = 'Godin '+y_axis_label
     # plot_data are scaled, if flow_in_thousands == True
-    gtsp_plot_data = [p.gdf for p in pp]
+    # gtsp_plot_data = [p.gdf for p in pp]
 
     # if p.gdf is not None:
-    if flow_in_thousands:
-        gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
+
+    # if flow_in_thousands:
+    #     gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
+
     # zoom in to desired timewindow: works, but doesn't zoom y axis, so need to fix later
     # if inst_plot_timewindow is not None:
     #     start_end_times = parse_time_window(inst_plot_timewindow)
@@ -665,8 +746,23 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     #     tsp.opts(xlim=(datetime.datetime(s[0], s[1], s[1]), datetime.datetime(e[0],e[1],e[2])))
 
     # remove data for specified time window for all time series
-    gtsp_plot_data = [remove_data_for_time_windows(p, time_window_exclusion_list_str=time_window_exclusion_list, 
-        invert_selection=invert_timewindow_exclusion) if p is not None else None for p in gtsp_plot_data]
+    # gtsp_plot_data = [remove_data_for_time_windows(p, time_window_exclusion_list_str=time_window_exclusion_list, 
+    #     invert_selection=invert_timewindow_exclusion) if p is not None else None for p in gtsp_plot_data]
+
+    # gtsp_plot_data = [remove_data_above_below_threshold(p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold) \
+    #     if p is not None else None for p in gtsp_plot_data]
+
+    gtsp_plot_data = []
+    for p in pp:
+        if p.gdf is not None:
+            new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+            # new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+            # new_p = remove_data_above_below_threshold(new_p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
+            if flow_in_thousands:
+                new_p = new_p/1000.0 if new_p is not None else None
+            gtsp_plot_data.append(new_p)
+        else:
+            gtsp_plot_data.append(None)
 
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
@@ -674,7 +770,8 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     return gtsp
 
 # def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
-def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None, invert_timewindow_exclusion=False):
+def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None, \
+    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True):
     """Builds calibration plot template
 
     Args:
@@ -703,20 +800,32 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
     # gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list).dropna(inplace=True) for p in pp]
 
     gtsp_plot_data = []
+    splot_plot_data = []
+    splot_metrics_data = []
+
+    # splot_plot_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp ]
+    # splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
+    # if flow_in_thousands:
+    #     gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
+    #     splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
+
     for p in pp:
-        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+        # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+        # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
+        
         gpd.dropna(inplace=True)
+        spd_plot = None
+        spd_metrics = gpd.resample('D').mean() if gpd is not None else None
+        if flow_in_thousands:
+            gpd = gpd/1000.0 if gpd is not None else None
+        spd_plot = gpd.resample('D').mean() if gpd is not None else None
+
         gtsp_plot_data.append(gpd)
+        splot_plot_data.append(spd_plot)
+        splot_metrics_data.append(spd_metrics)
+
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
-
-    splot_plot_data = None
-    splot_metrics_data = None
-
-    splot_plot_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp ]
-    splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
-    if flow_in_thousands:
-        gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-        splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
 
     splot = None
     if splot_plot_data is not None and splot_plot_data[0] is not None:
@@ -727,23 +836,25 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
     dfdisplayed_metrics = None
     # calculate calibration metrics
-    slope_plots_dfmetrics = None
-    if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
-        slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
+    # slope_plots_dfmetrics = None
+    # if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
+    #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+
+    # not using this any more
     dfmetrics = None
     if splot_metrics_data is not None:
         dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
-    dfmetrics_monthly = None
-    # if p.gdf is not None:
-    dfmetrics_monthly = calculate_metrics(
-        [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
+    # dfmetrics_monthly = None
+    # # if p.gdf is not None:
+    # dfmetrics_monthly = calculate_metrics(
+    #     [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
 
     # add regression lines to scatter plot, and set x and y axis titles
     slope_plots = None
     cplot = None
-    if slope_plots_dfmetrics is not None:
-        slope_plots = regression_line_plots(slope_plots_dfmetrics)
+    if dfmetrics is not None:
+        slope_plots = regression_line_plots(dfmetrics)
         cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
         cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
             .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
@@ -763,7 +874,8 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
 
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
-                              time_window_exclusion_list=None, invert_timewindow_exclusion=False):
+                              time_window_exclusion_list=None, invert_timewindow_exclusion=False, threshold_value=None,
+                              remove_data_above_threshold=True):
     """Builds calibration plot template
 
     Args:
@@ -800,34 +912,43 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # gtsp_plot_data = [p.gdf for p in pp]
     gtsp_plot_data = []
     for p in pp:
-        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+        # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
+        # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
+        # gpd = remove_data_above_below_threshold(gpd, threshold_value, remove_above=remove_data_above_threshold)
+        if flow_in_thousands:
+            gpd = gpd/1000.0 if gpd is not None else None
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
-
-    splot_metrics_data = None
+    splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
+    # splot_metrics_data = None
     # if p.gdf is not None:
-    splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
-    if flow_in_thousands:
+    # splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
+    # if flow_in_thousands:
         # if p.gdf is not None:
-        gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
+        # gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
     # use data_masking_df_dict to mask data (remove rows if gate open/closed)
     # for location in data_masking_df_dict:
 
     dfdisplayed_metrics = None
     column = None
     # calculate calibration metrics
-    slope_plots_dfmetrics = None
-    if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
-        slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp], location=location.name)
+    # slope_plots_dfmetrics = None
+    # if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
+    #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp], location=location.name)
+
     # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
     dfmetrics = None
     if splot_metrics_data is not None:
         dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
-    dfmetrics_monthly = None
+    # dfmetrics_monthly = None
+    # moved this down below, since it's only for EC data.
     # if p.gdf is not None:
-    dfmetrics_monthly = calculate_metrics(
-        [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
+    # dfmetrics_monthly = calculate_metrics(
+    #     [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
+    # dfmetrics_monthly = calculate_metrics(
+    #     [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
 
     # display calibration metrics
     # create a list containing study names, excluding observed.
@@ -878,6 +999,9 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
 
     else:
+        dfmetrics_monthly = calculate_metrics(
+            [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
+
         # template for nontidal (EC) data
         dfdisplayed_metrics = dfmetrics.loc[:, [
             'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
