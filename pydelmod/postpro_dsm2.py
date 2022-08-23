@@ -16,6 +16,7 @@ import dask
 from dask.distributed import Client, LocalCluster
 from pydelmod import calibplot
 from pydelmod import calib_heatmap
+import pyhecdss
 import panel as pn
 import pandas as pd
 import holoviews as hv
@@ -62,6 +63,9 @@ def postpro_model(cluster, config_data, use_dask):
                 print('processing model ' + vartype.name + ' data')
                 for study_name in postpro_model_dict:
                     dssfile=postpro_model_dict[study_name]
+                    # catalog the DSS file. If you don't do this, processes are likely to fail the first time you run them with an 
+                    # uncataloged DSS File, if you are using dask.
+                    pyhecdss.DSSFile(dssfile).catalog()
                     locationfile = location_files_dict[vartype.name]
                     units=vartype.units
                     observed=False
@@ -91,6 +95,9 @@ def postpro_observed(cluster, config_data, use_dask):
             if process_vartype_dict[vartype]:
                 print('processing observed ' + vartype + ' data')
                 dssfile = observed_files_dict[vartype]
+                # catalog the DSS file. If you don't do this, processes are likely to fail the first time you run them with an 
+                # uncataloged DSS File, if you are using dask.
+                pyhecdss.DSSFile(dssfile).catalog()
                 location_file = location_files_dict[vartype]
                 units = vartype_dict[vartype]
                 study_name='Observed'
@@ -183,9 +190,11 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     output_template = calib_plot_template    
 
     time_window_exclusion_list = location.time_window_exclusion_list
+    threshold_value = location.threshold_value
     calib_plot_template_masked_time_period = None
     metrics_df_masked_time_period = None
-    create_second_panel = True if (time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) else False
+    create_second_panel = True if ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
+        (threshold_value is not None and len(str(threshold_value)) > 0)) else False
     if create_second_panel:
         calib_plot_template_masked_time_period, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
             gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
