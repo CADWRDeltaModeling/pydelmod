@@ -9,7 +9,8 @@
 	"alt_run": "v8_3_run23",
 	"metrics_list": ["NRMSE"],
 	"station_order_file": "../../../postprocessing/location_info/calibrationHeatMapStationOrderCombined.csv",
-	"base_diff_type": "abs-diff"
+	"base_diff_type": "abs-diff",
+	"heatmap_width": 1000
     },
     "process_heatmap_vartype_dict": {
 		"EC": true,
@@ -69,6 +70,6 @@
     "dask_options_dict": {
 		"n_workers": 8,
 		"threads_per_worker": 1,
-		"memory_limit": "12G"
+		"memory_limit": "8G"
     }
 }
