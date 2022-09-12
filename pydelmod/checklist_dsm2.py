@@ -211,7 +211,7 @@ def checklist_plots(cluster, config_data, use_dask):
                     locationfile=checklist_location_files_dict[checklist_item]
                     dfloc = postpro.load_location_file(locationfile)
                     print('about to read location file: '+ locationfile)
-                    locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list']) for i,r in dfloc.iterrows()]
+                    locations = [postpro.Location(r['Name'],r['BPart'],r['Description'],r['time_window_exclusion_list'],r['threshold_value']) for i,r in dfloc.iterrows()]
 
                     # create list of postpro.
                     obs_study = postpro.Study('Observed',checklist_observed_files_dict[checklist_item])
