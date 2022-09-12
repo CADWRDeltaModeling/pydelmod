@@ -6,6 +6,7 @@ import sys
 import os
 import pyhecdss
 import pandas as pd
+import json
 import shutil
 
 def resample_to_15min(config_data):
@@ -171,7 +172,7 @@ def checklist_station_extract(config_data):
                     with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
                         newdss.write_rts(path_new, dfr_checklist, unit0, type0)
 
-            print("Extracted time series saved to" + fpath_out)
+            print("Extracted time series saved to " + fpath_out)
     print("Done\n")
 
 def checklist_plots(cluster, config_data, use_dask):
@@ -241,3 +242,22 @@ def checklist_plots(cluster, config_data, use_dask):
     finally:
         if use_dask:
             cluster.stop_local_cluster()
+
+def run_checklist(process_name, config_filename):
+    '''
+    process_name (str): should be 'resample', 'extract', or 'plot'
+    config_filename (str): filename of config (json) file
+    '''
+    # Read Config file
+    with open(config_filename) as f:
+        config_data = json.load(f)
+
+    # Run checklist process
+    if process_name.lower() == 'resample':
+        resample_to_15min(config_data)
+    elif process_name.lower() == 'extract':
+        checklist_station_extract(config_data)
+    elif process_name.lower() == 'plot':
+        checklist_plots(cluster=None, config_data=config_data, use_dask=False)
+    else:
+        print('Error in pydelmod.checklist_dsm2: process_name unrecognized: '+process_name)
