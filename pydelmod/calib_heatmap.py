@@ -86,7 +86,13 @@ def heatmap_for_metric(df, metric, region, vartype, title, base_column=None, bas
     
     # drop columns we don't want to display
     drop_col_list = ['v8_2_0', 'v8_2_1']
-    df.drop(drop_col_list, inplace=True, axis=1)
+    # df.drop(drop_col_list, inplace=True, axis=1)
+    for c in drop_col_list:
+        try:
+            df.drop(c, inplace=True, axis=1)
+        except:
+            print('exception caught in calib_heatmap.read_summary_stats while trying to drop column '+c)
+        
 
     heatmap = df.hvplot.heatmap(title=title+' Metric: '+metric,
                                 cmap='RdBu',

@@ -94,17 +94,8 @@ def scatterplot(dflist, names, index_x=0):
     return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols='all')
 
 
-# def test_function(df, start_dt_list, end_dt_list):
-#     return_value = True
-#     for start_dt, end_dt in zip(start_dt_list, end_dt_list):
-#         [((df.index<start_dt) or (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)]
-#     results = (all((df.index < start_dt) or (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list))
-#     return results
-
-# THIS method, if it worked, would, for the right hand side plots/metrics, include data specified in time windows, and inside time windows.
-def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False, threshold_value=None):
+def remove_data_for_time_windows_thresholds(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False, upper_threshold=None):
     """removes data from dataframe that is within time windows in the time_window_exclusion_list
-
     Args:
         df (DataFrame): The DataFrame from which to remove data
         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window 
@@ -117,13 +108,13 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
     """
     # df = df.copy()
     cols = df.columns
-    if threshold_value is None:
-        threshold_value = 999999
+    if upper_threshold is None:
+        upper_threshold = 999999
     else:
-        if(len(str(threshold_value))>0):
-            threshold_value = float(threshold_value)
+        if(len(str(upper_threshold))>0):
+            upper_threshold = float(upper_threshold)
         else:
-            threshold_value = 999999
+            upper_threshold = 999999
 
     time_window_exclusion_list = None
     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
@@ -141,7 +132,7 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
             for tw in time_window_exclusion_list:
                 start_dt_str, end_dt_str = tw.split('_')
                 df.loc[((df.index>=start_dt_str) & (df.index<end_dt_str)), 'outside_all_tw'] = False
-            df.loc[(df[cols[0]]>=threshold_value), 'above_threshold'] = True
+            df.loc[(df[cols[0]]>=upper_threshold), 'above_threshold'] = True
             df.loc[((df['outside_all_tw']==False) | (df['above_threshold']==True)), 'keep_inverted'] = True
             df.loc[df['keep_inverted']==False, cols[0]] = np.nan
             df.drop(columns=['outside_all_tw', 'above_threshold', 'keep_inverted'], inplace=True)
@@ -179,7 +170,7 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
                     # This is the old way: not good for plotting, because it becomes an ITS
                     # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
                     # df[start_dt_str:end_dt_str] = np.nan
-                    df[((df.index>pd.Timestamp(start_dt_str)) & (df.index<=pd.Timestamp(end_dt_str))) | (df[cols[0]]>=threshold_value)] = np.nan
+                    df[((df.index>pd.Timestamp(start_dt_str)) & (df.index<=pd.Timestamp(end_dt_str))) | (df[cols[0]]>=upper_threshold)] = np.nan
                 # else:
                 #     # keep data in the timewindows, and remove all other data, except those that are above the threshold
                 #     if tw_index == 0:
@@ -198,12 +189,92 @@ def remove_data_for_time_windows(df: pd.DataFrame, time_window_exclusion_list_st
         # if invert_selection and last_tw is not None and len(last_tw)>0:
         #     last_start_dt_str, last_end_dt_str = last_tw.split('_')
         #     df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
-    elif threshold_value is not None:
+    elif upper_threshold is not None:
         if not invert_selection:
-            df[df>=threshold_value] = np.nan
+            df[df>=upper_threshold] = np.nan
         else:
-            df[df<threshold_value] = np.nan
+            df[df<upper_threshold] = np.nan
     return df
+
+
+# def remove_data_for_time_windows_thresholds(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False, upper_threshold=None, \
+#     lower_threshold=None):
+#     """removes data from dataframe that is within time windows in the time_window_exclusion_list
+#         if data masking does not remove any data (which could happen if invert_selection=True and the data masking timewindow is outside the 
+#         time window of the data set), then this will return a dataframe with only nans. Code that calls this method must be prepared to
+#         deal with this situation.
+#     Args:
+#         df (DataFrame): The DataFrame from which to remove data
+#         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window 
+#         using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
+#         invert_selection (bool): If True, keep data in the time windows rather than removing it.
+#         upper_threshold (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR 
+#             datetime is outside all specified timewindows.
+#         lower_threshold (float): If specified, and if invert_selection==True, then data will be retained if value is below threshold OR 
+#             datetime is outside all specified timewindows.
+#     Returns:
+#         DataFrame: DataFrame with data removed
+#     """
+#     # df = df.copy()
+#     cols = df.columns
+#     if upper_threshold is None:
+#         upper_threshold = 999999
+#     else:
+#         if(len(str(upper_threshold))>0):
+#             upper_threshold = float(upper_threshold)
+#         else:
+#             upper_threshold = 999999
+
+#     if lower_threshold is None:
+#         lower_threshold = -999999
+#     else:
+#         if(len(str(lower_threshold))>0):
+#             lower_threshold = float(lower_threshold)
+#         else:
+#             lower_threshold = -999999
+    
+#     time_window_exclusion_list = None
+#     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
+#         time_window_exclusion_list = time_window_exclusion_list_str.split(',')
+#     if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None):
+#         tw_index = 0
+#         last_tw = None
+
+#         if invert_selection:
+#             # set all values NOT in any timewindow to nan.
+#             cols = df.columns
+#             df['outside_all_tw'] = True
+#             df['above_upper_threshold'] = False
+#             df['below_lower_threshold'] = False
+#             df['keep_inverted'] = False
+#             for tw in time_window_exclusion_list:
+#                 start_dt_str, end_dt_str = tw.split('_')
+#                 df.loc[((df.index>=start_dt_str) & (df.index<end_dt_str)), 'outside_all_tw'] = False
+#             df.loc[(df[cols[0]]>=upper_threshold), 'above_lower_threshold'] = True
+#             df.loc[(df[cols[0]]<=lower_threshold), 'below_lower_threshold'] = True
+#             df.loc[((df['outside_all_tw']==False) | (df['above_upper_threshold']==True) | (df['below_lower_threshold']==True)), 'keep_inverted'] = True
+#             df.loc[df['keep_inverted']==False, cols[0]] = np.nan
+#             df.drop(columns=['outside_all_tw', 'above_upper_threshold', 'below_lower_threshold', 'keep_inverted'], inplace=True)
+
+#         for tw in time_window_exclusion_list:
+#             if len(tw)>0:
+#                 start_dt_str, end_dt_str = tw.split('_')
+#                 if not invert_selection:
+#                     # remove data in the time windows
+#                     # This is the old way: not good for plotting, because it becomes an ITS
+#                     # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
+#                     # df[start_dt_str:end_dt_str] = np.nan
+#                     df[((df.index>pd.Timestamp(start_dt_str)) & (df.index<=pd.Timestamp(end_dt_str))) | \
+#                         (df[cols[0]]>=upper_threshold) | (df[cols[0]]<=lower_threshold)] = np.nan
+#             tw_index += 1
+#     else:
+#         if not invert_selection:
+#             df[df>=upper_threshold] = np.nan
+#             df[df<=lower_threshold] = np.nan
+#         else:
+#             df[df<upper_threshold] = np.nan
+#             df[df>lower_threshold] = np.nan
+#     return df
 
 
 def calculate_metrics(dflist, names, index_x=0, location=None):
@@ -463,6 +534,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots = None
+    metrics_table_name = ''
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
@@ -488,8 +560,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
                             layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
                             threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
-        df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
-        metrics_table_dict.update({'all': metrics_table})
+        # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
+        # metrics_table_dict.update({'all': metrics_table})
 
         if include_kde_plots: 
             kdeplots = build_kde_plots(pp)
@@ -504,139 +576,153 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     column = None
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
     add_toolbar = True
-    print('before creating column object (plot layout) for returning')
-    if tidal_template:
-        if not add_toolbar:
-            if obs_data_included:
-                if include_kde_plots:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-                    column.append(pn.Row(kdeplots))
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-            else:
-                column = pn.Column(
-                    header_panel,
-                    # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-        else:
-            if obs_data_included:
-                if include_kde_plots:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-                    column.append(pn.Row(kdeplots))
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'))
-                        # pn.Row(tsplots2),
-                        # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                    metrics_table_column = pn.Column()
-                    for metrics_table_name in metrics_table_dict:
-                        metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                    scatter_and_metrics_row.append(metrics_table_column)
-                    column.append(scatter_and_metrics_row)
-            else:
-                column = pn.Column(
-                    header_panel,
-                    # tsp.opts(width=900, legend_position='right'),
-                    tsp.opts(width=900, title='(a)', legend_position='right'),
-                    gtsp.opts(width=900, title='(b)', legend_position='right'))
+    if cplot is None and dfdisplayed_metrics is None and metrics_table is None:
+        print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
     else:
-        if not add_toolbar:
-            if obs_data_included:
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
-                    # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)')))
-                metrics_table_column = pn.Column()
-                for metrics_table_name in metrics_table_dict:
-                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
-                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'))
-                scatter_and_metrics_row.append(metrics_table_column)
-                column.append(scatter_and_metrics_row)
-            else:
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+        if tidal_template:
+            if not add_toolbar:
+                if obs_data_included:
+                    if include_kde_plots:
+                        column = pn.Column(
+                            header_panel,
+                            # tsp.opts(width=900, legend_position='right'),
+                            tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                            gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                            # pn.Row(tsplots2),
+                            # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                        # metrics_table_column = pn.Column()
+                        # for metrics_table_name in metrics_table_dict:
+                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                        scatter_and_metrics_row.append(metrics_table_row)
+                        column.append(scatter_and_metrics_row)
+                        column.append(pn.Row(kdeplots))
+                    else:
+                        column = pn.Column(
+                            header_panel,
+                            # tsp.opts(width=900, legend_position='right'),
+                            tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                            gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                            # pn.Row(tsplots2),
+                            # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
+                        # metrics_table_column = pn.Column()
+                        # for metrics_table_name in metrics_table_dict:
+                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
 
-        else:
-            if obs_data_included:
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
-                    # pn.Row(cplot.opts(shared_axes=False, title='(b)')))
-                metrics_table_column = pn.Column()
-                for metrics_table_name in metrics_table_dict:
-                    metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(c) ' + metrics_table_name))
-                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
-                scatter_and_metrics_row.append(metrics_table_column)
-                column.append(scatter_and_metrics_row)
+                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
+                        if metrics_table is not None:
+                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                            scatter_and_metrics_row.append(metrics_table_row)
+                        column.append(scatter_and_metrics_row)
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
             else:
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+                if obs_data_included:
+                    if include_kde_plots:
+                        column = pn.Column(
+                            header_panel,
+                            # tsp.opts(width=900, legend_position='right'),
+                            tsp.opts(width=900, title='(a)', legend_position='right'),
+                            gtsp.opts(width=900, title='(b)', legend_position='right'))
+                            # pn.Row(tsplots2),
+                            # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                        # metrics_table_column = pn.Column()
+                        # for metrics_table_name in metrics_table_dict:
+                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+
+                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                        if metrics_table is not None:
+                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                            scatter_and_metrics_row.append(metrics_table_row)
+                        column.append(scatter_and_metrics_row)
+                        column.append(pn.Row(kdeplots))
+                    else:
+                        column = pn.Column(
+                            header_panel,
+                            # tsp.opts(width=900, legend_position='right'),
+                            tsp.opts(width=900, title='(a)', legend_position='right'),
+                            gtsp.opts(width=900, title='(b)', legend_position='right'))
+                            # pn.Row(tsplots2),
+                            # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
+                        # metrics_table_column = pn.Column()
+                        # for metrics_table_name in metrics_table_dict:
+                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+
+                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
+                        if metrics_table is not None:
+                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                            scatter_and_metrics_row.append(metrics_table_row)
+                        column.append(scatter_and_metrics_row)
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        # tsp.opts(width=900, legend_position='right'),
+                        tsp.opts(width=900, title='(a)', legend_position='right'),
+                        gtsp.opts(width=900, title='(b)', legend_position='right'))
+        else:
+            if not add_toolbar:
+                if obs_data_included:
+                    column = pn.Column(
+                        header_panel,
+                        pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)')))
+                    # metrics_table_column = pn.Column()
+                    # for metrics_table_name in metrics_table_dict:
+                    #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'))
+                    if metrics_table is not None:
+                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                        scatter_and_metrics_row.append(metrics_table_row)
+                    column.append(scatter_and_metrics_row)
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+
+            else:
+                if obs_data_included:
+                    column = pn.Column(
+                        header_panel,
+                        pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+                        # pn.Row(cplot.opts(shared_axes=False, title='(b)')))
+                    # metrics_table_column = pn.Column()
+                    # for metrics_table_name in metrics_table_dict:
+                    #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
+                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
+                    if metrics_table is not None:
+                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
+                        scatter_and_metrics_row.append(metrics_table_row)
+                    column.append(scatter_and_metrics_row)
+                else:
+                    column = pn.Column(
+                        header_panel,
+                        pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
 
     # now merge all metrics dataframes, adding a column identifying the gate status
-    return_metrics_df = None
-    df_index = 0
-    for metrics_df_name in df_displayed_metrics_dict:
-        metrics_df_name_list = []
-        metrics_df = df_displayed_metrics_dict[metrics_df_name]
-        for r in range(metrics_df.shape[0]):
-            metrics_df_name_list.append(metrics_df_name)
-        metrics_df['Gate Pos'] = metrics_df_name_list
-        # move Gate Pos column to beginning
-        cols = list(metrics_df)
-        cols.insert(0, cols.pop(cols.index('Gate Pos')))
-        metrics_df = metrics_df.loc[:, cols]
-        # merge df into return_metrics_df
-        if df_index == 0:
-            return_metrics_df = metrics_df
-        else:
-            return_metrics_df.append(metrics_df)
-        df_index += 1
-    return column, return_metrics_df
+    # return_metrics_df = None
+    # df_index = 0
+    # for metrics_df_name in df_displayed_metrics_dict:
+    #     metrics_df_name_list = []
+    #     metrics_df = df_displayed_metrics_dict[metrics_df_name]
+    #     for r in range(metrics_df.shape[0]):
+    #         metrics_df_name_list.append(metrics_df_name)
+    #     metrics_df['Gate Pos'] = metrics_df_name_list
+    #     # move Gate Pos column to beginning
+    #     cols = list(metrics_df)
+    #     cols.insert(0, cols.pop(cols.index('Gate Pos')))
+    #     metrics_df = metrics_df.loc[:, cols]
+    #     # merge df into return_metrics_df
+    #     if df_index == 0:
+    #         return_metrics_df = metrics_df
+    #     else:
+    #         return_metrics_df.append(metrics_df)
+    #     df_index += 1
+    return column, dfdisplayed_metrics
 
 
 def load_data_for_plotting(studies, location, vartype, timewindow):
@@ -755,7 +841,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     gtsp_plot_data = []
     for p in pp:
         if p.gdf is not None:
-            new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+            new_p = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
             # new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
             # new_p = remove_data_above_below_threshold(new_p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
             if flow_in_thousands:
@@ -809,56 +895,67 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
     #     gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
     #     splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
 
+    # if False, return None
+    # this will happen if there are no data in the specified time period, or
+    # we're trying to create the right hand side plot (to show plots and metrics for masked data),
+    # and there are no data that have been masked. For example, this could happen if only one masking time window is specified,
+    # and it's outside the time window of the data.
+    any_data_left = True
+
     for p in pp:
-        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+        gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
         # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
         # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
-        
         gpd.dropna(inplace=True)
-        spd_plot = None
-        spd_metrics = gpd.resample('D').mean() if gpd is not None else None
-        if flow_in_thousands:
-            gpd = gpd/1000.0 if gpd is not None else None
-        spd_plot = gpd.resample('D').mean() if gpd is not None else None
+        if gpd.notnull().sum()[0] <= 0:
+            any_data_left = False
+        else:
+            spd_plot = None
+            spd_metrics = gpd.resample('D').mean() if gpd is not None else None
+            if flow_in_thousands:
+                gpd = gpd/1000.0 if gpd is not None else None
+            spd_plot = gpd.resample('D').mean() if gpd is not None else None
 
-        gtsp_plot_data.append(gpd)
-        splot_plot_data.append(spd_plot)
-        splot_metrics_data.append(spd_metrics)
+            gtsp_plot_data.append(gpd)
+            splot_plot_data.append(spd_plot)
+            splot_metrics_data.append(spd_metrics)
 
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
+    if any_data_left:
+        splot = None
+        if splot_plot_data is not None and splot_plot_data[0] is not None:
+            splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
+                .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
+                .opts(ylabel='Model', legend_position="top_left")\
+                .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
 
-    splot = None
-    if splot_plot_data is not None and splot_plot_data[0] is not None:
-        splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
-            .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
-            .opts(ylabel='Model', legend_position="top_left")\
-            .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
+        dfdisplayed_metrics = None
+        # calculate calibration metrics
+        # slope_plots_dfmetrics = None
+        # if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
+        #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
+        # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
 
-    dfdisplayed_metrics = None
-    # calculate calibration metrics
-    # slope_plots_dfmetrics = None
-    # if gtsp_plot_data is not None and len(gtsp_plot_data) > 0 and gtsp_plot_data[0] is not None:
-    #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp])
-    # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
+        # not using this any more
+        dfmetrics = None
+        if splot_metrics_data is not None:
+            dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
+        # dfmetrics_monthly = None
+        # # if p.gdf is not None:
+        # dfmetrics_monthly = calculate_metrics(
+        #     [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
 
-    # not using this any more
-    dfmetrics = None
-    if splot_metrics_data is not None:
-        dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
-    # dfmetrics_monthly = None
-    # # if p.gdf is not None:
-    # dfmetrics_monthly = calculate_metrics(
-    #     [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
-
-    # add regression lines to scatter plot, and set x and y axis titles
-    slope_plots = None
-    cplot = None
-    if dfmetrics is not None:
-        slope_plots = regression_line_plots(dfmetrics)
-        cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
-        cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
-            .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
-    return cplot
+        # add regression lines to scatter plot, and set x and y axis titles
+        slope_plots = None
+        cplot = None
+        if dfmetrics is not None:
+            slope_plots = regression_line_plots(dfmetrics)
+            cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
+            cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
+                .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
+        return cplot
+    else:
+        return None
 
 def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=580, fontscale=8):
     '''
@@ -912,7 +1009,7 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # gtsp_plot_data = [p.gdf for p in pp]
     gtsp_plot_data = []
     for p in pp:
-        gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, threshold_value=threshold_value)
+        gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
         # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
         # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
         # gpd = remove_data_above_below_threshold(gpd, threshold_value, remove_above=remove_data_above_threshold)
@@ -971,65 +1068,68 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
             'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
             'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}'}
 
-    if tidal_template:
-        dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
-        dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
-        dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
+    if dfmetrics is not None:
+        if tidal_template:
+            dfdisplayed_metrics = dfmetrics.loc[:, [
+                'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
+            dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
 
-        dfdisplayed_metrics.index.name = 'DSM2 Run'
-        dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
-                                    'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
-        
-        # now create a holoviews table object displaying the metrics
-        metrics_list_dict = {}
-        for m in dfdisplayed_metrics.columns:
-            if m is 'Equation':
-                metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
-            else:
-                # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
-                metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
-        metrics_list_for_hv_table = None
-        if layout_nash_sutcliffe:
-            metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
-                                        'Amp Avg %Err', 'Avg Phase Err']
-        else:
-            metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
-                                        'Amp Avg %Err', 'Avg Phase Err']
-        metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
-
-    else:
-        dfmetrics_monthly = calculate_metrics(
-            [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
-
-        # template for nontidal (EC) data
-        dfdisplayed_metrics = dfmetrics.loc[:, [
-            'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
-        dfdisplayed_metrics = pd.concat(
-            [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
-        dfdisplayed_metrics.index.name = 'DSM2 Run'
-        dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
-                                    'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
-        dfdisplayed_metrics.style.format(format_dict)
-        # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
-        # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
-        metrics_list_dict = {}
-
-        for m in dfdisplayed_metrics.columns:
-            if m is 'Equation':
-                metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
-            else:
-                metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+            dfdisplayed_metrics.index.name = 'DSM2 Run'
+            dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
+                                        'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
             
-        # now create a holoviews table object displaying the metrics
-        metrics_list_for_hv_table = None
-        if layout_nash_sutcliffe:
-            metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
-                                        'Mnly Mean Err', 'Mnly RMSE']
+            # now create a holoviews table object displaying the metrics
+            metrics_list_dict = {}
+            for m in dfdisplayed_metrics.columns:
+                if m is 'Equation':
+                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
+                else:
+                    # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+            metrics_list_for_hv_table = None
+            if layout_nash_sutcliffe:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
+                                            'Amp Avg %Err', 'Avg Phase Err']
+            else:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                            'Amp Avg %Err', 'Avg Phase Err']
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+
         else:
-            metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
-                                        'Mnly Mean Err', 'Mnly RMSE']
-        metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+            dfmetrics_monthly = calculate_metrics(
+                [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
+
+            # template for nontidal (EC) data
+            dfdisplayed_metrics = dfmetrics.loc[:, [
+                'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
+            dfdisplayed_metrics = pd.concat(
+                [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
+            dfdisplayed_metrics.index.name = 'DSM2 Run'
+            dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
+                                        'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
+            dfdisplayed_metrics.style.format(format_dict)
+            # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
+            # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
+            metrics_list_dict = {}
+
+            for m in dfdisplayed_metrics.columns:
+                if m is 'Equation':
+                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
+                else:
+                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                
+            # now create a holoviews table object displaying the metrics
+            metrics_list_for_hv_table = None
+            if layout_nash_sutcliffe:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
+                                            'Mnly Mean Err', 'Mnly RMSE']
+            else:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
+                                            'Mnly Mean Err', 'Mnly RMSE']
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+    else:
+        print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
     return dfdisplayed_metrics, metrics_table
 
 def build_kde_plots(pp, amp_title='(e)', phase_title='(f)'):
