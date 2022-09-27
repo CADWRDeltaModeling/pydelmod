@@ -86,6 +86,7 @@ def heatmap_for_metric(df, metric, region, vartype, title, base_column=None, bas
     
     # drop columns we don't want to display
     drop_col_list = ['v8_2_0', 'v8_2_1']
+    drop_col_list.append(base_column)
     # df.drop(drop_col_list, inplace=True, axis=1)
     for c in drop_col_list:
         try:
