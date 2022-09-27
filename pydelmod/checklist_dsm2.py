@@ -216,7 +216,7 @@ def checklist_plots(cluster, config_data, use_dask):
                     # create list of postpro.
                     obs_study = postpro.Study('Observed',checklist_observed_files_dict[checklist_item])
                     model_studies = [postpro.Study(name,checklist_study_files_dict[name]) for name in checklist_study_files_dict]
-                    studies = model_studies + [obs_study]
+                    studies = [obs_study] + model_studies
 
                     # now run the processes
                     if use_dask:
