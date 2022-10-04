@@ -2,7 +2,7 @@
 """Console script for pydelmod."""
 from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
-from pydelmod import postpro_dsm2
+from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
 import sys
 import click
@@ -60,12 +60,19 @@ def exec_postpro_dsm2(process_name, json_config_file, dask):
 def exec_dsm2_chan_mann_disp(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename):
     dsm2_chan_mann_disp.prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename)
 
+@click.command()
+@click.argument("process_name", type=click.Choice(['resample', 'extract', 'plot'], case_sensitive=False), default='')
+@click.argument("json_config_file")
+def exec_checklist_dsm2(process_name, json_config_file):
+    print(process_name, json_config_file)
+    checklist_dsm2.run_checklist(process_name, json_config_file)
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
 main.add_command(output_map_plotter)
 main.add_command(exec_postpro_dsm2)
 main.add_command(exec_dsm2_chan_mann_disp)
+main.add_command(exec_checklist_dsm2)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

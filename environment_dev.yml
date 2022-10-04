@@ -1,6 +1,7 @@
 name: dev_pydelmod
 channels:
   - cadwr-dms
+  - pyviz
   - defaults
   - conda-forge
 dependencies:
