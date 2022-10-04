@@ -6,11 +6,11 @@
     },
     "heatmap_options_dict": {
 	"base_run": "v8_2_1",
-	"alt_run": "v8_3_run23",
+	"alt_run": "v8_3_merged_ns28_c14_w52",
 	"metrics_list": ["NRMSE"],
 	"station_order_file": "../../../postprocessing/location_info/calibrationHeatMapStationOrderCombined.csv",
 	"base_diff_type": "abs-diff",
-	"heatmap_width": 1000
+	"heatmap_width": 600
     },
     "process_heatmap_vartype_dict": {
 		"EC": true,
@@ -28,21 +28,18 @@
 		"STAGE": "../../../postprocessing/observed_data/cdec/stage_merged.dss"
     },
     "study_files_dict": {
-	"v8_2_0": "../../v820/studies/historical/output/hist_v82.dss",
 	"v8_2_1": "../../hist19smcd/output/hist_v82_19smcd.dss",
-	"v8_3_run_merged_s19_c4_w28": "../../run_merged_s19_c4_w28/output/run_merged_s19_c4_w28.dss",
-	"v8_3_run20": "../../run20/output/run20.dss",
-	"v8_3_run21": "../../run21/output/run21.dss",
-	"v8_3_run22": "../../run22/output/run22.dss",
-	"v8_3_run23": "../output/run23.dss"
+	"v8_3_run_merged_ns28_c14_w50": "../../run_merged_ns28_c14_w50/output/run_merged_ns28_c14_w50.dss",
+	"v8_3_run_merged_ns28_c14_w51": "../../run_merged_ns28_c14_w51/output/run_merged_ns28_c14_w51.dss",
+	"v8_3_run_merged_ns28_c14_w52": "../output/run_merged_ns28_c14_w52.dss"
     },
     "calib_metric_csv_filenames_dict": {
-	"Flow": "./plots/1_summary_statistics_all_FLOW.csv",
-	"Stage": "./plots/1_summary_statistics_all_STAGE.csv",
-	"EC": "./plots/1_summary_statistics_all_EC.csv"
+	"EC": "./plots/1_summary_statistics_unmasked_all_EC.csv",
+	"Flow": "./plots/1_summary_statistics_unmasked_all_FLOW.csv",
+	"Stage": "./plots/1_summary_statistics_unmasked_all_Stage.csv"
     },
     "postpro_model_dict": {
-	"v8_3_run23": "../output/run23.dss"
+	"v8_3_run_merged_ns28_c14_w52": "../output/run_merged_ns28_c14_w52.dss"
     },
     "inst_plot_timewindow_dict": {
 		"FLOW": "2011-09-01:2011-09-30",
@@ -55,7 +52,8 @@
 		"qual_calibration": "01OCT2009 - 01OCT2017",
 		"hydro_validation": "01OCT2000 - 01OCT2017",
          	"qual_validation": "01OCT2000 - 01OCT2009",
-	        "ext_hydro_calibration": "01OCT2010 - 01OCT2017"
+	"ext_hydro_calibration": "01OCT2010 - 01OCT2017",
+	"dsm2_calibration": "01OCT2009 - 01OCT2017"
     },
     "vartype_dict": {
 		"EC": "uS/cm",
@@ -68,8 +66,8 @@
 		"STAGE": false
     },
     "dask_options_dict": {
-		"n_workers": 8,
+		"n_workers": 12,
 		"threads_per_worker": 1,
-		"memory_limit": "8G"
+		"memory_limit": "12G"
     }
 }
