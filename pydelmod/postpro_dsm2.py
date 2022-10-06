@@ -209,13 +209,12 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         # and the data removed from outside the masked time periods on the left
         output_template = pn.Row(calib_plot_template, calib_plot_template_masked_time_period)
 
-
     os.makedirs(output_plot_dir, exist_ok=True)
     # save plot to html and/or png file
     if calib_plot_template is not None and metrics_df is not None:
         if write_html: 
             print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
-            output_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html')
+            output_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
         if write_graphics:
             save_to_graphics_format(output_template,f'{output_plot_dir}{location}_{vartype.name}.png')
     #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
