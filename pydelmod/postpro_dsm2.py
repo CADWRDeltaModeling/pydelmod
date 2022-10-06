@@ -216,7 +216,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
             print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
             output_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
         if write_graphics:
-            save_to_graphics_format(output_template,f'{output_plot_dir}{location}_{vartype.name}.png')
+            save_to_graphics_format(output_template,f'{output_plot_dir}{location.name}_{vartype.name}.png')
     #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
 
     if metrics_df is not None:
@@ -301,6 +301,9 @@ def postpro_plots(cluster, config_data, use_dask):
     study_files_dict = config_data['study_files_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
+    options_dict = config_data['options_dict']
+    write_graphics = True if ('write_graphics' in options_dict and options_dict['write_graphics']) else False
+    write_html = True if ('write_html' in options_dict and options_dict['write_html']) else False
     gate_location_file_dict = config_data['gate_location_file_dict'] if 'gate_location_file_dict' in config_data else None
     ## Set options and run processes. If using dask, create delayed tasks
     try:
@@ -339,7 +342,7 @@ def postpro_plots(cluster, config_data, use_dask):
                 if use_dask:
                     print('using dask')
                     tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
-                                                    write_html=True,write_graphics=False, gate_studies = gate_studies, 
+                                                    write_html=write_html,write_graphics=write_graphics, gate_studies = gate_studies, 
                                                     gate_locations=gate_locations, gate_vartype=gate_vartype,
                                                     dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
                     # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
@@ -349,7 +352,7 @@ def postpro_plots(cluster, config_data, use_dask):
                 else:
                     print('not using dask')
                     for location in locations:
-                        build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=False,
+                        build_and_save_plot(config_data, studies, location, vartype, write_html=write_html,write_graphics=write_graphics,
                                             gate_studies = gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
                 merge_statistics_files(vartype, config_data)
     finally:
