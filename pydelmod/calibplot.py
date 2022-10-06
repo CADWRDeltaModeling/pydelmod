@@ -465,11 +465,6 @@ def sanitize_name(name):
 #                 return_df = t
 #         return return_df
 
-
-
-
-
-
     # def get_gate_value(self, location, datetime):
     #     '''
     #     returns the value of the gate time series at or before given date.
@@ -534,7 +529,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots = None
-    metrics_table_name = ''
+    # metrics_table_name = ''
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
@@ -573,135 +568,10 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # # start_dt = dflist[0].index.min()
     # # end_dt = dflist[0].index.max()
 
-    column = None
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
     add_toolbar = True
-    if cplot is None and dfdisplayed_metrics is None and metrics_table is None:
-        print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
-    else:
-        if tidal_template:
-            if not add_toolbar:
-                if obs_data_included:
-                    if include_kde_plots:
-                        column = pn.Column(
-                            header_panel,
-                            # tsp.opts(width=900, legend_position='right'),
-                            tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                            gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                            # pn.Row(tsplots2),
-                            # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                        # metrics_table_column = pn.Column()
-                        # for metrics_table_name in metrics_table_dict:
-                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                        scatter_and_metrics_row.append(metrics_table_row)
-                        column.append(scatter_and_metrics_row)
-                        column.append(pn.Row(kdeplots))
-                    else:
-                        column = pn.Column(
-                            header_panel,
-                            # tsp.opts(width=900, legend_position='right'),
-                            tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                            gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-                            # pn.Row(tsplots2),
-                            # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)')))
-                        # metrics_table_column = pn.Column()
-                        # for metrics_table_name in metrics_table_dict:
-                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-
-                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(c)'))
-                        if metrics_table is not None:
-                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                            scatter_and_metrics_row.append(metrics_table_row)
-                        column.append(scatter_and_metrics_row)
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
-            else:
-                if obs_data_included:
-                    if include_kde_plots:
-                        column = pn.Column(
-                            header_panel,
-                            # tsp.opts(width=900, legend_position='right'),
-                            tsp.opts(width=900, title='(a)', legend_position='right'),
-                            gtsp.opts(width=900, title='(b)', legend_position='right'))
-                            # pn.Row(tsplots2),
-                            # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                        # metrics_table_column = pn.Column()
-                        # for metrics_table_name in metrics_table_dict:
-                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-
-                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                        if metrics_table is not None:
-                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                            scatter_and_metrics_row.append(metrics_table_row)
-                        column.append(scatter_and_metrics_row)
-                        column.append(pn.Row(kdeplots))
-                    else:
-                        column = pn.Column(
-                            header_panel,
-                            # tsp.opts(width=900, legend_position='right'),
-                            tsp.opts(width=900, title='(a)', legend_position='right'),
-                            gtsp.opts(width=900, title='(b)', legend_position='right'))
-                            # pn.Row(tsplots2),
-                            # pn.Row(cplot.opts(shared_axes=False, title='(c)')))
-                        # metrics_table_column = pn.Column()
-                        # for metrics_table_name in metrics_table_dict:
-                        #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-
-                        scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(c)'))
-                        if metrics_table is not None:
-                            metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                            scatter_and_metrics_row.append(metrics_table_row)
-                        column.append(scatter_and_metrics_row)
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        # tsp.opts(width=900, legend_position='right'),
-                        tsp.opts(width=900, title='(a)', legend_position='right'),
-                        gtsp.opts(width=900, title='(b)', legend_position='right'))
-        else:
-            if not add_toolbar:
-                if obs_data_included:
-                    column = pn.Column(
-                        header_panel,
-                        pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
-                        # pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)')))
-                    # metrics_table_column = pn.Column()
-                    # for metrics_table_name in metrics_table_dict:
-                    #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=None, title='(b)'))
-                    if metrics_table is not None:
-                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                        scatter_and_metrics_row.append(metrics_table_row)
-                    column.append(scatter_and_metrics_row)
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
-
-            else:
-                if obs_data_included:
-                    column = pn.Column(
-                        header_panel,
-                        pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
-                        # pn.Row(cplot.opts(shared_axes=False, title='(b)')))
-                    # metrics_table_column = pn.Column()
-                    # for metrics_table_name in metrics_table_dict:
-                    #     metrics_table_column.append(metrics_table_dict[metrics_table_name].opts(title='(d) ' + metrics_table_name))
-                    scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
-                    if metrics_table is not None:
-                        metrics_table_row = pn.Row(metrics_table.opts(title='(d) '+metrics_table_name))
-                        scatter_and_metrics_row.append(metrics_table_row)
-                    column.append(scatter_and_metrics_row)
-                else:
-                    column = pn.Column(
-                        header_panel,
-                        pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)')))
+    column = create_layout(cplot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
+        tidal_template, add_toolbar, obs_data_included, include_kde_plots, header_panel)
 
     # now merge all metrics dataframes, adding a column identifying the gate status
     # return_metrics_df = None
@@ -724,6 +594,40 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     #     df_index += 1
     return column, dfdisplayed_metrics
 
+def create_layout(cplot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
+    tidal_template, add_toolbar, obs_data_included, include_kde_plots, header_panel):
+    '''
+    Creates Holoviews Column object with plots and metrics.
+    '''
+    if cplot is None and dfdisplayed_metrics is None and metrics_table is None:
+        print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
+    else:
+        column = None
+        toolbar_option = None if not add_toolbar else 'right'
+        scatter_and_metrics_row = None
+        if tidal_template:
+            column = pn.Column(
+                header_panel,
+                tsp.opts(width=900, toolbar=toolbar_option, title='(a)', legend_position='right'),
+                gtsp.opts(width=900, toolbar=toolbar_option, title='(b)', legend_position='right'))
+            if obs_data_included:
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=toolbar_option, title='(c)'))
+                if metrics_table is not None:
+                    # metrics_table_row = pn.Row(metrics_table.opts(title='(d)'))
+                    scatter_and_metrics_row.append(metrics_table.opts(title='(d)', fontscale=1))
+                column.append(scatter_and_metrics_row)
+                if include_kde_plots:
+                    column.append(pn.Row(kdeplots))
+        else:
+            column = pn.Column(
+                header_panel,
+                pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=toolbar_option, title='(a)', legend_position='right')))
+            if obs_data_included:
+                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
+                if metrics_table is not None:
+                    scatter_and_metrics_row.append(metrics_table.opts(title='(c)', fontscale=1))
+                column.append(scatter_and_metrics_row)
+    return column
 
 def load_data_for_plotting(studies, location, vartype, timewindow):
     """Loads data used for creating plots and metrics
@@ -1010,43 +914,18 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     gtsp_plot_data = []
     for p in pp:
         gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
-        # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
-        # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
-        # gpd = remove_data_above_below_threshold(gpd, threshold_value, remove_above=remove_data_above_threshold)
         if flow_in_thousands:
             gpd = gpd/1000.0 if gpd is not None else None
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
     splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
-    # splot_metrics_data = None
-    # if p.gdf is not None:
-    # splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
-    # if flow_in_thousands:
-        # if p.gdf is not None:
-        # gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-    # use data_masking_df_dict to mask data (remove rows if gate open/closed)
-    # for location in data_masking_df_dict:
 
     dfdisplayed_metrics = None
     column = None
-    # calculate calibration metrics
-    # slope_plots_dfmetrics = None
-    # if gtsp_plot_data is not None and gtsp_plot_data[0] is not None:
-    #     slope_plots_dfmetrics = calculate_metrics(gtsp_plot_data, [p.study.name for p in pp], location=location.name)
-
-    # dfmetrics = calculate_metrics([p.gdf for p in pp], [p.study.name for p in pp])
     dfmetrics = None
     if splot_metrics_data is not None:
         dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
-    # dfmetrics_monthly = None
-    # moved this down below, since it's only for EC data.
-    # if p.gdf is not None:
-    # dfmetrics_monthly = calculate_metrics(
-    #     [p.gdf.resample('M').mean() if p.gdf is not None else None for p in pp], [p.study.name for p in pp])
-    # dfmetrics_monthly = calculate_metrics(
-    #     [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
-
     # display calibration metrics
     # create a list containing study names, excluding observed.
     dfdisplayed_metrics = None
