@@ -349,7 +349,7 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
     return dfmetrics
 
 
-def regression_line_plots(dfmetrics):
+def regression_line_plots(dfmetrics, flow_in_thousands):
     """Create Slope from the metrics DataFrame (calculate_metrics function)
 
     Args:
@@ -362,6 +362,7 @@ def regression_line_plots(dfmetrics):
     for i, row in dfmetrics.iterrows():
         slope = row['regression_slope']
         intercep = row['regression_intercep']
+        intercep/=1000.0 if flow_in_thousands else intercep
         slope_plot = hv.Slope(slope, y_intercept=intercep)
         slope_plots = slope_plot if slope_plots == None else slope_plots*slope_plot
     return slope_plots
@@ -844,6 +845,7 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
         dfmetrics = None
         if splot_metrics_data is not None:
             dfmetrics = calculate_metrics(splot_metrics_data, [p.study.name for p in pp])
+
         # dfmetrics_monthly = None
         # # if p.gdf is not None:
         # dfmetrics_monthly = calculate_metrics(
@@ -852,8 +854,10 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
         # add regression lines to scatter plot, and set x and y axis titles
         slope_plots = None
         cplot = None
+
+
         if dfmetrics is not None:
-            slope_plots = regression_line_plots(dfmetrics)
+            slope_plots = regression_line_plots(dfmetrics, flow_in_thousands)
             cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
             cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
                 .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
