@@ -146,7 +146,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     units = vartype.units
     include_kde_plots = options_dict['include_kde_plots']
 
-    calib_plot_template, metrics_df = \
+    calib_plot_template_dict, metrics_df = \
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
@@ -156,7 +156,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
     #         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
     #         zoom_inst_plot=zoom_inst_plot)
-    if calib_plot_template is None:
+    if calib_plot_template_dict is None:
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
@@ -169,7 +169,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
         cols = list(metrics_df)
         cols.insert(0, cols.pop(cols.index('Location')))
         metrics_df = metrics_df.loc[:, cols]
-    return calib_plot_template, metrics_df
+    return calib_plot_template_dict, metrics_df
 
 
 def build_and_save_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, \
@@ -180,43 +180,49 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     print('build and save plot: output_plot_dir = ' + output_plot_dir)
     print('Building plot template for location: ' + str(location))    
 
-    calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
+    calib_plot_template_dict, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
         gate_locations=gate_locations, gate_vartype=gate_vartype)
+    calib_plot_template_with_toolbar = calib_plot_template_dict['with']
+    calib_plot_template_without_toolbar = calib_plot_template_dict['without']
     # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
-    if calib_plot_template is None:
+    if calib_plot_template_dict is None:
         print('failed to create plots')
     if metrics_df is None:
         print('failed to create metrics')
-    output_template = calib_plot_template    
+    output_template_with_toolbar = calib_plot_template_with_toolbar
+    output_template_without_toolbar = calib_plot_template_without_toolbar
 
     time_window_exclusion_list = location.time_window_exclusion_list
     threshold_value = location.threshold_value
-    calib_plot_template_masked_time_period = None
+    # calib_plot_template_masked_time_period = None
     metrics_df_masked_time_period = None
     create_second_panel = True if ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
         (threshold_value is not None and len(str(threshold_value)) > 0)) else False
     if create_second_panel:
-        calib_plot_template_masked_time_period, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
+        calib_plot_template_masked_time_period_dict, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
             gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
                 remove_data_above_threshold=False)
         # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
-        if calib_plot_template_masked_time_period is None:
+        if calib_plot_template_masked_time_period_dict is None:
             print('failed to create plots for masked time period')
         if metrics_df_masked_time_period is None:
             print('failed to create metrics for masked time period')
+        calib_plot_template_masked_time_period_with_toolbar = calib_plot_template_masked_time_period_dict['with']
+        calib_plot_template_masked_time_period_without_toolbar = calib_plot_template_masked_time_period_dict['without']
         # This puts the two calib plots templates side by side, with the 
         # data removed from the masked time periods on the right,
         # and the data removed from outside the masked time periods on the left
-        output_template = pn.Row(calib_plot_template, calib_plot_template_masked_time_period)
+        output_template_with_toolbar = pn.Row(calib_plot_template_with_toolbar, calib_plot_template_masked_time_period_with_toolbar)
+        output_template_without_toolbar = pn.Row(calib_plot_template_without_toolbar, calib_plot_template_masked_time_period_without_toolbar)
 
     os.makedirs(output_plot_dir, exist_ok=True)
     # save plot to html and/or png file
-    if calib_plot_template is not None and metrics_df is not None:
+    if calib_plot_template_with_toolbar is not None and calib_plot_template_without_toolbar is not None and metrics_df is not None:
         if write_html: 
             print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
-            output_template.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
+            output_template_with_toolbar.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
         if write_graphics:
-            save_to_graphics_format(output_template,f'{output_plot_dir}{location.name}_{vartype.name}.png')
+            save_to_graphics_format(output_template_without_toolbar,f'{output_plot_dir}{location.name}_{vartype.name}.png')
     #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
 
     if metrics_df is not None:
@@ -302,8 +308,8 @@ def postpro_plots(cluster, config_data, use_dask):
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
     options_dict = config_data['options_dict']
-    write_graphics = True if ('write_graphics' in options_dict and options_dict['write_graphics']) else False
-    write_html = True if ('write_html' in options_dict and options_dict['write_html']) else False
+    write_graphics = False if ('write_graphics' in options_dict and not options_dict['write_graphics']) else True
+    write_html = False if ('write_html' in options_dict and not options_dict['write_html']) else True
     gate_location_file_dict = config_data['gate_location_file_dict'] if 'gate_location_file_dict' in config_data else None
     ## Set options and run processes. If using dask, create delayed tasks
     try:
