@@ -2,7 +2,9 @@
     "options_dict": {
 	"output_folder": "./plots/",
 	"include_kde_plots": true,
-	"zoom_inst_plot": false
+	"zoom_inst_plot": false,
+	"write_graphics": false,
+	"write_html": true
     },
     "heatmap_options_dict": {
 	"base_run": "v8_2_1",
