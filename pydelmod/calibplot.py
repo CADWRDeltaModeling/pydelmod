@@ -18,6 +18,7 @@ import logging
 ## - Generic Plotting Functions ##
 import pyhecdss
 import numpy as np
+import copy
 
 def parse_time_window(timewindow):
     """
@@ -414,6 +415,8 @@ def kdeplot(dflist, names, xlabel):
         Overlay : Overlay of Distribution
     """
     kdes = [df.hvplot.kde(label=name, xlabel=xlabel) for df, name in zip(dflist, names)]
+    for kde in kdes:
+        kde.opts(toolbar=None)
     return hv.Overlay(kdes)
 
 
@@ -502,7 +505,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         zoom_inst_plot (bool): If true, instantaneous plots will display on data in the inst_plot_timewindow
         time_window_exclusion_list (list of time window strings in format yyyy-mm-dd hh:mm:ss_yyyy-mm-dd hh:mm:ss)
     Returns:
-        panel: A template ready for rendering by display or save
+        dict of holoviews Column objects. Keys=['with', 'without'], meaning with toolbars and without toolbars. 
+            values are holoviews Column objects, which are templates ready for rendering by display or save.
         dataframe: equations and statistics for all locations
     """
     all_data_found, pp = load_data_for_plotting(studies, location, vartype, timewindow)
@@ -526,17 +530,22 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
         threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
 
-    cplot = None
+    scatter_plot_with_toolbar = None
+    scatter_plot_without_toolbar = None
     dfdisplayed_metrics = None
     metrics_table = None
-    kdeplots = None
+    kdeplots_with_toolbar = None
+    kdeplots_without_toolbar = None
     # metrics_table_name = ''
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
-        cplot = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
+        scatter_plot_with_toolbar = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
             time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
+            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold,toolbar_option='right')
+        scatter_plot_without_toolbar = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
+            time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
+            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, toolbar_option=None)
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
@@ -560,7 +569,9 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         # metrics_table_dict.update({'all': metrics_table})
 
         if include_kde_plots: 
-            kdeplots = build_kde_plots(pp)
+            kdeplots_with_toolbar = build_kde_plots(pp, include_toolbar=True)
+            kdeplots_without_toolbar = build_kde_plots(pp, include_toolbar=False)
+            # kdeplots = build_kde_plots(pp)
     
     # # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
@@ -570,9 +581,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # # end_dt = dflist[0].index.max()
 
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
-    add_toolbar = True
-    column = create_layout(cplot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
-        tidal_template, add_toolbar, obs_data_included, include_kde_plots, header_panel)
+    add_toolbars = True
+    column_with_toolbar = create_layout(scatter_plot_with_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_with_toolbar, \
+        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel)
+    add_toolbars = False
+    column_without_toolbar = create_layout(scatter_plot_without_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_without_toolbar, \
+        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel)
+    column_dict = {'with': column_with_toolbar, 'without': column_without_toolbar}
 
     # now merge all metrics dataframes, adding a column identifying the gate status
     # return_metrics_df = None
@@ -593,40 +608,61 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     #     else:
     #         return_metrics_df.append(metrics_df)
     #     df_index += 1
-    return column, dfdisplayed_metrics
+    return column_dict, dfdisplayed_metrics
 
-def create_layout(cplot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
-    tidal_template, add_toolbar, obs_data_included, include_kde_plots, header_panel):
+def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
+    tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel):
     '''
     Creates Holoviews Column object with plots and metrics.
     '''
-    if cplot is None and dfdisplayed_metrics is None and metrics_table is None:
+    # This method may be called twice, once with add_toolbar=True, and again with add_toolbar=False.
+    # adding or removing the toolbar changes the options on the plot objects, so we need to create 
+    # separate instances of the objects by using deepcopy.
+    tsp_copy = copy.deepcopy(tsp)
+    gtsp_copy = copy.deepcopy(gtsp)
+    scatter_plot_copy = copy.deepcopy(scatter_plot)
+    metrics_table_copy = copy.deepcopy(metrics_table)
+    if scatter_plot is None and dfdisplayed_metrics is None and metrics_table is None:
         print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
     else:
         column = None
-        toolbar_option = None if not add_toolbar else 'right'
         scatter_and_metrics_row = None
         if tidal_template:
-            column = pn.Column(
-                header_panel,
-                tsp.opts(width=900, toolbar=toolbar_option, title='(a)', legend_position='right'),
-                gtsp.opts(width=900, toolbar=toolbar_option, title='(b)', legend_position='right'))
+            print('tidal template is true, add_toolbar='+str(add_toolbars))
+            if not add_toolbars:
+                column = pn.Column(
+                    header_panel,
+                    tsp_copy.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
+                    gtsp_copy.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+            else:
+                column = pn.Column(
+                    header_panel,
+                    tsp_copy.opts(width=900, title='(a)', legend_position='right'),
+                    gtsp_copy.opts(width=900, title='(b)', legend_position='right'))
             if obs_data_included:
-                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, toolbar=toolbar_option, title='(c)'))
+                if not add_toolbars:
+                    scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, toolbar=None, title='(c)'))
+                else: 
+                    scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, title='(c)'))
                 if metrics_table is not None:
                     # metrics_table_row = pn.Row(metrics_table.opts(title='(d)'))
-                    scatter_and_metrics_row.append(metrics_table.opts(title='(d)', fontscale=1))
+                    scatter_and_metrics_row.append(metrics_table_copy.opts(title='(d)', fontscale=1))
                 column.append(scatter_and_metrics_row)
                 if include_kde_plots:
                     column.append(pn.Row(kdeplots))
         else:
-            column = pn.Column(
-                header_panel,
-                pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=toolbar_option, title='(a)', legend_position='right')))
+            if not add_toolbars:
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp_copy.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+            else: 
+                column = pn.Column(
+                    header_panel,
+                    pn.Row(gtsp_copy.opts(width=900, show_legend=True, title='(a)', legend_position='right')))
             if obs_data_included:
-                scatter_and_metrics_row = pn.Row(cplot.opts(shared_axes=False, title='(b)'))
-                if metrics_table is not None:
-                    scatter_and_metrics_row.append(metrics_table.opts(title='(c)', fontscale=1))
+                scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, title='(b)'))
+                if metrics_table_copy is not None:
+                    scatter_and_metrics_row.append(metrics_table_copy.opts(title='(c)', fontscale=1))
                 column.append(scatter_and_metrics_row)
     return column
 
@@ -762,7 +798,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
 
 # def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
 def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None, \
-    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True):
+    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True, toolbar_option='right'):
     """Builds calibration plot template
 
     Args:
@@ -832,7 +868,8 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
             splot = scatterplot(splot_plot_data, [p.study.name for p in pp])\
                 .opts(opts.Scatter(color=shift_cycle(hv.Cycle('Category10'))))\
                 .opts(ylabel='Model', legend_position="top_left")\
-                .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
+                .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)\
+                    .opts(toolbar=toolbar_option)
 
         dfdisplayed_metrics = None
         # calculate calibration metrics
@@ -853,15 +890,15 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
         # add regression lines to scatter plot, and set x and y axis titles
         slope_plots = None
-        cplot = None
+        scatter_plot = None
 
 
         if dfmetrics is not None:
             slope_plots = regression_line_plots(dfmetrics, flow_in_thousands)
-            cplot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
-            cplot = cplot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
+            scatter_plot = slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle('Category10'))))*splot
+            scatter_plot = scatter_plot.opts(xlabel='Observed ' + unit_string, ylabel='Model ' + unit_string, legend_position="top_left")\
                 .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1, show_legend=False)
-        return cplot
+        return scatter_plot
     else:
         return None
 
@@ -1015,7 +1052,7 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
     return dfdisplayed_metrics, metrics_table
 
-def build_kde_plots(pp, amp_title='(e)', phase_title='(f)'):
+def build_kde_plots(pp, amp_title='(e)', phase_title='(f)', include_toolbar=True):
     """Builds calibration plot template
 
     Args:
@@ -1059,6 +1096,7 @@ def build_kde_plots(pp, amp_title='(e)', phase_title='(f)'):
     phase_diff_kde = phase_diff_kde.opts(opts.Distribution(
         line_color=shift_cycle(hv.Cycle('Category10')), filled=False))
     phase_diff_kde.opts(opts.Distribution(line_width=5))
+
     # create panel containing 3 kernel density estimate plots. We currently only want the last two, so commenting this out for now.
     # amp diff, amp % diff, phase diff
     # kdeplots = amp_diff_kde.opts(
@@ -1068,10 +1106,17 @@ def build_kde_plots(pp, amp_title='(e)', phase_title='(f)'):
     # don't use
 
     # create panel containing amp % diff and phase diff kernel density estimate plots. Excluding amp diff plot
-    kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
-        phase_diff_kde.opts(show_legend=False, title=phase_title)
+    if not include_toolbar:
+        kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title, toolbar=None) + \
+            phase_diff_kde.opts(show_legend=False, title=phase_title, toolbar=None)
+        print('not adding toolbar to kde plots')
+    else: 
+        kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
+            phase_diff_kde.opts(show_legend=False, title=phase_title)
+        print('adding toolbar to kde plots')
     kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
         opts.Distribution(height=200, width=300))
+    
     return kdeplots
 
 
