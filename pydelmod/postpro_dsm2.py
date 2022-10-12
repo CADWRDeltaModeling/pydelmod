@@ -182,48 +182,55 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
 
     calib_plot_template_dict, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
         gate_locations=gate_locations, gate_vartype=gate_vartype)
-    calib_plot_template_with_toolbar = calib_plot_template_dict['with']
-    calib_plot_template_without_toolbar = calib_plot_template_dict['without']
-    # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
-    if calib_plot_template_dict is None:
-        print('failed to create plots')
-    if metrics_df is None:
-        print('failed to create metrics')
-    output_template_with_toolbar = calib_plot_template_with_toolbar
-    output_template_without_toolbar = calib_plot_template_without_toolbar
 
-    time_window_exclusion_list = location.time_window_exclusion_list
-    threshold_value = location.threshold_value
-    # calib_plot_template_masked_time_period = None
     metrics_df_masked_time_period = None
-    create_second_panel = True if ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
-        (threshold_value is not None and len(str(threshold_value)) > 0)) else False
-    if create_second_panel:
-        calib_plot_template_masked_time_period_dict, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
-            gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
-                remove_data_above_threshold=False)
+    if calib_plot_template_dict is not None:
+        calib_plot_template_with_toolbar = calib_plot_template_dict['with']
+        calib_plot_template_without_toolbar = calib_plot_template_dict['without']
         # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
-        if calib_plot_template_masked_time_period_dict is None:
-            print('failed to create plots for masked time period')
-        if metrics_df_masked_time_period is None:
-            print('failed to create metrics for masked time period')
-        calib_plot_template_masked_time_period_with_toolbar = calib_plot_template_masked_time_period_dict['with']
-        calib_plot_template_masked_time_period_without_toolbar = calib_plot_template_masked_time_period_dict['without']
-        # This puts the two calib plots templates side by side, with the 
-        # data removed from the masked time periods on the right,
-        # and the data removed from outside the masked time periods on the left
-        output_template_with_toolbar = pn.Row(calib_plot_template_with_toolbar, calib_plot_template_masked_time_period_with_toolbar)
-        output_template_without_toolbar = pn.Row(calib_plot_template_without_toolbar, calib_plot_template_masked_time_period_without_toolbar)
+        if calib_plot_template_dict is None:
+            print('failed to create plots')
+        if metrics_df is None:
+            print('failed to create metrics')
+        output_template_with_toolbar = calib_plot_template_with_toolbar
+        output_template_without_toolbar = calib_plot_template_without_toolbar
 
-    os.makedirs(output_plot_dir, exist_ok=True)
-    # save plot to html and/or png file
-    if calib_plot_template_with_toolbar is not None and calib_plot_template_without_toolbar is not None and metrics_df is not None:
-        if write_html: 
-            print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
-            output_template_with_toolbar.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
-        if write_graphics:
-            save_to_graphics_format(output_template_without_toolbar,f'{output_plot_dir}{location.name}_{vartype.name}.png')
-    #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
+        time_window_exclusion_list = location.time_window_exclusion_list
+        threshold_value = location.threshold_value
+        # calib_plot_template_masked_time_period = None
+        create_second_panel = True if ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
+            (threshold_value is not None and len(str(threshold_value)) > 0)) else False
+        if create_second_panel:
+            calib_plot_template_masked_time_period_dict, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
+                gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
+                    remove_data_above_threshold=False)
+            # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
+            if calib_plot_template_masked_time_period_dict is None:
+                print('failed to create plots for masked time period')
+            if metrics_df_masked_time_period is None:
+                print('failed to create metrics for masked time period')
+            calib_plot_template_masked_time_period_with_toolbar = calib_plot_template_masked_time_period_dict['with']
+            calib_plot_template_masked_time_period_without_toolbar = calib_plot_template_masked_time_period_dict['without']
+            # This puts the two calib plots templates side by side, with the 
+            # data removed from the masked time periods on the right,
+            # and the data removed from outside the masked time periods on the left
+            output_template_with_toolbar = pn.Row(calib_plot_template_with_toolbar, calib_plot_template_masked_time_period_with_toolbar)
+            output_template_without_toolbar = pn.Row(calib_plot_template_without_toolbar, calib_plot_template_masked_time_period_without_toolbar)
+
+        os.makedirs(output_plot_dir, exist_ok=True)
+        # save plot to html and/or png file
+        if calib_plot_template_with_toolbar is not None and calib_plot_template_without_toolbar is not None and metrics_df is not None:
+            if write_html: 
+                print('writing to html: 'f'{output_plot_dir}{location.name}_{vartype.name}.html')
+                output_template_with_toolbar.save(f'{output_plot_dir}{location.name}_{vartype.name}.html', title=location.name)
+            if write_graphics:
+                print('writing to png: 'f'{output_plot_dir}{location.name}_{vartype.name}.png')
+                save_to_graphics_format(output_template_without_toolbar,f'{output_plot_dir}{location.name}_{vartype.name}.png')
+        #         export_svg(calib_plot_template,f'{output_plot_dir}{location.name}_{vartype.name}.svg')
+    else:
+        print('***************************************************************************************************************************************')
+        print('not creating output for location (there may be no data in specified time period): '+location.name)
+        print('***************************************************************************************************************************************')
 
     if metrics_df is not None:
         location_list = []

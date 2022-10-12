@@ -608,6 +608,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     #     else:
     #         return_metrics_df.append(metrics_df)
     #     df_index += 1
+
     return column_dict, dfdisplayed_metrics
 
 def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
@@ -617,13 +618,12 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
     '''
     # Need to set clone=True when changing options below. This prevents changing the original objects.
 
+    column = None
     if scatter_plot is None and dfdisplayed_metrics is None and metrics_table is None:
         print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
     else:
-        column = None
         scatter_and_metrics_row = None
         if tidal_template:
-            print('tidal template is true, add_toolbar='+str(add_toolbars))
             if not add_toolbars:
                 column = pn.Column(
                     header_panel,
