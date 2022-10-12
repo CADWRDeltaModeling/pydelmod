@@ -615,13 +615,8 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
     '''
     Creates Holoviews Column object with plots and metrics.
     '''
-    # This method may be called twice, once with add_toolbar=True, and again with add_toolbar=False.
-    # adding or removing the toolbar changes the options on the plot objects, so we need to create 
-    # separate instances of the objects by using deepcopy.
-    tsp_copy = copy.deepcopy(tsp)
-    gtsp_copy = copy.deepcopy(gtsp)
-    scatter_plot_copy = copy.deepcopy(scatter_plot)
-    metrics_table_copy = copy.deepcopy(metrics_table)
+    # Need to set clone=True when changing options below. This prevents changing the original objects.
+
     if scatter_plot is None and dfdisplayed_metrics is None and metrics_table is None:
         print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
     else:
@@ -632,21 +627,21 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
             if not add_toolbars:
                 column = pn.Column(
                     header_panel,
-                    tsp_copy.opts(width=900, toolbar=None, title='(a)', legend_position='right'),
-                    gtsp_copy.opts(width=900, toolbar=None, title='(b)', legend_position='right'))
+                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right', clone=True),
+                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right', clone=True))
             else:
                 column = pn.Column(
                     header_panel,
-                    tsp_copy.opts(width=900, title='(a)', legend_position='right'),
-                    gtsp_copy.opts(width=900, title='(b)', legend_position='right'))
+                    tsp.opts(width=900, title='(a)', legend_position='right', clone=True),
+                    gtsp.opts(width=900, title='(b)', legend_position='right', clone=True))
             if obs_data_included:
                 if not add_toolbars:
-                    scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, toolbar=None, title='(c)'))
+                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, toolbar=None, title='(c)', clone=True))
                 else: 
-                    scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, title='(c)'))
+                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title='(c)', clone=True))
                 if metrics_table is not None:
                     # metrics_table_row = pn.Row(metrics_table.opts(title='(d)'))
-                    scatter_and_metrics_row.append(metrics_table_copy.opts(title='(d)', fontscale=1))
+                    scatter_and_metrics_row.append(metrics_table.opts(title='(d)', fontscale=1, clone=True))
                 column.append(scatter_and_metrics_row)
                 if include_kde_plots:
                     column.append(pn.Row(kdeplots))
@@ -654,15 +649,15 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
             if not add_toolbars:
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp_copy.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right')))
+                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right', clone=True)))
             else: 
                 column = pn.Column(
                     header_panel,
-                    pn.Row(gtsp_copy.opts(width=900, show_legend=True, title='(a)', legend_position='right')))
+                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)', legend_position='right', clone=True)))
             if obs_data_included:
-                scatter_and_metrics_row = pn.Row(scatter_plot_copy.opts(shared_axes=False, title='(b)'))
-                if metrics_table_copy is not None:
-                    scatter_and_metrics_row.append(metrics_table_copy.opts(title='(c)', fontscale=1))
+                scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title='(b)', clone=True))
+                if metrics_table is not None:
+                    scatter_and_metrics_row.append(metrics_table.opts(title='(c)', fontscale=1, clone=True))
                 column.append(scatter_and_metrics_row)
     return column
 
@@ -1052,6 +1047,10 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
     return dfdisplayed_metrics, metrics_table
 
+def set_toolbar_autohide(plot, element):
+    bokeh_plot = plot.state
+    bokeh_plot.toolbar.autohide = True
+
 def build_kde_plots(pp, amp_title='(e)', phase_title='(f)', include_toolbar=True):
     """Builds calibration plot template
 
@@ -1106,17 +1105,14 @@ def build_kde_plots(pp, amp_title='(e)', phase_title='(f)', include_toolbar=True
     # don't use
 
     # create panel containing amp % diff and phase diff kernel density estimate plots. Excluding amp diff plot
-    if not include_toolbar:
-        kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title, toolbar=None) + \
-            phase_diff_kde.opts(show_legend=False, title=phase_title, toolbar=None)
-        print('not adding toolbar to kde plots')
-    else: 
-        kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
-            phase_diff_kde.opts(show_legend=False, title=phase_title)
-        print('adding toolbar to kde plots')
-    kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
-        opts.Distribution(height=200, width=300))
-    
+    kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
+        phase_diff_kde.opts(show_legend=False, title=phase_title)
+    if include_toolbar:
+        kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
+                opts.Distribution(height=200, width=300))
+    else:
+        kdeplots = kdeplots.cols(2).opts(shared_axes=False, toolbar=None).opts(
+                opts.Distribution(height=200, width=300))
     return kdeplots
 
 
