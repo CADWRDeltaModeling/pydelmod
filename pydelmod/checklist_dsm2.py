@@ -104,8 +104,6 @@ def checklist_station_extract(config_data):
 
                 for vartype in ["FLOW", "STAGE", "EC"]:
 
-                    print("      processing ", vartype)
-
                     try:
                         # list of time series
                         list_dfr = []
@@ -173,10 +171,10 @@ def checklist_station_extract(config_data):
                         with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
                             newdss.write_rts(path_new, dfr_checklist, unit0, type0)
 
-                        print("         success.")
+                        print("      processed:", vartype)
 
                     except:
-                        print("         variable does not exist.")
+                        pass
 
             print("Extracted time series saved to " + fpath_out)
     print("Done\n")
