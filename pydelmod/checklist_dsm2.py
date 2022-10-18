@@ -57,9 +57,9 @@ def resample_to_15min(config_data):
                         newdss.write_rts(p, dfr_new, unit0, type0)
 
                     # plot original and resampled time series for sanity check (for first 100 entries)
-                    ax = dfr_new.plot(marker="o", color="C0", markersize=4, linestyle="none", figsize=(16,4))
-                    dfr.plot(ax=ax, marker="o", color="C1", markersize=3, linestyle="none")
-                    plt.legend(["Resampled", "Original"])
+                    ax = dfr.plot(marker="x", color="C1", markersize=4, linestyle="none", figsize=(16,4))
+                    dfr_new.plot(ax=ax, marker="o", color="C0", markersize=1, linestyle="none")
+                    plt.legend(["Original", "Resampled"])
                     plt.xlim([dfr.index[0], dfr.index[100]])
                     plt.title("First 100 data points vs. resampled")
                     substr = p.split("/")
