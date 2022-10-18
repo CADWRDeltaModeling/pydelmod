@@ -44,7 +44,7 @@ def resample_to_15min(config_data):
                         dfr, unit0, type0 = dss_in.read_its(p)
 
                     # resample to 15min interval
-                    dfr = dfr.resample(rule="15min").interpolate()
+                    dfr = dfr.resample(rule="15min").ffill()
 
                     # write to new file
                     with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
