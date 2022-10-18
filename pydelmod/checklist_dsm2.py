@@ -8,10 +8,16 @@ import pyhecdss
 import pandas as pd
 import json
 import shutil
+import matplotlib.pyplot as plt
 
 def resample_to_15min(config_data):
     resample_switch_dict = config_data["resample_switch_dict"]
     resample_file_dict = config_data["resample_file_dict"]
+
+    # create a temporary folder to check resampled plot against original.
+    dir_temp = "./check"
+    if not os.path.exists(dir_temp):
+        os.mkdir(dir_temp)
 
     for data_source in resample_switch_dict:
         if resample_switch_dict[data_source] == True:
@@ -44,11 +50,22 @@ def resample_to_15min(config_data):
                         dfr, unit0, type0 = dss_in.read_its(p)
 
                     # resample to 15min interval
-                    dfr = dfr.resample(rule="15min").ffill()
+                    dfr_new = dfr.resample(rule="15min").ffill()
 
                     # write to new file
                     with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                        newdss.write_rts(p, dfr, unit0, type0)
+                        newdss.write_rts(p, dfr_new, unit0, type0)
+
+                    # plot original and resampled time series for sanity check (for first 100 entries)
+                    ax = dfr_new.plot(marker="o", color="C0", markersize=4, linestyle="none", figsize=(16,4))
+                    dfr.plot(ax=ax, marker="o", color="C1", markersize=3, linestyle="none")
+                    plt.legend(["Resampled", "Original"])
+                    plt.xlim([dfr.index[0], dfr.index[100]])
+                    plt.title("First 100 data points vs. resampled")
+                    substr = p.split("/")
+                    figpath = os.path.join(dir_temp, substr[2]+"_"+substr[3]+".png")
+                    plt.savefig(figpath)
+                    print("   comparison plot generated: ", figpath)
 
             print("Resampled time series saved to " + fpath_out)
 
