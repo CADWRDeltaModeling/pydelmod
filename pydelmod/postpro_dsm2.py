@@ -410,26 +410,26 @@ def postpro_plots(cluster, config_data, use_dask):
 
 def check_config_data(config_data):
     if 'process_vartype_dict' in config_data or 'vartype_timewindow_dict' not in config_data:
-        print('**********************************************************************************************************')
-        print("Config file error: process_vartype_dict should be replaced with vartype_timewindow_dict. YAML Example:")
-        print("vartype_timewindow_dict:\n  EC: qual_tw\n  FLOW: hydro_tw\n  STAGE: hydro_tw")
-        print('Exiting. Fix your config file before re-running processes.')
-        print('**********************************************************************************************************')
+        print('''**********************************************************************************************************
+        Config file error: process_vartype_dict should be replaced with vartype_timewindow_dict. YAML Example:
+        vartype_timewindow_dict:\n  EC: qual_tw\n  FLOW: hydro_tw\n  STAGE: hydro_tw
+        Exiting. Fix your config file before re-running processes, by removing process_vartype_dict, and/or adding vartype_timewindow_dict.
+        **********************************************************************************************************''')
         exit(0)
 
-    required_dicts_list = ['options_dict', 'location_files_dict', 'observed_files_dict', 'study_files_dict', 'postpro_model_dict', \
-        'timewindow_dict', 'vartype_dict', 'vartype_timewindow_dict', 'dask_options_dict']
-    not_found_list = []
-    for d in required_dicts_list:
-        if d not in config_data:
-            not_found_list.append(d)
-    if len(not_found_list) > 0:
-        print('**********************************************************************************************************')
-        print("Config file error: the following dictionaries are missing from your file: ")
-        for d in not_found_list:
-            print(d)
-        print('Exiting. Fix your config file before re-running processes.')
-        print('**********************************************************************************************************')
+    # required_dicts_list = ['options_dict', 'location_files_dict', 'observed_files_dict', 'study_files_dict', 'postpro_model_dict', \
+    #     'timewindow_dict', 'vartype_dict', 'vartype_timewindow_dict', 'dask_options_dict']
+    # not_found_list = []
+    # for d in required_dicts_list:
+    #     if d not in config_data:
+    #         not_found_list.append(d)
+    # if len(not_found_list) > 0:
+    #     print('**********************************************************************************************************')
+    #     print("Config file error: the following dictionaries are missing from your file: ")
+    #     for d in not_found_list:
+    #         print(d)
+    #     print('Exiting. Fix your config file before re-running processes.')
+    #     print('**********************************************************************************************************')
 
 def run_process(process_name, config_filename, use_dask):
     '''
