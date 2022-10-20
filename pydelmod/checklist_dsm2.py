@@ -8,10 +8,16 @@ import pyhecdss
 import pandas as pd
 import json
 import shutil
+import matplotlib.pyplot as plt
 
 def resample_to_15min(config_data):
     resample_switch_dict = config_data["resample_switch_dict"]
     resample_file_dict = config_data["resample_file_dict"]
+
+    # create a temporary folder to check resampled plot against original.
+    dir_temp = "./check"
+    if not os.path.exists(dir_temp):
+        os.mkdir(dir_temp)
 
     for data_source in resample_switch_dict:
         if resample_switch_dict[data_source] == True:
@@ -44,11 +50,22 @@ def resample_to_15min(config_data):
                         dfr, unit0, type0 = dss_in.read_its(p)
 
                     # resample to 15min interval
-                    dfr = dfr.resample(rule="15min").interpolate()
+                    dfr_new = dfr.resample(rule="15min").ffill()
 
                     # write to new file
                     with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                        newdss.write_rts(p, dfr, unit0, type0)
+                        newdss.write_rts(p, dfr_new, unit0, type0)
+
+                    # plot original and resampled time series for sanity check (for first 100 entries)
+                    ax = dfr.plot(marker="x", color="C1", markersize=4, linestyle="none", figsize=(16,4))
+                    dfr_new.plot(ax=ax, marker="o", color="C0", markersize=1, linestyle="none")
+                    plt.legend(["Original", "Resampled"])
+                    plt.xlim([dfr.index[0], dfr.index[100]])
+                    plt.title("First 100 data points vs. resampled")
+                    substr = p.split("/")
+                    figpath = os.path.join(dir_temp, substr[2]+"_"+substr[3]+".png")
+                    plt.savefig(figpath)
+                    print("   comparison plot generated: ", figpath)
 
             print("Resampled time series saved to " + fpath_out)
 
@@ -104,73 +121,77 @@ def checklist_station_extract(config_data):
 
                 for vartype in ["FLOW", "STAGE", "EC"]:
 
-                    print("      processing ", vartype)
+                    try:
+                        # list of time series
+                        list_dfr = []
 
-                    # list of time series
-                    list_dfr = []
+                        # for given checklist station (e.g., SWP),
+                        #   loop through the constituting stations
+                        for station_source in station_checklist[station_out]:
 
-                    # for given checklist station (e.g., SWP),
-                    #   loop through the constituting stations
-                    for station_source in station_checklist[station_out]:
+                            # time series values are reversed when specified by "-"
+                            sign = +1.
+                            if (station_source[0] == "-"):
+                                sign = -1.
+                                station_source = station_source[1:]
 
-                        # time series values are reversed when specified by "-"
-                        sign = +1.
-                        if (station_source[0] == "-"):
-                            sign = -1.
-                            station_source = station_source[1:]
+                            # select time series with desired location and variable
+                            with pyhecdss.DSSFile(fpath_in) as dss_in:
+                                catdf = dss_in.read_catalog()
+                                pathi = dss_in.get_pathnames(
+                                        catdf[(catdf.B == station_source) &
+                                              (catdf.C == vartype)])
 
-                        # select time series with desired location and variable
-                        with pyhecdss.DSSFile(fpath_in) as dss_in:
-                            catdf = dss_in.read_catalog()
-                            pathi = dss_in.get_pathnames(
-                                    catdf[(catdf.B == station_source) &
-                                          (catdf.C == vartype)])
+                            # extract time series
+                            try:
+                                dfr, unit0, type0 = dss_in.read_rts(pathi[0])
 
-                        # extract time series
-                        try:
-                            dfr, unit0, type0 = dss_in.read_rts(pathi[0])
+                            except:
+                                dfr, unit0, type0 = dss_in.read_its(pathi[0])
 
-                        except:
-                            dfr, unit0, type0 = dss_in.read_its(pathi[0])
+                            # write original data to new file for sanity check
+                            # if sign is reversed, the sign-reversed data is saved.
+                            if sign == -1.:
+                                substr = pathi[0].split("/")
+                                substr[2] = "-" + station_source
+                                pathi[0] = "/".join(substr)
 
-                        # write original data to new file for sanity check
-                        # if sign is reversed, the sign-reversed data is saved.
-                        if sign == -1.:
-                            substr = pathi[0].split("/")
-                            substr[2] = "-" + station_source
-                            pathi[0] = "/".join(substr)
+                            with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                                newdss.write_rts(pathi[0], dfr*sign, unit0, type0)
 
+                            # if the original and new station names are same
+                            #   with exception of the sign, the original time series
+                            #   is indicated accordingly. Otherwise, it is confusing
+                            #   what the "raw" data contained.
+                            if station_source == station_out:
+                                substr = pathi[0].split("/")
+                                substr[2] = station_source + "(original)"
+                                pathi[0] = "/".join(substr)
+
+                            with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
+                                newdss.write_rts(pathi[0], dfr, unit0, type0)
+
+                            # append to the list of dfr
+                            list_dfr.append(dfr*sign)
+
+                            dfr_checklist = pd.concat(list_dfr, axis=1)
+
+                        # replace the station name to checklist convention
+                        #   using the last known path is acceptable,
+                        #   because only Part B (location) is different.
+                        substr = pathi[0].split("/")
+                        substr[2] = station_out
+                        path_new = "/".join(substr)
+
+                        # write to new file using checklist alias
+                        dfr_checklist = dfr_checklist.sum(axis=1)
                         with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                            newdss.write_rts(pathi[0], dfr*sign, unit0, type0)
+                            newdss.write_rts(path_new, dfr_checklist, unit0, type0)
 
-                        # if the original and new station names are same
-                        #   with exception of the sign, the original time series
-                        #   is indicated accordingly. Otherwise, it is confusing
-                        #   what the "raw" data contained.
-                        if station_source == station_out:
-                            substr = pathi[0].split("/")
-                            substr[2] = station_source + "(original)"
-                            pathi[0] = "/".join(substr)
+                        print("      processed:", vartype)
 
-                        with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                            newdss.write_rts(pathi[0], dfr, unit0, type0)
-
-                        # append to the list of dfr
-                        list_dfr.append(dfr*sign)
-
-                        dfr_checklist = pd.concat(list_dfr, axis=1)
-
-                    # replace the station name to checklist convention
-                    #   using the last known path is acceptable,
-                    #   because only Part B (location) is different.
-                    substr = pathi[0].split("/")
-                    substr[2] = station_out
-                    path_new = "/".join(substr)
-
-                    # write to new file using checklist alias
-                    dfr_checklist = dfr_checklist.sum(axis=1)
-                    with pyhecdss.DSSFile(fpath_out, create_new = False) as newdss:
-                        newdss.write_rts(path_new, dfr_checklist, unit0, type0)
+                    except:
+                        pass
 
             print("Extracted time series saved to " + fpath_out)
     print("Done\n")
