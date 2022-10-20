@@ -5,6 +5,7 @@ import os
 import pydsm
 from pydsm import postpro
 import json
+import yaml
 import sys
 
 
@@ -52,14 +53,15 @@ def postpro_model(cluster, config_data, use_dask):
     #import logging
     #logging.basicConfig(filename='postpro-model.log', level=logging.DEBUG)
     vartype_dict = config_data['vartype_dict']
-    process_vartype_dict = config_data['process_vartype_dict']
     # this specifies the files that are to be post-processed. Using study_files_dict resulted in all study files being post-processed.
     postpro_model_dict = config_data['postpro_model_dict']
     location_files_dict = config_data['location_files_dict']
+    vartype_timewindow_dict = config_data['vartype_timewindow_dict']
+
     try:
         for var_name in vartype_dict:
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
-            if process_vartype_dict[vartype.name]:
+            if vartype_timewindow_dict[vartype.name] is not None:
                 print('processing model ' + vartype.name + ' data')
                 for study_name in postpro_model_dict:
                     dssfile=postpro_model_dict[study_name]
@@ -86,13 +88,13 @@ def postpro_model(cluster, config_data, use_dask):
 def postpro_observed(cluster, config_data, use_dask):
     # Setup for EC, FLOW, STAGE
     vartype_dict = config_data['vartype_dict']
-    process_vartype_dict = config_data['process_vartype_dict']
     observed_files_dict = config_data['observed_files_dict']
     location_files_dict = config_data['location_files_dict']
-    
+    vartype_timewindow_dict = config_data['vartype_timewindow_dict']
+
     try:
         for vartype in vartype_dict:
-            if process_vartype_dict[vartype]:
+            if vartype_timewindow_dict[vartype] is not None:
                 print('processing observed ' + vartype + ' data')
                 dssfile = observed_files_dict[vartype]
                 # catalog the DSS file. If you don't do this, processes are likely to fail the first time you run them with an 
@@ -135,9 +137,12 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     inst_plot_timewindow = inst_plot_timewindow_dict[vartype.name]
     timewindow_dict = config_data['timewindow_dict']
-    timewindow = timewindow_dict[timewindow_dict['default_timewindow']]
+    vartype_timewindow_dict = config_data['vartype_timewindow_dict']
+    timewindow = timewindow_dict[vartype_timewindow_dict[vartype.name]]
+
     zoom_inst_plot = options_dict['zoom_inst_plot']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
+    mask_plot_metric_data = options_dict['mask_plot_metric_data'] if 'mask_plot_metric_data' in options_dict else True
     flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
@@ -150,7 +155,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
-                invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold)
+                invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data)
 
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
@@ -176,9 +181,11 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     write_html=False, write_graphics=True, output_format='png'):
 # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data['study_files_dict']
-    output_plot_dir = config_data['options_dict']['output_folder']
+    options_dict = config_data['options_dict']
+    output_plot_dir = options_dict['output_folder']
     print('build and save plot: output_plot_dir = ' + output_plot_dir)
     print('Building plot template for location: ' + str(location))    
+    mask_data = options_dict['mask_plot_metric_data'] if 'mask_plot_metric_data' in options_dict else True
 
     calib_plot_template_dict, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
         gate_locations=gate_locations, gate_vartype=gate_vartype)
@@ -198,8 +205,8 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         time_window_exclusion_list = location.time_window_exclusion_list
         threshold_value = location.threshold_value
         # calib_plot_template_masked_time_period = None
-        create_second_panel = True if ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
-            (threshold_value is not None and len(str(threshold_value)) > 0)) else False
+        create_second_panel = True if (mask_data and ((time_window_exclusion_list is not None and len(time_window_exclusion_list)>0) or \
+            (threshold_value is not None and len(str(threshold_value)) > 0))) else False
         if create_second_panel:
             calib_plot_template_masked_time_period_dict, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
                 gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
@@ -305,10 +312,36 @@ def postpro_heatmaps(cluster, config_data, use_dask):
     calib_heatmap.create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
         heatmap_width=heatmap_width, process_vartype_dict=process_heatmap_vartype_dict, base_diff_type=base_diff_type)
 
+def postpro_bars(cluster, config_data, write_graphics=True, write_html=True):
+    calib_metric_csv_filenames_dict = config_data['calib_metric_csv_filenames_dict']
+
+    layout = hv.Layout
+    plot_list = []
+    for f in calib_metric_csv_filenames_dict:
+        const_name = f
+    #         all_loc_metrics_df = pd.read_csv(temp_files[f])
+        all_loc_metrics_df = pd.read_csv(calib_metric_csv_filenames_dict[f])
+        r2_df = all_loc_metrics_df[['Location', 'DSM2 Run', 'R Squared']]
+        pbias_df = all_loc_metrics_df[['Location', 'DSM2 Run', 'PBIAS']]
+        r2_bars = hv.Bars(r2_df, kdims=['Location', 'DSM2 Run']).opts(
+            title='R Squared, %s,\nDSM2 v8.2.0 vs DSM2 v8.1.2' % const_name, 
+            width=900, height=500, xrotation=90, multi_level=False, legend_position='right')
+        pbias_bars = hv.Bars(pbias_df, kdims=['Location', 'DSM2 Run']).opts(
+            title='Percent Bias, %s,\nDSM2 v8.2.0 vs DSM2 v8.1.2' % const_name, 
+            width=900, height=500, xrotation=90, multi_level=False, legend_position='right')
+        plot_list.append(r2_bars)
+        plot_list.append(pbias_bars)
+        print('saving')
+        hv.save(r2_bars, '0r2_%s' % f, fmt='png')
+        hv.save(pbias_bars, '0pbias_%s' % f, fmt='png')
+    layout = hv.Layout(plot_list).cols(2)
+    if write_graphics:
+        hv.save(layout, '0r2_pbias_comp.png', fmt='png')
+    if write_html:
+        hv.save(layout, '0r2_pbias_comp.html', fmt='html')
 
 def postpro_plots(cluster, config_data, use_dask):
     vartype_dict = config_data['vartype_dict']
-    process_vartype_dict = config_data['process_vartype_dict']
     location_files_dict = config_data['location_files_dict']
     observed_files_dict = config_data['observed_files_dict']
     study_files_dict = config_data['study_files_dict']
@@ -318,13 +351,16 @@ def postpro_plots(cluster, config_data, use_dask):
     write_graphics = False if ('write_graphics' in options_dict and not options_dict['write_graphics']) else True
     write_html = False if ('write_html' in options_dict and not options_dict['write_html']) else True
     gate_location_file_dict = config_data['gate_location_file_dict'] if 'gate_location_file_dict' in config_data else None
+    
+    vartype_timewindow_dict = config_data['vartype_timewindow_dict']
+
     ## Set options and run processes. If using dask, create delayed tasks
     try:
         gate_vartype = postpro.VarType('POS', '')
         for var_name in vartype_dict:
             vartype = postpro.VarType(var_name, vartype_dict[var_name])
             print('vartype='+str(vartype))
-            if process_vartype_dict[vartype.name]:
+            if vartype_timewindow_dict[vartype.name] is not None:
                 # set a separate timewindow for instantaneous plots
                 inst_plot_timewindow = inst_plot_timewindow_dict[vartype.name]
                 ## Load locations from a .csv file, and create a list of postpro.Location objects
@@ -372,24 +408,63 @@ def postpro_plots(cluster, config_data, use_dask):
         if use_dask:
             cluster.stop_local_cluster()
 
+def check_config_data(config_data):
+    if 'process_vartype_dict' in config_data or 'vartype_timewindow_dict' not in config_data:
+        print('**********************************************************************************************************')
+        print("Config file error: process_vartype_dict should be replaced with vartype_timewindow_dict. YAML Example:")
+        print("vartype_timewindow_dict:\n  EC: qual_tw\n  FLOW: hydro_tw\n  STAGE: hydro_tw")
+        print('Exiting. Fix your config file before re-running processes.')
+        print('**********************************************************************************************************')
+        exit(0)
+
+    required_dicts_list = ['options_dict', 'location_files_dict', 'observed_files_dict', 'study_files_dict', 'postpro_model_dict', \
+        'timewindow_dict', 'vartype_dict', 'vartype_timewindow_dict', 'dask_options_dict']
+    not_found_list = []
+    for d in required_dicts_list:
+        if d not in config_data:
+            not_found_list.append(d)
+    if len(not_found_list) > 0:
+        print('**********************************************************************************************************')
+        print("Config file error: the following dictionaries are missing from your file: ")
+        for d in not_found_list:
+            print(d)
+        print('Exiting. Fix your config file before re-running processes.')
+        print('**********************************************************************************************************')
 
 def run_process(process_name, config_filename, use_dask):
     '''
-    process_name (str): should be 'model', 'observed', or 'plots'
+    process_name (str): should be 'model', 'observed', 'plots', or 'bars'
     config_filename (str): filename of config (json) file
     use_dask (boolean): if true, dask will be used
     '''
-    # Read Config file
-    with open(config_filename) as f:
-        config_data = json.load(f)
+    import csv 
+    config_data = None
+    # This enables user to use a json or yaml file. One advantage of yaml is you can add comments. 
+    # You can use this web page to convert json to yaml: https://codebeautify.org/json-to-yaml
+    if '.json' in config_filename:
+        # Read Config file
+        with open(config_filename) as f:
+            config_data = json.load(f)
+    elif '.yml' in config_filename or '.yaml' in config_filename:
+        # using yaml instead
+        with open(config_filename, "r") as stream:
+            try:
+                config_data = yaml.safe_load(stream)
+            except yaml.YAMLError as exc:
+                print(exc)
+    else:
+        print('error: config file must be .json, .yml, or .yaml')
+        exit(0)
+
+    # check data in json or yaml file
+    check_config_data(config_data)
 
     # Create cluster if using dask
     cluster = None
     c_link = None
     if use_dask:
         cluster = DaskCluster(config_data)
-        cluster.start_local_cluster()
-        c_link=cluster.client
+        cluster.start_local_cluster() 
         print(c_link)
     c_link
     if process_name.lower() == 'model':
@@ -398,6 +473,8 @@ def run_process(process_name, config_filename, use_dask):
         postpro_observed(cluster, config_data, use_dask)
     elif process_name.lower() == 'plots':
         postpro_plots(cluster, config_data, use_dask)
+    elif process_name.lower() == 'bars': 
+        postpro_bars(cluster, config_data)
     elif process_name.lower() == 'heatmaps':
         postpro_heatmaps(cluster, config_data, use_dask)
     else:

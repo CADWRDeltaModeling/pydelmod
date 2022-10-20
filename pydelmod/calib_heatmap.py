@@ -7,6 +7,7 @@ import holoviews as hv
 import hvplot.pandas
 import panel as pn
 
+# yes, I know this is a bad way to do this. Someone should fix this so this information is read from the location files
 central=['RSAC101','RVB','SRV','STI','RSMKL008','MOK','SAL','RSAN032','TSL','SLTRM004','EMM','RSAC092',
         'PRI','RSAN037','FAL','JER','RSAN018','HOL','DSJ','SLDUT007','HLT','TRN','RSL','SLRCK005','OBI',
         'ROLD024','BAC','RRI','RSAN058','OH4','ROLD034']

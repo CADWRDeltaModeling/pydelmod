@@ -363,7 +363,8 @@ def regression_line_plots(dfmetrics, flow_in_thousands):
     for i, row in dfmetrics.iterrows():
         slope = row['regression_slope']
         intercep = row['regression_intercep']
-        intercep/=1000.0 if flow_in_thousands else intercep
+        intercep = intercep/1000.0 if flow_in_thousands else intercep
+
         slope_plot = hv.Slope(slope, y_intercept=intercep)
         slope_plots = slope_plot if slope_plots == None else slope_plots*slope_plot
     return slope_plots
@@ -480,7 +481,7 @@ def sanitize_name(name):
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
                               inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
                               zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False,
-                              remove_data_above_threshold=True):
+                              remove_data_above_threshold=True, mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -525,10 +526,10 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # else:
     #     print('Not using gate information for plots/metrics data masking because insufficient information provided.')
 
-    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot)
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot, mask_data=mask_data)
     gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
         time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-        threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
+        threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data)
 
     scatter_plot_with_toolbar = None
     scatter_plot_without_toolbar = None
@@ -542,10 +543,10 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         time_window_exclusion_list = location.time_window_exclusion_list
         scatter_plot_with_toolbar = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
             time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold,toolbar_option='right')
+            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold,toolbar_option='right', mask_data=mask_data)
         scatter_plot_without_toolbar = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
             time_window_exclusion_list = time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, toolbar_option=None)
+            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, toolbar_option=None, mask_data=mask_data)
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
@@ -564,7 +565,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
         dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
                             layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold)
+                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data)
         # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
         # metrics_table_dict.update({'all': metrics_table})
 
@@ -697,7 +698,7 @@ def get_units(flow_in_thousands=False, units=None):
     return unit_string
 
 
-def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None, zoom_inst_plot=False):
+def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None, zoom_inst_plot=False, mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -730,7 +731,7 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     return tsp
 
 def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None, \
-    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True):
+    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True, mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -777,7 +778,10 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     gtsp_plot_data = []
     for p in pp:
         if p.gdf is not None:
-            new_p = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+            if mask_data:
+                new_p = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+            else:
+                new_p = p.gdf
             # new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
             # new_p = remove_data_above_below_threshold(new_p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
             if flow_in_thousands:
@@ -793,7 +797,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
 
 # def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
 def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None, \
-    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True, toolbar_option='right'):
+    invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True, toolbar_option='right', mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -839,7 +843,10 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
     any_data_left = True
 
     for p in pp:
-        gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+        if mask_data:
+            gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+        else:
+            gpd = p.gdf
         # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
         # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
         gpd.dropna(inplace=True)
@@ -912,7 +919,7 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
                               time_window_exclusion_list=None, invert_timewindow_exclusion=False, threshold_value=None,
-                              remove_data_above_threshold=True):
+                              remove_data_above_threshold=True, mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -948,14 +955,21 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # plot_data are scaled, if flow_in_thousands == True
     # gtsp_plot_data = [p.gdf for p in pp]
     gtsp_plot_data = []
+    gpd = None
     for p in pp:
-        gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+        if mask_data:
+            gpd = remove_data_for_time_windows_thresholds(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion, upper_threshold=threshold_value)
+        else:
+            gpd=p.gdf
         if flow_in_thousands:
             gpd = gpd/1000.0 if gpd is not None else None
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
-    splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
+    if flow_in_thousands:
+        splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
+    else:
+        splot_metrics_data = [g.resample('D').mean() if g is not None else None for g in gtsp_plot_data]
 
     dfdisplayed_metrics = None
     column = None

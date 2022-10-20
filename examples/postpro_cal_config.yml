@@ -1,0 +1,64 @@
+options_dict:
+  output_folder: ./plots/
+  include_kde_plots: true
+  zoom_inst_plot: false
+  write_html: true
+  write_graphics: true
+  mask_plot_metric_data: false
+heatmap_options_dict:
+  base_run: v8_3
+  alt_run: v8_3_SMCD
+  metrics_list:
+    - NRMSE
+  station_order_file: >-
+    ../../../postprocessing/location_info/calibrationHeatMapStationOrderCombined.csv
+  base_diff_type: abs-diff
+  heatmap_width: 600
+process_heatmap_vartype_dict:
+  EC: true
+  FLOW: true
+  STAGE: true
+location_files_dict:
+  EC: ../../../postprocessing/location_info/calibration_ec_stations.csv
+  FLOW: ../../../postprocessing/location_info/calibration_flow_stations.csv
+  STAGE: ../../../postprocessing/location_info/calibration_stage_stations_georg.csv
+observed_files_dict:
+  EC: ../../../postprocessing/observed_data/cdec/ec_merged.dss
+  FLOW: ../../../postprocessing/observed_data/cdec/flow_merged.dss
+  STAGE: ../../../postprocessing/observed_data/cdec/stage_merged.dss
+study_files_dict:
+  v820: ../../test820/output/test820.dss
+  v821: ../output/test821.dss
+calib_metric_csv_filenames_dict:
+  EC: ./plots/1_summary_statistics_unmasked_all_EC.csv
+  Flow: ./plots/1_summary_statistics_unmasked_all_FLOW.csv
+  Stage: ./plots/1_summary_statistics_unmasked_all_Stage.csv
+postpro_model_dict:
+  v820: ../../test820/output/test820.dss
+  v821: ../output/test821.dss
+inst_plot_timewindow_dict:
+  FLOW: 2011-09-01:2011-09-30
+  EC: null
+  STAGE: 2011-09-01:2011-09-30
+timewindow_dict:
+  hydro_calibration: 01OCT2010 - 01OCT2012
+  qual_calibration: 01OCT2009 - 01OCT2017
+  hydro_validation: 01OCT2000 - 01OCT2017
+  qual_validation: 01OCT2000 - 01OCT2009
+  ext_hydro_calibration: 01OCT2010 - 01OCT2017
+  dsm2_calibration: 01OCT2009 - 01OCT2017
+  calmemo_all: 01OCT2001-01OCT2017
+  calmemo_hydro: 01OCT2010-01OCT2012
+  calmemo_qual: 01OCT2010 - 01OCT2017
+vartype_dict:
+  EC: uS/cm
+  FLOW: cfs
+  STAGE: feet
+vartype_timewindow_dict:
+  EC: calmemo_qual
+  FLOW: calmemo_hydro
+  STAGE: calmemo_hydro
+dask_options_dict:
+  n_workers: 8
+  threads_per_worker: 1
+  memory_limit: 8G
