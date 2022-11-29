@@ -139,6 +139,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     timewindow_dict = config_data['timewindow_dict']
     vartype_timewindow_dict = config_data['vartype_timewindow_dict']
     timewindow = timewindow_dict[vartype_timewindow_dict[vartype.name]]
+    tech_memo_validation_metrics = options_dict['tech_memo_validation_metrics'] if 'tech_memo_validation_metrics' in options_dict else False
 
     zoom_inst_plot = options_dict['zoom_inst_plot']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
@@ -155,7 +156,8 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
-                invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data)
+                invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data,
+                tech_memo_validation_metrics=tech_memo_validation_metrics)
 
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
@@ -312,33 +314,45 @@ def postpro_heatmaps(cluster, config_data, use_dask):
     calib_heatmap.create_save_heatmaps(calib_metric_csv_filenames_dict, station_order_file, base_run_name, run_name, metrics_list, \
         heatmap_width=heatmap_width, process_vartype_dict=process_heatmap_vartype_dict, base_diff_type=base_diff_type)
 
-def postpro_bars(cluster, config_data, write_graphics=True, write_html=True):
-    calib_metric_csv_filenames_dict = config_data['calib_metric_csv_filenames_dict']
-
-    layout = hv.Layout
-    plot_list = []
-    for f in calib_metric_csv_filenames_dict:
-        const_name = f
-    #         all_loc_metrics_df = pd.read_csv(temp_files[f])
-        all_loc_metrics_df = pd.read_csv(calib_metric_csv_filenames_dict[f])
-        r2_df = all_loc_metrics_df[['Location', 'DSM2 Run', 'R Squared']]
-        pbias_df = all_loc_metrics_df[['Location', 'DSM2 Run', 'PBIAS']]
-        r2_bars = hv.Bars(r2_df, kdims=['Location', 'DSM2 Run']).opts(
-            title='R Squared, %s,\nDSM2 v8.2.0 vs DSM2 v8.1.2' % const_name, 
-            width=900, height=500, xrotation=90, multi_level=False, legend_position='right')
-        pbias_bars = hv.Bars(pbias_df, kdims=['Location', 'DSM2 Run']).opts(
-            title='Percent Bias, %s,\nDSM2 v8.2.0 vs DSM2 v8.1.2' % const_name, 
-            width=900, height=500, xrotation=90, multi_level=False, legend_position='right')
-        plot_list.append(r2_bars)
-        plot_list.append(pbias_bars)
-        print('saving')
-        hv.save(r2_bars, '0r2_%s' % f, fmt='png')
-        hv.save(pbias_bars, '0pbias_%s' % f, fmt='png')
-    layout = hv.Layout(plot_list).cols(2)
-    if write_graphics:
-        hv.save(layout, '0r2_pbias_comp.png', fmt='png')
-    if write_html:
-        hv.save(layout, '0r2_pbias_comp.html', fmt='html')
+def postpro_validation_bar_chants(cluster, config_data, write_graphics=True, write_html=True):
+    '''
+    Creates bar charts for technical memo validation section
+    '''
+    validation_bar_chart_options_dict = config_data['validation_bar_chart_options_dict']
+    validation_metric_csv_filenames_dict = validation_bar_chart_options_dict['validation_metric_csv_filenames_dict']
+    validation_plot_output_folder = validation_bar_chart_options_dict['validation_plot_output_folder']
+    vartype_to_station_list_dict = validation_bar_chart_options_dict['vartype_to_station_list_dict']
+    calibplot.create_validation_bar_charts(validation_plot_output_folder, validation_metric_csv_filenames_dict, vartype_to_station_list_dict)
+    
+def postpro_copy_plot_files(cluster, config_data):
+    import shutil
+    plot_file_copying_options_dict = config_data['plot_file_copying_options_dict']
+    # plot_type will be 'flow_calibration', 'ec_validation', etc.
+    # filenames to copy have filenames such as ANC_EC.png.
+    # validation plots are in ./plots_val/ and calibration plots are in ./plots_cal/
+    plot_type_to_const_dict = {'flow_calibration': 'Flow', 'flow_validation': 'Flow', \
+        'stage_calibration': 'Stage', 'stage_validation': 'Stage', \
+            'ec_calibration': 'EC', 'ec_validation': 'EC'}
+    plot_type_to_dir_dict = {'flow_calibration': './plots_cal/', 'flow_validation': './plots_val/', \
+        'stage_calibration': './plots_cal/', 'stage_validation': './plots_val/', \
+            'ec_calibration': './plots_cal/', 'ec_validation': './plots_val/'}
+    plot_types_to_copy_list = plot_file_copying_options_dict['plot_types_to_copy_list']
+    for plot_type in plot_types_to_copy_list:
+        # location list is a list of locations, for example, RSAC155
+        const = plot_type_to_const_dict[plot_type]
+        d = plot_type_to_dir_dict[plot_type]
+        location_list = plot_file_copying_options_dict[plot_type]
+    #     now copy the files...
+        i = 0
+        for location in location_list:
+            infile = d + location+'_'+const+'.png'
+            outfile = d + plot_type+'_'+str(i)+'_'+location+'.png'
+            print('infile, outfile='+infile+','+outfile)
+            try:
+                shutil.copy2(infile, outfile)
+            except FileNotFoundError as e:
+                print('FileNotFoundError exception caught: infile, outfile: '+infile+','+outfile)
+            i += 1
 
 def postpro_plots(cluster, config_data, use_dask):
     vartype_dict = config_data['vartype_dict']
@@ -347,6 +361,7 @@ def postpro_plots(cluster, config_data, use_dask):
     study_files_dict = config_data['study_files_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
+    tech_memo_validation_metrics = config_data['tech_memo_validation_metrics'] if 'tech_memo_validation_metrics' in config_data else False
     options_dict = config_data['options_dict']
     write_graphics = False if ('write_graphics' in options_dict and not options_dict['write_graphics']) else True
     write_html = False if ('write_html' in options_dict and not options_dict['write_html']) else True
@@ -473,10 +488,12 @@ def run_process(process_name, config_filename, use_dask):
         postpro_observed(cluster, config_data, use_dask)
     elif process_name.lower() == 'plots':
         postpro_plots(cluster, config_data, use_dask)
-    elif process_name.lower() == 'bars': 
-        postpro_bars(cluster, config_data)
+    elif process_name.lower() == 'validation_bar_charts': 
+        postpro_validation_bar_chants(cluster, config_data)
     elif process_name.lower() == 'heatmaps':
         postpro_heatmaps(cluster, config_data, use_dask)
+    elif process_name.lower() == 'copy_plot_files':
+        postpro_copy_plot_files(cluster, config_data)
     else:
         print('Error in pydelmod.postpro: process_name unrecognized: '+process_name)
 

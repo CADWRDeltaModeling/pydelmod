@@ -19,6 +19,8 @@ import logging
 import pyhecdss
 import numpy as np
 import copy
+import re
+
 
 def parse_time_window(timewindow):
     """
@@ -481,7 +483,7 @@ def sanitize_name(name):
 def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
                               inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
                               zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False,
-                              remove_data_above_threshold=True, mask_data=True):
+                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
     """Builds calibration plot template
 
     Args:
@@ -565,9 +567,11 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
         dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
                             layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data)
+                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data,
+                            tech_memo_validation_metrics=tech_memo_validation_metrics)
         # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
         # metrics_table_dict.update({'all': metrics_table})
+
 
         if include_kde_plots: 
             kdeplots_with_toolbar = build_kde_plots(pp, include_toolbar=True)
@@ -906,7 +910,7 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 
 def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=580, fontscale=8):
     '''
-    Create a Holoviews table displaying the metrics
+    Create a Holoviews table displaying calibration metrics.
     '''
     metrics_list_list = [study_list.copy()]
     for m in metrics_list:
@@ -916,10 +920,103 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
     metrics_table = hv.Table(metrics_list_tuple, metrics_list). opts(width=width, fontscale=fontscale)
     return metrics_table
 
+def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data, pp, tidal_template, amp_avg_pct_errors, \
+    amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics=False):
+    '''
+    Create dataframe and holoviews metrics table for calibration metrics.
+    Metrics are selected based on options passed to method 
+    '''
+    dfdisplayed_metrics = None
+    metrics_table = None
+    if dfmetrics is not None:
+        if tidal_template:
+            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
+            if tech_memo_validation_metrics:
+                cols.append('rmse')
+            dfdisplayed_metrics = dfmetrics.loc[:, cols]
+            dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
+            dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
+
+            dfdisplayed_metrics.index.name = 'DSM2 Run'
+            c = ['Equation', 'R Squared', 'Mean Error','NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+            if tech_memo_validation_metrics:
+                c.append('RMSE')
+            c.append('Amp Avg %Err')
+            c.append('Avg Phase Err')
+            dfdisplayed_metrics.columns = c
+            # now create a holoviews table object displaying the metrics
+            metrics_list_dict = {}
+            for m in dfdisplayed_metrics.columns:
+                if m is 'Equation':
+                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
+                else:
+                    # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+            metrics_list_for_hv_table = None
+            if layout_nash_sutcliffe:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+            else:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR']
+            if tech_memo_validation_metrics:
+                metrics_list_for_hv_table.append('RMSE')
+            metrics_list_for_hv_table.append('Amp Avg %Err')
+            metrics_list_for_hv_table.append('Avg Phase Err')
+
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+
+        else:
+            # not tidal: EC data
+            dfmetrics_monthly = calculate_metrics(
+                [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
+
+            # template for nontidal (EC) data
+            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
+            if tech_memo_validation_metrics:
+                cols.append('rmse')
+
+            dfdisplayed_metrics = dfmetrics.loc[:, cols]
+            dfdisplayed_metrics = pd.concat(
+                [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
+            dfdisplayed_metrics.index.name = 'DSM2 Run'
+
+            c = ['Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+            if tech_memo_validation_metrics:
+                c.append('RMSE')
+            c.append('Mnly Mean Err')
+            c.append('Mnly RMSE')
+            dfdisplayed_metrics.columns = c
+
+            dfdisplayed_metrics.style.format(format_dict)
+            # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
+            # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
+            metrics_list_dict = {}
+
+            for m in dfdisplayed_metrics.columns:
+                if m is 'Equation':
+                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
+                else:
+                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+                
+            # now create a holoviews table object displaying the metrics
+            metrics_list_for_hv_table = None
+            if layout_nash_sutcliffe:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+            else:
+                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR']
+            if tech_memo_validation_metrics:
+                metrics_list_for_hv_table.append('RMSE')
+            metrics_list_for_hv_table.append('Mnly Mean Err')
+            metrics_list_for_hv_table.append('Mnly RMSE')
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+    else:
+        print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
+
+    return dfdisplayed_metrics, metrics_table
+
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
                               time_window_exclusion_list=None, invert_timewindow_exclusion=False, threshold_value=None,
-                              remove_data_above_threshold=True, mask_data=True):
+                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
     """Builds calibration plot template
 
     Args:
@@ -995,70 +1092,11 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     metrics_table = None
     format_dict = {'Equation': '{:s}', 'R Squared': '{:.2f}', 'Mean Error': '{:.1f}', 'NMean Error': '{:.3f}', 'NMSE': '{:.1}', 'NRMSE': '{:.4}',
             'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
-            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}'}
+            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}', 'RMSE': '{:.2f}'}
 
-    if dfmetrics is not None:
-        if tidal_template:
-            dfdisplayed_metrics = dfmetrics.loc[:, [
-                'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
-            dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
-            dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
+    dfdisplayed_metrics, metrics_table = create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data,\
+         pp, tidal_template, amp_avg_pct_errors, amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics)
 
-            dfdisplayed_metrics.index.name = 'DSM2 Run'
-            dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
-                                        'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Amp Avg %Err', 'Avg Phase Err']
-            
-            # now create a holoviews table object displaying the metrics
-            metrics_list_dict = {}
-            for m in dfdisplayed_metrics.columns:
-                if m is 'Equation':
-                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
-                else:
-                    # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
-                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
-            metrics_list_for_hv_table = None
-            if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
-                                            'Amp Avg %Err', 'Avg Phase Err']
-            else:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
-                                            'Amp Avg %Err', 'Avg Phase Err']
-            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
-
-        else:
-            dfmetrics_monthly = calculate_metrics(
-                [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
-
-            # template for nontidal (EC) data
-            dfdisplayed_metrics = dfmetrics.loc[:, [
-                'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']]
-            dfdisplayed_metrics = pd.concat(
-                [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
-            dfdisplayed_metrics.index.name = 'DSM2 Run'
-            dfdisplayed_metrics.columns = ['Equation', 'R Squared', 'Mean Error',
-                                        'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', 'Mnly Mean Err', 'Mnly RMSE']
-            dfdisplayed_metrics.style.format(format_dict)
-            # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
-            # metrics_table = pn.widgets.DataFrame(dfdisplayed_metrics, autosize_mode='fit_columns')
-            metrics_list_dict = {}
-
-            for m in dfdisplayed_metrics.columns:
-                if m is 'Equation':
-                    metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
-                else:
-                    metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
-                
-            # now create a holoviews table object displaying the metrics
-            metrics_list_for_hv_table = None
-            if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR', \
-                                            'Mnly Mean Err', 'Mnly RMSE']
-            else:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR', \
-                                            'Mnly Mean Err', 'Mnly RMSE']
-            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
-    else:
-        print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
     return dfdisplayed_metrics, metrics_table
 
 def set_toolbar_autohide(plot, element):
@@ -1136,3 +1174,88 @@ def export_svg(plot, fname):
     p = hv.render(plot, backend='bokeh')
     p.output_backend = "svg"
     export_svgs(p, filename=fname)
+
+def _process_df_for_validation_bar_charts(vartype, vartype_to_station_list_dict, df):
+    '''
+    The location field is a string representation of the information in a Location object, which contains
+    a lot of text we don't need. all we need is the station abbreviation
+    ,Location(,v2022_10,0.9017457956731834,"ANC', bpart='ANC', description='San Joaquin River at Antioch', time_window_exclusion_list='', threshold_value='')"
+    These splits must return 2 items, otherwise you get a "SystemError: tile cannot extend outside image"
+    '''
+    df[['Location', 'new loc']] = df['Location'].str.split('name=\'', expand=True)
+    df[['Location', 'new loc2']] = df['new loc'].str.split('\', bpart', expand=True)
+    df.drop(['new loc', 'new loc2'], axis=1, inplace=True)
+
+    stations_to_keep = vartype_to_station_list_dict[vartype]
+
+    print('stations_to_keep='+str(stations_to_keep))
+
+    df = df.loc[df['Location'].isin(stations_to_keep)]
+    df.to_csv('d:/temp/r2_3.csv')
+    return df
+
+
+def create_validation_bar_charts(validation_plot_output_folder, validation_metric_csv_filenames_dict, vartype_to_station_list_dict):
+    '''
+    Create bar charts for selected locations
+    '''
+    # these could be read from a file, but for now it's easier to hardcode, since we don't expect this info to change
+    mu='\u03BC'
+    vartype_to_metric_list = {'EC': ['Mean Error', 'RMSE', 'Mnly Mean Err', 'Mnly RMSE'],
+                            'Flow': ['Mean Error', 'RMSE', 'Amp Avg %Err', 'Avg Phase Err'],
+                            'Stage': ['Mean Error', 'RMSE', 'Amp Avg %Err', 'Avg Phase Err']}
+    vartype_to_units_list = {'EC': [mu+'s/cm', mu+'s/cm', mu+'s/cm', mu+'s/cm'],
+                            'Flow': ['cfs', 'cfs', '%', 'minute'],
+                            'Stage': ['ft', 'ft', '%', 'minute']}
+
+
+    # used for plot title and axis titles, to convert abbreviations    
+    abbreviation_dict = {'Amp': 'Amplitude', 'Avg': 'Average', 'Mnly': 'Monthly'}
+    # convert abbreviations only if string ends with the key. 
+    abbreviation_end_of_str_dict = {'%Err': 'Err', 'Err': 'Error'}
+    for const_name in validation_metric_csv_filenames_dict:
+        plot_list = []
+
+        all_loc_metrics_df = pd.read_csv(validation_metric_csv_filenames_dict[const_name])
+        metrics_list = vartype_to_metric_list[const_name]
+        units_list = vartype_to_units_list[const_name]
+        print('metrics_list='+str(metrics_list))
+        all_loc_metrics_df.to_csv('all_loc_metrics_df.csv')
+        
+        df_list = []
+        document_plot_title_list = ['(a)', '(b)', '(c)', '(d)']
+        i = 0
+        for m, u in zip(metrics_list, units_list):
+
+            df = all_loc_metrics_df[['Location', 'DSM2 Run', m]]
+
+            print('about to create before file')
+            df.to_csv('d:/temp/000testdf_script_before.csv')
+            print('done creating before file')
+
+            df=_process_df_for_validation_bar_charts(const_name, vartype_to_station_list_dict, df)
+            df_list.append(df)
+            grid_style={'grid_line_color': 'black', 'xgrid_line_alpha': 0}
+
+            full_title = title='%s, %s,\nDSM2 v 8.3 vs DSM2 v8.2.1' % (m, const_name) # not used for technical memo
+            document_plot_title = document_plot_title_list[i]
+            for abbrev in abbreviation_dict:
+                m = m.replace(abbrev, abbreviation_dict[abbrev])
+            for abbrev in abbreviation_end_of_str_dict:
+                m = re.sub(abbrev+'$', abbreviation_end_of_str_dict[abbrev], m)
+
+            df.to_csv('d:/temp/000testdf_script.csv')
+            m_bars = hv.Bars(df, kdims=['Location', 'DSM2 Run']).opts(title=document_plot_title, width=350, height=350, 
+                                                                    xrotation=45, multi_level=False, 
+                                                                    legend_position='right', ylabel=m+' ('+u+')', 
+                                                                    xlabel='', color=shift_cycle(hv.Cycle('Category10')), 
+                                                                    gridstyle=grid_style, show_grid=True, show_legend=False,
+                                                                    shared_axes=False)
+            plot_list.append(m_bars)
+        
+            hv.save(m_bars, '%s_%s' % (m, const_name), fmt='png')
+            i+=1
+        layout = hv.Layout(plot_list).cols(2)
+        layout.opts(shared_axes=False)
+        hv.save(layout, validation_plot_output_folder+'/validation_metrics_layout'+const_name+'.png', fmt='png')
+        hv.save(layout, validation_plot_output_folder+'/validation_metrics_layout'+const_name+'.html', fmt='html')
