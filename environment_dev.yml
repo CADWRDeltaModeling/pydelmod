@@ -56,3 +56,12 @@ dependencies:
   - pdoc3
 #  - pip : # not working with the no-deps option. Here for doc purposes. Run by hand
 #    - --no-deps -e .
+
+# To resolve issue with Fiona ("module 'fiona' has no attribute '_loading'"), run the following:
+#   pip install fiona --no-deps --force-reinstall
+
+# To resolve issue with Pillow ("DLL load failed"), run the following:
+#   pip install Pillow --force-reinstall
+
+# Once the environment is set up, install pydelmod using:
+#   pip install -e .
