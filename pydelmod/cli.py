@@ -4,6 +4,8 @@ from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
+from pydelmod import create_ann_inputs
+
 import sys
 import click
 import panel as pn
@@ -67,6 +69,11 @@ def exec_checklist_dsm2(process_name, json_config_file):
     print(process_name, json_config_file)
     checklist_dsm2.run_checklist(process_name, json_config_file)
 
+@click.command()
+def exec_create_ann_inputs():
+    print('create ann inputs')
+    create_ann_inputs.create_ann_inputs()
+
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
@@ -74,6 +81,7 @@ main.add_command(output_map_plotter)
 main.add_command(exec_postpro_dsm2)
 main.add_command(exec_dsm2_chan_mann_disp)
 main.add_command(exec_checklist_dsm2)
+main.add_command(exec_create_ann_inputs)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
