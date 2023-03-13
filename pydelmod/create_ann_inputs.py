@@ -6,7 +6,7 @@ from pydsm.functions import tsmath
 
 
 def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part, primary_part_c_part_dict=None, \
-    primary_part_e_part_dict=None, primary_part_f_part_dict=None, daily_avg=True):
+    primary_part_e_part_dict=None, primary_part_f_part_dict=None, daily_avg=True, filter_b_part_numeric=False):
     '''
     Read each dss time series from specified b part, c part, e part, and filename, and return a 
     dataframe containing all time series individual columns
@@ -24,6 +24,7 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
     primary_part_e_part_dict (dict): key=primary part, value=e_part to use for filtering
     primary_part_f_part_dict (dict): key=primary part, value=f_part to use for filtering
     daily_avg (bool, optional): if true and data are not daily, only daily averaged data will be returned
+    filter_b_part_numeric (bool, optional): if true, remove any columns for which b part in dss path header is not numeric
     '''
     print('==============================================================')
     return_df = None
@@ -58,7 +59,8 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
                 filtered_df = filtered_df[(catdf.E==e_part)] if filtered_df is not None else catdf[(catdf.E==e_part)]
             if f_part is not None:
                 filtered_df = filtered_df[(catdf.F==f_part)] if filtered_df is not None else catdf[(catdf.F==f_part)]
-
+            if filter_b_part_numeric:
+                filtered_df = filtered_df[(catdf.B.str.isnumeric())]
             path_list = d.get_pathnames(filtered_df)
             for p in path_list:
                 df = None
@@ -226,16 +228,23 @@ def create_ann_inputs():
     drain_dcd_c_part_dss_filename_dict = {'DRAIN-FLOW': dcd_dss_file}
     drain_smcd_c_part_dss_filename_dict = {'DRAIN-FLOW': smcd_dss_file}
 
-    df_div_seep_dcd = get_dss_data(div_seep_dcd_c_part_dss_filename_dict, 'c_part')
-    df_div_seep_smcd = get_dss_data(div_seep_smcd_c_part_dss_filename_dict, 'c_part')
-    df_drain_dcd = get_dss_data(drain_dcd_c_part_dss_filename_dict, 'c_part')
-    df_drain_smcd = get_dss_data(drain_smcd_c_part_dss_filename_dict, 'c_part')
+    df_div_seep_dcd = get_dss_data(div_seep_dcd_c_part_dss_filename_dict, 'c_part', filter_b_part_numeric=True)
+    df_div_seep_smcd = get_dss_data(div_seep_smcd_c_part_dss_filename_dict, 'c_part', filter_b_part_numeric=True)
+    df_drain_dcd = get_dss_data(drain_dcd_c_part_dss_filename_dict, 'c_part', filter_b_part_numeric=True)
+    df_drain_smcd = get_dss_data(drain_smcd_c_part_dss_filename_dict, 'c_part', filter_b_part_numeric=True)
 
     df_div_seep_dcd['dcd_divseep_total']=df_div_seep_dcd[df_div_seep_dcd.columns].sum(axis=1)
     df_div_seep_smcd['smcd_divseep_total']=df_div_seep_smcd[df_div_seep_smcd.columns].sum(axis=1)
 
     df_drain_dcd['dcd_drain_total']=df_drain_dcd[df_drain_dcd.columns].sum(axis=1)
     df_drain_smcd['smcd_drain_total']=df_drain_smcd[df_drain_smcd.columns].sum(axis=1)
+
+    df_div_seep_dcd.to_csv('d:/temp/df_div_seep_dcd.csv')
+    df_div_seep_smcd.to_csv('d:/temp/df_div_seep_smcd.csv')
+    df_drain_dcd.to_csv('d:/temp/df_drain_dcd.csv')
+    df_drain_smcd.to_csv('d:/temp/df_drain_smcd.csv')
+
+
     cu_total_dcd = pd.merge(df_div_seep_dcd, df_drain_dcd, how='left', left_index=True, right_index=True)
     cu_total_smcd = pd.merge(df_div_seep_smcd, df_drain_smcd, how='left', left_index=True, right_index=True)
     cu_total = pd.merge(cu_total_dcd, cu_total_smcd, how='left', left_index=True, right_index=True)
