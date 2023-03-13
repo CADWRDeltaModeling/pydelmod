@@ -11,20 +11,21 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
     Read each dss time series from specified b part, c part, e part, and filename, and return a 
     dataframe containing all time series individual columns
 
-    The 'primary pathname part' is the pathname part for which we will be extracting one or more
-    time series. For example:
-    1) if we want data for a specific list of stations, then 'b_part' will
-    be the primary pathname part. This is used for getting flow or ec data for specific stations. This
-    should be used when we want one time series per b part.
-    2) If we want all div-flow, seep-flow, or drain-flow data, then 'e_part' will be the primary 
-    pathname part. This is typically used when we want multiple time series per c part.
-    b_part_dss_filename_dict: key=b part, value=DSS filename
-    b_part_operation_dict: key = b part, value = mathematical operation, + - * /
-    b_part_c_part_dict: optional: key=b part, value=c part that should be used with the b part
-    b_part_e_part_dict: optional: key=b part, value=e part that should be used with the e part
+    primary_pathname_part (str): 
+            The 'primary pathname part' is the pathname part for which we will be extracting one or more
+        time series. For example:
+        1) if we want data for a specific list of stations, then 'b_part' will
+            be the primary pathname part. This is used for getting flow or ec data for specific stations. This
+            should be used when we want one time series per b part.
+        2) If we want all div-flow, seep-flow, or drain-flow data, then 'e_part' will be the primary 
+            pathname part. This is typically used when we want multiple time series per c part.
+    primary_part_dss_filename_dict (dict): key=b part, value=DSS filename
+    primary_part_c_part_dict (dict): key=primary part, value=c_part to use for filtering
+    primary_part_e_part_dict (dict): key=primary part, value=e_part to use for filtering
+    primary_part_f_part_dict (dict): key=primary part, value=f_part to use for filtering
+    daily_avg (bool, optional): if true and data are not daily, only daily averaged data will be returned
     '''
     print('==============================================================')
-
     return_df = None
     for pp in primary_pathname_part_dss_filename_dict:
         dss_filename = primary_pathname_part_dss_filename_dict[pp]
@@ -39,8 +40,6 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
             f_part = primary_part_f_part_dict[pp] if (primary_part_f_part_dict is not None and b_part in primary_part_f_part_dict) else None
             print('bcef='+str(b_part)+','+str(c_part)+','+str(e_part)+','+str(f_part))
         elif primary_pathname_part is 'c_part':
-            # print('setting c_part to '+pp)
-            # print('filename='+dss_filename)
             c_part=pp
         else:
             print('FATAL ERROR! Primary pathname part is not b_part or c_part!')
@@ -50,9 +49,6 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
             catdf = d.read_catalog()
             dss_file_parts = dss_filename.split('/')
             dfilename = dss_file_parts[len(dss_file_parts)-1]
-
-            catdf.to_csv('D:/temp/'+dfilename+'catdf.csv')
-
             filtered_df = None
             if b_part is not None:
                 filtered_df = filtered_df[(catdf.B==b_part)] if filtered_df is not None else catdf[(catdf.B==b_part)]
@@ -63,39 +59,6 @@ def get_dss_data(primary_pathname_part_dss_filename_dict, primary_pathname_part,
             if f_part is not None:
                 filtered_df = filtered_df[(catdf.F==f_part)] if filtered_df is not None else catdf[(catdf.F==f_part)]
 
-
-            # if b_part is not None and c_part is not None and e_part is not None and f_part is not None:
-            #     filtered_df = catdf[(catdf.B==b_part) & (catdf.C==c_part) & (catdf.E==e_part) & (catdf.F==f_part)]
-            # elif b_part is not None and c_part is None and e_part is None and f_part is not None:
-            #     filtered_df = catdf[(catdf.B==b_part) & (catdf.F==f_part)]
-            #     print('filtered usiong f part')
-            # elif b_part is not None and c_part is not None and e_part is not None and f_part is None:
-            #     filtered_df = catdf[(catdf.B==b_part) & (catdf.C==c_part) & (catdf.E==e_part)]
-            #     # print('filtered by bce, head='+str(filtered_df.head()))
-            # elif b_part is not None and c_part is not None and e_part is None and f_part is None:
-            #     filtered_df = catdf[(catdf.B==b_part) & (catdf.C==c_part)]
-            # elif b_part is not None and c_part is None and e_part is not None and f_part is None:
-            #     filtered_df = catdf[(catdf.B==b_part) & (catdf.E==e_part)]
-            # elif c_part is not None and b_part is None and e_part is None and f_part is None:
-            #     print('=====================================================================================')
-            #     print('dss filename='+dss_filename)
-            #     print('before filtering by c part. C part, num results = '+c_part+','+str(catdf.shape[0]))
-            #     # for row in catdf:
-            #     #     print('row, len(row)='+str(row)+','+str(len(row)))
-            #     #     print('type of row='+str(type(row)))
-            #     #     print('isdigit, is c part:'+ row[2].isdigit()+','+row[3] is c_part)
-            #     # filtered_df = catdf[(catdf.C==c_part) & ((catdf.B.str.isdigit()) | (catdf.B.str.lower() == 'bbid'))]
-            #     catdf.B = catdf.B.str.replace(" ", "")
-            #     # filtered_df = catdf[(catdf.C==c_part) & ((catdf.B.str.isnumeric()) | (catdf.B.str.lower() == 'bbid'))]
-            #     # filtered_df = catdf[(catdf.C==c_part) & (catdf.B.str.isnumeric())]
-            #     filtered_df = catdf[(catdf.C==c_part)]
-            #     print('*************************************************************************************')
-            #     print('after filtering by c part. C part, num results = '+c_part+','+str(filtered_df.shape[0]))
-            #     print(str(filtered_df.columns))
-            #     print('*************************************************************************************')
-            #     print('=====================================================================================')
-            # else:
-            #     filtered_df = catdf[(catdf.B==pp)]
             path_list = d.get_pathnames(filtered_df)
             for p in path_list:
                 df = None
