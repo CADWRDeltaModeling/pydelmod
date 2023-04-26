@@ -140,6 +140,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     vartype_timewindow_dict = config_data['vartype_timewindow_dict']
     timewindow = timewindow_dict[vartype_timewindow_dict[vartype.name]]
     tech_memo_validation_metrics = options_dict['tech_memo_validation_metrics'] if 'tech_memo_validation_metrics' in options_dict else False
+    manuscript_layout = options_dict['manuscript_layout'] if 'manuscript_layout' in options_dict else False
 
     zoom_inst_plot = options_dict['zoom_inst_plot']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
@@ -157,7 +158,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
             tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
                 invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data,
-                tech_memo_validation_metrics=tech_memo_validation_metrics)
+                tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_layout=manuscript_layout)
 
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
@@ -279,6 +280,12 @@ def merge_statistics_files(vartype, config_data):
     This method merges all of them.
     """
     options_dict = config_data['options_dict']
+    col_rename_dict = {'regression_equation': 'Equation', 'r2': 'R Squared', 'mean_error': 'Mean Error', 'nmean_error': 'NMean Error', 'nmse': 'NMSE', 
+                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
+                        'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
+                        'mnly_nmean_error': 'Mnly NMean Err', 'mnly_nmse': 'Mnly NMSE', 
+                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 'mnly_percent_bias': 'Mnly PBIAS', 'mnly_rsr': 'Mnly RSR', 
+                        'mnly_rmse': 'Mnly RMSE', 'Study': 'Study', 'Amp Avg %Err': 'Amp Avg %Err', 'Avg Phase Err': 'Avg Phase Err'}
 
     import glob, os
     print('merging statistics files')
@@ -293,6 +300,9 @@ def merge_statistics_files(vartype, config_data):
             frames.append(pd.read_csv(f))
         if len(frames)>0:
             result_df = pd.concat(frames)
+
+            result_df.rename(columns=col_rename_dict, inplace=True)
+
             result_df.sort_values(by=['Location', 'DSM2 Run'], inplace=True, ascending=True)
             # result_df.to_csv(output_dir + '1_summary_statistics_all_'+vartype.name+'.csv', index=False)
             result_df.to_csv(output_dir + '1_' + fp + 'all_'+vartype.name+'.csv', index=False)

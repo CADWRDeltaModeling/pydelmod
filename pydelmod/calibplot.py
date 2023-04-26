@@ -73,10 +73,20 @@ def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
             logging.error(errmsg)
     # This doesn't work. Need to find a way to get this working.
     # plt = [df[start_dt:end_dt].hvplot(label=name, x_range=(timewindow)) if df is not None else hv.Curve(None, label=name)
-    plt = [df[start_dt:end_dt].hvplot(label=name) if df is not None else hv.Curve(None, label=name)
+
+    from bokeh.models.tickers import MonthsTicker
+    # p.xaxis.ticker = MonthsTicker()
+
+
+
+
+    plt = [df[start_dt:end_dt].hvplot(label=name, ticker=MonthsTicker()) if df is not None else hv.Curve(None, label=name)
         for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
         if c.name != '' else c for c in plt]
+
+    # plt.xaxis.ticker = MonthsTicker()
+
     return hv.Overlay(plt)
 
 
@@ -340,6 +350,7 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
         print(errmsg)
         logging.info(errmsg)
     dfmetrics = None
+
     if metrics_calculated:
         dfmetrics = pd.concat([pd.DataFrame(arr)
                             for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, nmean_errors, mses, nmses, rmses, nrmses, \
@@ -480,10 +491,10 @@ def sanitize_name(name):
     #     gate_value_index = self.gate_time_series_df.get_loc(datetime) - 1
     #     return self.gate_time_series_df[[gate_value_index]]['POS']
 
-def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, flow_in_thousands=False, units=None,
-                              inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False,
-                              zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False,
-                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
+def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, manuscript_layout=False, flow_in_thousands=False, \
+    units=None, inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False, \
+        zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False, \
+            remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
     """Builds calibration plot template
 
     Args:
@@ -492,6 +503,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         vartype (VarType): name,units
         timewindow (str): timewindow as start_date_str "-" end_date_str or "" for full availability
         tidal_template (bool, optional): If True include tidal plots. Defaults to False.
+        manuscript_layout (bool, optional): If True, no header, no scatter plot, no metrics table
         flow_in_thousands (bool, optional): If True, template is for flow data, and
             1) y axis title will include the string '(1000 CFS)', and
             2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
@@ -528,10 +540,25 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # else:
     #     print('Not using gate information for plots/metrics data masking because insufficient information provided.')
 
-    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot, mask_data=mask_data)
-    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, units=units, 
+    tsp = build_inst_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands, manuscript_layout=manuscript_layout, units=units, inst_plot_timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot, mask_data=mask_data)
+    gtsp = build_godin_plot(pp, location, vartype, flow_in_thousands=flow_in_thousands,  manuscript_layout=manuscript_layout, units=units, 
         time_window_exclusion_list=location.time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
         threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data)
+
+    # trying to add labels to beginning and end of x axis, but this isn't working.
+    # print('gtsp='+str(gtsp))
+
+    # # print('p='+str(p))
+    # gtsp.xaxis.axis_label = "X-axis"
+
+    # # create left and right labels
+    # left_label = Label(x=10, y=0, text="Left Label", render_mode="css", text_font_size="10pt")
+    # right_label = Label(x=p.plot_width-10, y=0, text="Right Label", render_mode="css", text_font_size="10pt")
+
+    # # add labels to the plot
+    # gtsp.add_layout(left_label, 'below')
+    # gtsp.add_layout(right_label, 'below')
+
 
     scatter_plot_with_toolbar = None
     scatter_plot_without_toolbar = None
@@ -540,7 +567,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     kdeplots_with_toolbar = None
     kdeplots_without_toolbar = None
     # metrics_table_name = ''
-
+ 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
         scatter_plot_with_toolbar = build_scatter_plots(pp, flow_in_thousands=flow_in_thousands, units=units,
@@ -564,11 +591,13 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         #     metrics_table_dict.update({'open': metrics_table_open})
         #     metrics_table_dict.update({'closed': metrics_table_closed})
         # else:
+        manuscript_metrics = manuscript_layout and flow_in_thousands
 
-        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, units=units,
-                            layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, invert_timewindow_exclusion=invert_timewindow_exclusion,
-                            threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data,
-                            tech_memo_validation_metrics=tech_memo_validation_metrics)
+        dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, \
+            units=units, layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, \
+                invert_timewindow_exclusion=invert_timewindow_exclusion,\
+                    threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data, \
+                        tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_metrics=manuscript_metrics)
         # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
         # metrics_table_dict.update({'all': metrics_table})
 
@@ -580,6 +609,8 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     
     # # create plot/metrics template
     header_panel = pn.panel(f'## {location.description} ({location.name}/{vartype.name})')
+    if manuscript_layout:
+        header_panel = pn.panel('')
     # # do this if you want to link the axes
     # # tsplots2 = (tsp.opts(width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
     # # start_dt = dflist[0].index.min()
@@ -588,10 +619,10 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
     add_toolbars = True
     column_with_toolbar = create_layout(scatter_plot_with_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_with_toolbar, \
-        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel)
+        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=manuscript_layout)
     add_toolbars = False
     column_without_toolbar = create_layout(scatter_plot_without_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_without_toolbar, \
-        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel)
+        tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=manuscript_layout)
     column_dict = {'with': column_with_toolbar, 'without': column_without_toolbar}
 
     # now merge all metrics dataframes, adding a column identifying the gate status
@@ -617,9 +648,11 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
     return column_dict, dfdisplayed_metrics
 
 def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
-    tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel):
+    tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=False):
     '''
     Creates Holoviews Column object with plots and metrics.
+
+    manuscript_layout (bool, optional): if true, only first two items included in layout
     '''
     # Need to set clone=True when changing options below. This prevents changing the original objects.
 
@@ -639,7 +672,7 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
                     header_panel,
                     tsp.opts(width=900, title='(a)', legend_position='right', clone=True),
                     gtsp.opts(width=900, title='(b)', legend_position='right', clone=True))
-            if obs_data_included:
+            if obs_data_included and not manuscript_layout:
                 if not add_toolbars:
                     scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, toolbar=None, title='(c)', clone=True))
                 else: 
@@ -659,7 +692,7 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
                 column = pn.Column(
                     header_panel,
                     pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)', legend_position='right', clone=True)))
-            if obs_data_included:
+            if obs_data_included and not manuscript_layout:
                 scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title='(b)', clone=True))
                 if metrics_table is not None:
                     scatter_and_metrics_row.append(metrics_table.opts(title='(c)', fontscale=1, clone=True))
@@ -702,7 +735,8 @@ def get_units(flow_in_thousands=False, units=None):
     return unit_string
 
 
-def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, inst_plot_timewindow=None, zoom_inst_plot=False, mask_data=True):
+def build_inst_plot(pp, location, vartype, flow_in_thousands=False, manuscript_layout=False, units=None, inst_plot_timewindow=None, \
+    zoom_inst_plot=False, mask_data=True):
     """Builds calibration plot template
 
     Args:
@@ -712,6 +746,7 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
         flow_in_thousands (bool, optional): If True, template is for flow data, and
             1) y axis title will include the string '(1000 CFS)', and
             2) all flow values in the inst, godin, and scatter plots will be divided by 1000.
+        csdp_manuscript (bool, optional): If True, a few things will be different, such as cms vs cfs
         units (str, optional): a string representing the units of the data. examples: CFS, FEET, UMHOS/CM.
             Included in axis titles if specified.
         inst_plot_timewindow (str, optional): Defines a separate timewindow to use for the instantaneous plot.
@@ -725,16 +760,34 @@ def build_inst_plot(pp, location, vartype, flow_in_thousands=False, units=None, 
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     # plot_data are scaled, if flow_in_thousands == True
     tsp_plot_data = [p.df for p in pp]
+    cfs_to_cms = 0.028316847
 
     if flow_in_thousands:
-        tsp_plot_data = [p.df/1000.0 if p.df is not None else None for p in pp]
+        if manuscript_layout: 
+            y_axis_label = 'Flow (CMS)'
+            tsp_plot_data = [p.df * cfs_to_cms if p.df is not None else None for p in pp]
+        else:
+            tsp_plot_data = [p.df/1000.0 if p.df is not None else None for p in pp]
+
     # create plots: instantaneous, godin, and scatter
+
+    i=0
+    for tpd in tsp_plot_data:
+        datatype = None
+        if i==0:
+            datatype = 'obs'
+        elif i==1:
+            datatype = 'model'
+        # tpd.to_csv('plot_df_files/'+location.name+'_'+y_axis_label+'_'+datatype+'.csv') 
+        i+=1
+
+
     tsp = tsplot(tsp_plot_data, [p.study.name for p in pp], timewindow=inst_plot_timewindow, zoom_inst_plot=zoom_inst_plot).opts(
         ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
     tsp = tsp.opts(opts.Curve(color=hv.Cycle('Category10')))
     return tsp
 
-def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None, time_window_exclusion_list=None, \
+def build_godin_plot(pp, location, vartype, flow_in_thousands=False, manuscript_layout=False, units=None, time_window_exclusion_list=None, \
     invert_timewindow_exclusion=False, threshold_value=None, remove_data_above_threshold=True, mask_data=True):
     """Builds calibration plot template
 
@@ -757,6 +810,8 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
     unit_string = get_units(flow_in_thousands, units)
     y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
     godin_y_axis_label = 'Godin '+y_axis_label
+    if manuscript_layout:
+        godin_y_axis_label = 'Tidal Avg. Flow (CMS)'
     # plot_data are scaled, if flow_in_thousands == True
     # gtsp_plot_data = [p.gdf for p in pp]
 
@@ -778,7 +833,7 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
 
     # gtsp_plot_data = [remove_data_above_below_threshold(p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold) \
     #     if p is not None else None for p in gtsp_plot_data]
-
+    cfs_to_cms = 0.028316847
     gtsp_plot_data = []
     for p in pp:
         if p.gdf is not None:
@@ -788,15 +843,46 @@ def build_godin_plot(pp, location, vartype, flow_in_thousands=False, units=None,
                 new_p = p.gdf
             # new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
             # new_p = remove_data_above_below_threshold(new_p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
-            if flow_in_thousands:
+            if manuscript_layout:
+                new_p = new_p * cfs_to_cms
+            elif flow_in_thousands:
                 new_p = new_p/1000.0 if new_p is not None else None
             gtsp_plot_data.append(new_p)
         else:
             gtsp_plot_data.append(None)
 
+    i=0
+    for gpd in gtsp_plot_data:
+        datatype = None
+        if i==0:
+            datatype = 'obs'
+        elif i==1:
+            datatype = 'model'
+
+        # gpd.to_csv('plot_df_files/'+location.name+'_godin_'+y_axis_label+'_'+datatype+'.csv') 
+        i+=1
+
+
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle)
     gtsp = gtsp.opts(opts.Curve(color=hv.Cycle('Category10')))
+
+    # trying to add labels to beginning and end of x axis, but this isn't working.
+    # print('gtsp='+str(gtsp))
+
+    # # print('p='+str(p))
+    # gtsp.xaxis.axis_label = "X-axis"
+
+    # # create left and right labels
+    # left_label = Label(x=10, y=0, text="Left Label", render_mode="css", text_font_size="10pt")
+    # right_label = Label(x=p.plot_width-10, y=0, text="Right Label", render_mode="css", text_font_size="10pt")
+
+    # # add labels to the plot
+    # gtsp.add_layout(left_label, 'below')
+    # gtsp.add_layout(right_label, 'below')
+
+
+
     return gtsp
 
 # def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
@@ -921,29 +1007,36 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
     return metrics_table
 
 def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data, pp, tidal_template, amp_avg_pct_errors, \
-    amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics=False):
+    amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics=False, manuscript_metrics=False):
     '''
     Create dataframe and holoviews metrics table for calibration metrics.
     Metrics are selected based on options passed to method 
     '''
     dfdisplayed_metrics = None
     metrics_table = None
+    # this is used for renaming column headers that come from the method that calculates metrics.
+    # Don't make them too long, because they need to be displayed in a holoviews table with no wrapping.
+    col_rename_dict = {'regression_equation': 'Equation', 'r2': 'R Squared', 'mean_error': 'Mean Error', 'nmean_error': 'NMean Error', 'nmse': 'NMSE', 
+                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
+                        'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
+                        'mnly_nmean_error': 'Mnly NMean Err', 'mnly_nmse': 'Mnly NMSE', 
+                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 'mnly_percent_bias': 'Mnly PBIAS', 'mnly_rsr': 'Mnly RSR', 
+                        'mnly_rmse': 'Mnly RMSE', 'Study': 'Study', 'Amp Avg %Err': 'Amp Avg %Err', 'Avg Phase Err': 'Avg Phase Err'}
+
     if dfmetrics is not None:
         if tidal_template:
+            # ok to include things you don't need here, but don't exclude anything you might need later
             cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
             if tech_memo_validation_metrics:
                 cols.append('rmse')
-            dfdisplayed_metrics = dfmetrics.loc[:, cols]
-            dfdisplayed_metrics['Amp Avg pct Err'] = amp_avg_pct_errors
-            dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
+            if manuscript_metrics:
+                cols = ['r2', 'percent_bias', 'rsr']
 
+            dfdisplayed_metrics = dfmetrics.loc[:, cols]
+            dfdisplayed_metrics['Amp Avg %Err'] = amp_avg_pct_errors
+            dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
             dfdisplayed_metrics.index.name = 'DSM2 Run'
-            c = ['Equation', 'R Squared', 'Mean Error','NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
-            if tech_memo_validation_metrics:
-                c.append('RMSE')
-            c.append('Amp Avg %Err')
-            c.append('Avg Phase Err')
-            dfdisplayed_metrics.columns = c
+
             # now create a holoviews table object displaying the metrics
             metrics_list_dict = {}
             for m in dfdisplayed_metrics.columns:
@@ -952,39 +1045,46 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
                 else:
                     # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
                     metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
+            # if you need to change the list of metrics that will be displayed in the table, do it here.
+            # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
             metrics_list_for_hv_table = None
             if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
             else:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR']
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
+
             if tech_memo_validation_metrics:
-                metrics_list_for_hv_table.append('RMSE')
+                metrics_list_for_hv_table.append('rmse')
             metrics_list_for_hv_table.append('Amp Avg %Err')
             metrics_list_for_hv_table.append('Avg Phase Err')
+            # we now have metrics_list_for_hv_table, which is a list of metrics that we want to use
+            # and metrics_list_dict, with key = metric name, value = list of values. Included is a list of Study names.
+            # rename all the metrics names in the list, and in the dict (the keys)
+            # rename list elements; see https://stackoverflow.com/questions/17295776/how-to-replace-elements-in-a-list-using-dictionary-lookup
+            metrics_list_for_hv_table_renamed = list((pd.Series(metrics_list_for_hv_table)).map(col_rename_dict))
+            # rename dictionary keys; see https://codereview.stackexchange.com/questions/263904/efficient-renaming-of-dict-keys-from-another-dicts-values-python
+            # metrics_list_dict_renamed = {col_rename_dict[k]: v for k, v in metrics_list_dict.items()}
+            metrics_list_dict_renamed = {col_rename_dict.get(k, k): v for k, v in metrics_list_dict.items()}
 
-            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+            # if manuscript_metrics:
+            #     metrics_list_for_hv_table = ['Study', 'R Squared', 'PBIAS', 'RSR']
 
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict_renamed, metrics_list_for_hv_table_renamed)
         else:
             # not tidal: EC data
             dfmetrics_monthly = calculate_metrics(
                 [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
+            # rename columns to include mnly (monthly)
+            dfmetrics_monthly = dfmetrics_monthly.add_prefix('mnly_')
 
             # template for nontidal (EC) data
-            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
-            if tech_memo_validation_metrics:
-                cols.append('rmse')
+            # ok to include things you don't need here, but don't exclude anything you might need later
+            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
 
             dfdisplayed_metrics = dfmetrics.loc[:, cols]
             dfdisplayed_metrics = pd.concat(
-                [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['nmean_error', 'nrmse']]], axis=1)
+                [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['mnly_mean_error', 'mnly_rmse', 'mnly_nmean_error', 'mnly_nrmse']]], axis=1)
             dfdisplayed_metrics.index.name = 'DSM2 Run'
-
-            c = ['Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
-            if tech_memo_validation_metrics:
-                c.append('RMSE')
-            c.append('Mnly Mean Err')
-            c.append('Mnly RMSE')
-            dfdisplayed_metrics.columns = c
 
             dfdisplayed_metrics.style.format(format_dict)
             # Ideally, the columns should be sized to fit the data. This doesn't work properly--replaces some values with blanks
@@ -996,18 +1096,29 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
                     metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
                 else:
                     metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
-                
             # now create a holoviews table object displaying the metrics
+            # if you need to change the list of metrics that will be displayed in the table, do it here.
+            # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
             metrics_list_for_hv_table = None
+
             if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'NSE', 'PBIAS', 'RSR']
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
             else:
-                metrics_list_for_hv_table = ['Study', 'Equation', 'R Squared', 'Mean Error', 'NMean Error', 'NMSE', 'NRMSE', 'PBIAS', 'RSR']
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
+
             if tech_memo_validation_metrics:
-                metrics_list_for_hv_table.append('RMSE')
-            metrics_list_for_hv_table.append('Mnly Mean Err')
-            metrics_list_for_hv_table.append('Mnly RMSE')
-            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict, metrics_list_for_hv_table)
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'rmse', 'mnly_mean_error', 'mnly_rmse']
+
+            # we now have metrics_list_for_hv_table, which is a list of metrics that we want to use
+            # and metrics_list_dict, with key = metric name, value = list of values. Included is a list of Study names.
+            # rename all the metrics names in the list, and in the dict (the keys)
+            # rename list elements; see https://stackoverflow.com/questions/17295776/how-to-replace-elements-in-a-list-using-dictionary-lookup
+            metrics_list_for_hv_table_renamed = list((pd.Series(metrics_list_for_hv_table)).map(col_rename_dict))
+            # rename dictionary keys; see https://codereview.stackexchange.com/questions/263904/efficient-renaming-of-dict-keys-from-another-dicts-values-python
+            # metrics_list_dict_renamed = {col_rename_dict[k]: v for k, v in metrics_list_dict.items()}
+            metrics_list_dict_renamed = {col_rename_dict.get(k, k): v for k, v in metrics_list_dict.items()}
+
+            metrics_table = create_hv_metrics_table(study_list, metrics_list_dict_renamed, metrics_list_for_hv_table_renamed)
     else:
         print('build_metrics_table: dfmetrics is none, so not creating metrics table for location.name, vartype: '+location.name+','+str(vartype))
 
@@ -1016,7 +1127,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
                               time_window_exclusion_list=None, invert_timewindow_exclusion=False, threshold_value=None,
-                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
+                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False, manuscript_metrics=False):
     """Builds calibration plot template
 
     Args:
@@ -1063,8 +1174,13 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         gpd.dropna(inplace=True)
         gtsp_plot_data.append(gpd)
     # data have been removed; no need to pass time_window_exclusion_list to calculate_metrics calls
+
+    cfs_to_cms = 0.028316847
     if flow_in_thousands:
-        splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
+        if manuscript_metrics:
+            splot_metrics_data = [g.resample('D').mean()*1000.0*cfs_to_cms if g is not None else None for g in gtsp_plot_data]
+        else:
+            splot_metrics_data = [g.resample('D').mean()*1000.0 if g is not None else None for g in gtsp_plot_data]
     else:
         splot_metrics_data = [g.resample('D').mean() if g is not None else None for g in gtsp_plot_data]
 
@@ -1092,10 +1208,21 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     metrics_table = None
     format_dict = {'Equation': '{:s}', 'R Squared': '{:.2f}', 'Mean Error': '{:.1f}', 'NMean Error': '{:.3f}', 'NMSE': '{:.1}', 'NRMSE': '{:.4}',
             'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
-            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}', 'RMSE': '{:.2f}'}
+            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}', 'RMSE': '{:.2f}',
+            'Mnly Equation': '{:s}', 'Mnly R Squared': '{:.2f}', 'Mnly Mean Error': '{:.1f}', 'Mnly NMean Error': '{:.3f}', 'Mnly NMSE': '{:.1}', 'Mnly NRMSE': '{:.4}',
+            'Mnly Amp Avg %Err': '{:.1f}', 'Mnly Avg Phase Err': '{:.2f}', 'Mnly NSE': '{:.2f}', 'Mnly PBIAS': '{:.1f}', 'Mnly RSR': '{:.2f}',
+
+            'regression_equation': '{:s}', 'r2': '{:.2f}', 'mean_error': '{:.1f}', 'nmean_error': '{:.3f}', 'nmse': '{:.1}', 'nrmse': '{:.4}',
+            'rmse': '{:.4}', 'mnly_nmean_error': '{:4}','mnly_mean_err': '{:4}','mnly_mean_error': '{:4}', 'mnly_nrmse': '{:.4}', 'mnly_rmse': '{:.4}',
+            'nash_sutcliffe': '{:.2f}', 'percent_bias': '{:.1f}', 'rsr': '{:.2f}'
+            
+            }
+
+
 
     dfdisplayed_metrics, metrics_table = create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data,\
-         pp, tidal_template, amp_avg_pct_errors, amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics)
+         pp, tidal_template, amp_avg_pct_errors, amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics,\
+            manuscript_metrics=manuscript_metrics)
 
     return dfdisplayed_metrics, metrics_table
 
@@ -1187,11 +1314,7 @@ def _process_df_for_validation_bar_charts(vartype, vartype_to_station_list_dict,
     df.drop(['new loc', 'new loc2'], axis=1, inplace=True)
 
     stations_to_keep = vartype_to_station_list_dict[vartype]
-
-    print('stations_to_keep='+str(stations_to_keep))
-
     df = df.loc[df['Location'].isin(stations_to_keep)]
-    df.to_csv('d:/temp/r2_3.csv')
     return df
 
 
@@ -1208,7 +1331,6 @@ def create_validation_bar_charts(validation_plot_output_folder, validation_metri
                             'Flow': ['cfs', 'cfs', '%', 'minute'],
                             'Stage': ['ft', 'ft', '%', 'minute']}
 
-
     # used for plot title and axis titles, to convert abbreviations    
     abbreviation_dict = {'Amp': 'Amplitude', 'Avg': 'Average', 'Mnly': 'Monthly'}
     # convert abbreviations only if string ends with the key. 
@@ -1219,20 +1341,13 @@ def create_validation_bar_charts(validation_plot_output_folder, validation_metri
         all_loc_metrics_df = pd.read_csv(validation_metric_csv_filenames_dict[const_name])
         metrics_list = vartype_to_metric_list[const_name]
         units_list = vartype_to_units_list[const_name]
-        print('metrics_list='+str(metrics_list))
         all_loc_metrics_df.to_csv('all_loc_metrics_df.csv')
         
         df_list = []
         document_plot_title_list = ['(a)', '(b)', '(c)', '(d)']
         i = 0
         for m, u in zip(metrics_list, units_list):
-
             df = all_loc_metrics_df[['Location', 'DSM2 Run', m]]
-
-            print('about to create before file')
-            df.to_csv('d:/temp/000testdf_script_before.csv')
-            print('done creating before file')
-
             df=_process_df_for_validation_bar_charts(const_name, vartype_to_station_list_dict, df)
             df_list.append(df)
             grid_style={'grid_line_color': 'black', 'xgrid_line_alpha': 0}
@@ -1244,7 +1359,6 @@ def create_validation_bar_charts(validation_plot_output_folder, validation_metri
             for abbrev in abbreviation_end_of_str_dict:
                 m = re.sub(abbrev+'$', abbreviation_end_of_str_dict[abbrev], m)
 
-            df.to_csv('d:/temp/000testdf_script.csv')
             m_bars = hv.Bars(df, kdims=['Location', 'DSM2 Run']).opts(title=document_plot_title, width=350, height=350, 
                                                                     xrotation=45, multi_level=False, 
                                                                     legend_position='right', ylabel=m+' ('+u+')', 
