@@ -1,12 +1,12 @@
 name: pydelmod
 channels:
-  - cadwr-dms
-  - pyviz
-  - defaults
-  - plotly
   - conda-forge
+  - cadwr-dms
+#  - pyviz
+#  - defaults
+#  - plotly
 dependencies:
-  - python=3.7
+  - python=3.8
   - pip
   # first our packages
   - pyhecdss
@@ -36,7 +36,11 @@ dependencies:
   # then plot stuff
   - matplotlib
   - geoviews
+  # later versions are not compatible with the current geoviews
+#  - holoviews=1.14.7
+#  - jinja2=3.0.3
   - holoviews
+  - jinja2
   - hvplot
   - jupyter
   - plotly-orca

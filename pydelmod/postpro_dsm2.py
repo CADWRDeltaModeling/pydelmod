@@ -145,17 +145,18 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     zoom_inst_plot = options_dict['zoom_inst_plot']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
     mask_plot_metric_data = options_dict['mask_plot_metric_data'] if 'mask_plot_metric_data' in options_dict else True
-    flow_or_stage = (vartype.name == 'FLOW') or (vartype.name == 'STAGE')
+    # Flow and stage are tidal (also certain water quality constituents)
+    tidal_data = (vartype.name != 'EC')
     if location=='RSAC128-RSAC123':
         print('cross-delta flow')
-        flow_or_stage = False
+        tidal_data = False
     flow_in_thousands = (vartype.name == 'FLOW')
     units = vartype.units
     include_kde_plots = options_dict['include_kde_plots']
 
     calib_plot_template_dict, metrics_df = \
         calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
-            tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
+            tidal_template=tidal_data, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
                 invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data,
                 tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_layout=manuscript_layout)

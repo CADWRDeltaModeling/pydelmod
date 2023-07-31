@@ -65,8 +65,8 @@ def prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_
 
     print('You should now execute the following commands:')
     print('cd ../geom')
-    print('ren '+ci_filename_prefix+'.inp ', ci_filename_prefix+'_prev.inp')
-    print('ren '+ci_filename_prefix+'_new.inp ', ci_filename_prefix+'.inp')
+    print('cp '+ci_filename_prefix+'.inp ', ci_filename_prefix+'_prev.inp')
+    print('cp '+ci_filename_prefix+'_new.inp ', ci_filename_prefix+'.inp')
 
     # These commands don't work--some kind of permission error
     # rename existing file, adding _prev to end
