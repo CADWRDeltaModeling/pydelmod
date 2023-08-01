@@ -74,19 +74,15 @@ def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
     # This doesn't work. Need to find a way to get this working.
     # plt = [df[start_dt:end_dt].hvplot(label=name, x_range=(timewindow)) if df is not None else hv.Curve(None, label=name)
 
-    from bokeh.models.tickers import MonthsTicker
-    # p.xaxis.ticker = MonthsTicker()
+    from bokeh.models import DatetimeTickFormatter
 
 
 
 
-    plt = [df[start_dt:end_dt].hvplot(label=name, ticker=MonthsTicker()) if df is not None else hv.Curve(None, label=name)
+    plt = [df[start_dt:end_dt].hvplot(label=name, xformatter=DatetimeTickFormatter(years='%b-%Y',months='%b-%y', days='%d-%b-%y')) if df is not None else hv.Curve(None, label=name)
         for df, name in zip(dflist, names)]
     plt = [c.redim(**{c.vdims[0].name:c.label, c.kdims[0].name: 'Time'})
         if c.name != '' else c for c in plt]
-
-    # plt.xaxis.ticker = MonthsTicker()
-
     return hv.Overlay(plt)
 
 
