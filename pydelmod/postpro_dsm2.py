@@ -141,7 +141,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     timewindow = timewindow_dict[vartype_timewindow_dict[vartype.name]]
     tech_memo_validation_metrics = options_dict['tech_memo_validation_metrics'] if 'tech_memo_validation_metrics' in options_dict else False
     manuscript_layout = options_dict['manuscript_layout'] if 'manuscript_layout' in options_dict else False
-
+    include_inst_plot_dict = config_data['include_inst_plot_dict'] if 'include_inst_plot_dict' in config_data else None
     zoom_inst_plot = options_dict['zoom_inst_plot']
     gate_file_dict = config_data['gate_file_dict'] if 'gate_file_dict' in config_data else None
     mask_plot_metric_data = options_dict['mask_plot_metric_data'] if 'mask_plot_metric_data' in options_dict else True
@@ -154,8 +154,19 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
     units = vartype.units
     include_kde_plots = options_dict['include_kde_plots']
 
+    include_inst_plot = True
+    if include_inst_plot_dict is None:
+        if vartype.name == 'EC':
+            include_inst_plot = False
+    else:
+        if vartype.name in include_inst_plot_dict:
+            include_inst_plot = include_inst_plot_dict[vartype.name]
+        else:
+            if vartype.name == 'EC':
+                include_inst_plot = False
+
     calib_plot_template_dict, metrics_df = \
-        calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
+        calibplot.build_calib_plot_template(studies, location, vartype, timewindow, include_inst_plot,\
             tidal_template=tidal_data, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
                 invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data,

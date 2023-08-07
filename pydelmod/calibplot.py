@@ -487,7 +487,7 @@ def sanitize_name(name):
     #     gate_value_index = self.gate_time_series_df.get_loc(datetime) - 1
     #     return self.gate_time_series_df[[gate_value_index]]['POS']
 
-def build_calib_plot_template(studies, location, vartype, timewindow, tidal_template=False, manuscript_layout=False, flow_in_thousands=False, \
+def build_calib_plot_template(studies, location, vartype, timewindow, include_inst_plot, tidal_template=False, manuscript_layout=False, flow_in_thousands=False, \
     units=None, inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False, \
         zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False, \
             remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
@@ -498,6 +498,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
         location (Location): name,bpart,description
         vartype (VarType): name,units
         timewindow (str): timewindow as start_date_str "-" end_date_str or "" for full availability
+        include_inst_plot (bool): include instantaneous plot in layout
         tidal_template (bool, optional): If True include tidal plots. Defaults to False.
         manuscript_layout (bool, optional): If True, no header, no scatter plot, no metrics table
         flow_in_thousands (bool, optional): If True, template is for flow data, and
@@ -614,10 +615,10 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
     add_toolbars = True
-    column_with_toolbar = create_layout(scatter_plot_with_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_with_toolbar, \
+    column_with_toolbar = create_layout(include_inst_plot, scatter_plot_with_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_with_toolbar, \
         tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=manuscript_layout)
     add_toolbars = False
-    column_without_toolbar = create_layout(scatter_plot_without_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_without_toolbar, \
+    column_without_toolbar = create_layout(include_inst_plot, scatter_plot_without_toolbar, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots_without_toolbar, \
         tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=manuscript_layout)
     column_dict = {'with': column_with_toolbar, 'without': column_without_toolbar}
 
@@ -643,7 +644,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, tidal_temp
 
     return column_dict, dfdisplayed_metrics
 
-def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplots, \
+def create_layout(include_inst_plot, scatter_plot, dfdisplayed_metrics, metrics_table, location, vartype, tsp, gtsp, kdeplot_list, \
     tidal_template, add_toolbars, obs_data_included, include_kde_plots, header_panel, manuscript_layout=False):
     '''
     Creates Holoviews Column object with plots and metrics.
@@ -651,47 +652,62 @@ def create_layout(scatter_plot, dfdisplayed_metrics, metrics_table, location, va
     manuscript_layout (bool, optional): if true, only first two items included in layout
     '''
     # Need to set clone=True when changing options below. This prevents changing the original objects.
-
     column = None
+    index_to_title_dict = {1: '(a)', 2: '(b)', 3: '(c)', 4: '(d)', 5: '(e)', 6: '(f)', 7: '(g)', 8: '(h)', 9: '(i)', 10: '(j)'}
     if scatter_plot is None and dfdisplayed_metrics is None and metrics_table is None:
         print('build_calib_plot_template: cplot, dfdisplayedmetrics, metrics_table, and kdeplot are all None for location, vartype='+location.name+','+str(vartype))
     else:
         scatter_and_metrics_row = None
-        if tidal_template:
+        col_row_index = 1
+        column = pn.Column(header_panel)
+        if include_inst_plot:
             if not add_toolbars:
-                column = pn.Column(
-                    header_panel,
-                    tsp.opts(width=900, toolbar=None, title='(a)', legend_position='right', clone=True),
-                    gtsp.opts(width=900, toolbar=None, title='(b)', legend_position='right', clone=True))
+                column.append(tsp.opts(width=900, toolbar=None, title=index_to_title_dict[col_row_index], legend_position='right', clone=True))
             else:
-                column = pn.Column(
-                    header_panel,
-                    tsp.opts(width=900, title='(a)', legend_position='right', clone=True),
-                    gtsp.opts(width=900, title='(b)', legend_position='right', clone=True))
+                column.append(tsp.opts(width=900, title=index_to_title_dict[col_row_index], legend_position='right', clone=True))
+            col_row_index += 1
+        if not add_toolbars:
+            column.append(gtsp.opts(width=900, toolbar=None, title=index_to_title_dict[col_row_index], legend_position='right', clone=True))
+        else:
+            column.append(gtsp.opts(width=900, title=index_to_title_dict[col_row_index], legend_position='right', clone=True))
+        col_row_index += 1
+
+        if tidal_template:
             if obs_data_included and not manuscript_layout:
                 if not add_toolbars:
-                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, toolbar=None, title='(c)', clone=True))
+                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, toolbar=None, 
+                                                                       title=index_to_title_dict[col_row_index], clone=True))
                 else: 
-                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title='(c)', clone=True))
+                    scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, 
+                                                                       title=index_to_title_dict[col_row_index], clone=True))
+                col_row_index += 1
                 if metrics_table is not None:
                     # metrics_table_row = pn.Row(metrics_table.opts(title='(d)'))
-                    scatter_and_metrics_row.append(metrics_table.opts(title='(d)', fontscale=1, clone=True))
+                    scatter_and_metrics_row.append(metrics_table.opts(title=index_to_title_dict[col_row_index], 
+                                                                      fontscale=1, clone=True))
+                    col_row_index += 1
                 column.append(scatter_and_metrics_row)
+
                 if include_kde_plots:
-                    column.append(pn.Row(kdeplots))
+                    kdeplot_list[0].opts(title=index_to_title_dict[col_row_index])
+                    col_row_index+=1
+                    kdeplot_list[1].opts(title=index_to_title_dict[col_row_index])
+                    col_row_index+=1
+                    kdeplot_row = kdeplot_list[0] + kdeplot_list[1]
+                    if add_toolbars:
+                        kdeplot_row = kdeplot_row.cols(2).opts(shared_axes=False).opts(
+                                opts.Distribution(height=200, width=300))
+                    else:
+                        kdeplot_row = kdeplot_row.cols(2).opts(shared_axes=False, toolbar=None).opts(
+                                opts.Distribution(height=200, width=300))
+                    column.append(pn.Row(kdeplot_row))
         else:
-            if not add_toolbars:
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, toolbar=None, title='(a)', legend_position='right', clone=True)))
-            else: 
-                column = pn.Column(
-                    header_panel,
-                    pn.Row(gtsp.opts(width=900, show_legend=True, title='(a)', legend_position='right', clone=True)))
             if obs_data_included and not manuscript_layout:
-                scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title='(b)', clone=True))
+                scatter_and_metrics_row = pn.Row(scatter_plot.opts(shared_axes=False, title=index_to_title_dict[col_row_index], clone=True))
+                col_row_index += 1
                 if metrics_table is not None:
-                    scatter_and_metrics_row.append(metrics_table.opts(title='(c)', fontscale=1, clone=True))
+                    scatter_and_metrics_row.append(metrics_table.opts(title=index_to_title_dict[col_row_index], fontscale=1, clone=True))
+                    col_row_index += 1
                 column.append(scatter_and_metrics_row)
     return column
 
@@ -1280,16 +1296,20 @@ def build_kde_plots(pp, amp_title='(e)', phase_title='(f)', include_toolbar=True
     # don't use
 
     # create panel containing amp % diff and phase diff kernel density estimate plots. Excluding amp diff plot
-    kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
-        phase_diff_kde.opts(show_legend=False, title=phase_title)
-    if include_toolbar:
-        kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
-                opts.Distribution(height=200, width=300))
-    else:
-        kdeplots = kdeplots.cols(2).opts(shared_axes=False, toolbar=None).opts(
-                opts.Distribution(height=200, width=300))
-    return kdeplots
+    # kdeplots = amp_pdiff_kde.opts(show_legend=False, title=amp_title) + \
+    #     phase_diff_kde.opts(show_legend=False, title=phase_title)
+    # if include_toolbar:
+    #     kdeplots = kdeplots.cols(2).opts(shared_axes=False).opts(
+    #             opts.Distribution(height=200, width=300))
+    # else:
+    #     kdeplots = kdeplots.cols(2).opts(shared_axes=False, toolbar=None).opts(
+    #             opts.Distribution(height=200, width=300))
 
+    # return a list instead so we can change titles later
+    kdeplots_list = [amp_pdiff_kde.opts(show_legend=False, title=amp_title), 
+        phase_diff_kde.opts(show_legend=False, title=phase_title)]
+
+    return kdeplots_list
 
 def export_svg(plot, fname):
     ''' export holoview object to filename fname '''
