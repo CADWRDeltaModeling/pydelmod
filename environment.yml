@@ -1,58 +1,51 @@
 name: pydelmod
 channels:
-  - conda-forge
   - cadwr-dms
-#  - pyviz
-#  - defaults
-#  - plotly
+  - conda-forge
+  - nodefaults
 dependencies:
-  - python=3.8
+  - python
   - pip
+  # pip install these
+  - ipykernel
   # first our packages
   - pyhecdss
   - vtools3
-  - pydsm
-  - pydelmod
   - schimpy
   # then basics
   - click
   - aiohttp
   - numba
-  - pandas
   - dask
+  - pandas
   - xarray
-  - netcdf4
+  - h5py
   - scipy
   # geo stuff
-  - gdal
-  - shapely
   - geopandas
+  # then plot stuff
+  - plotly-orca
+  - plotly
+  - matplotlib
+  - holoviews
+  - geoviews
+  - hvplot
+  - networkx
   # for different file formats
   - fastparquet
   - python-snappy
   - pyarrow
   - pytables
   - openpyxl
-  # then plot stuff
-  - matplotlib
-  - geoviews
-  # later versions are not compatible with the current geoviews
-#  - holoviews=1.14.7
-#  - jinja2=3.0.3
-  - holoviews
   - jinja2
-  - hvplot
-  - jupyter
-  - plotly-orca
-  - plotly
-  - networkx
-  # widgets
-  - ipyleaflet
-  - ipywidgets
   # browsers
   - selenium
   - firefox
   - geckodriver
   # finally misc 
-  - jupyter_contrib_nbextensions
   - autopep8
+# pip install pydelmod and pydsm from github. use the -e flag to install in editable mode as indicated below
+  - pip:
+     - -e git+https://github.com/CADWRDeltaModeling/pydelmod#egg=pydelmod
+     - -e git+https://github.com/CADWRDeltaModeling/pydsm#egg=pydsm
+
