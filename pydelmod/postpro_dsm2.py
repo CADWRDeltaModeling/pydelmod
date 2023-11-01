@@ -131,7 +131,7 @@ def save_to_graphics_format(calib_plot_template,fname):
     calib_plot_template.save(fname)
 
 def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, \
-    invert_timewindow_exclusion=False, remove_data_above_threshold=True):
+    invert_timewindow_exclusion=False, remove_data_above_threshold=True, metrics_table_list=None):
 # def build_plot(config_data, studies, location, vartype):
     options_dict = config_data['options_dict']
     inst_plot_timewindow_dict = config_data['inst_plot_timewindow_dict']
@@ -170,7 +170,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
             tidal_template=tidal_data, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
             zoom_inst_plot=zoom_inst_plot, gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, \
                 invert_timewindow_exclusion=invert_timewindow_exclusion, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_plot_metric_data,
-                tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_layout=manuscript_layout)
+                tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_layout=manuscript_layout, metrics_table_list=metrics_table_list)
 
     # calib_plot_template, metrics_df = \
     #     calibplot.build_calib_plot_template(studies, location, vartype, timewindow, \
@@ -193,7 +193,7 @@ def build_plot(config_data, studies, location, vartype, gate_studies=None, gate_
 
 
 def build_and_save_plot(config_data, studies, location, vartype, gate_studies=None, gate_locations=None, gate_vartype=None, \
-    write_html=False, write_graphics=True, output_format='png'):
+    write_html=False, write_graphics=True, output_format='png', metrics_table_list=None):
 # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data['study_files_dict']
     options_dict = config_data['options_dict']
@@ -203,7 +203,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
     mask_data = options_dict['mask_plot_metric_data'] if 'mask_plot_metric_data' in options_dict else True
 
     calib_plot_template_dict, metrics_df = build_plot(config_data, studies, location, vartype, gate_studies=gate_studies, \
-        gate_locations=gate_locations, gate_vartype=gate_vartype)
+        gate_locations=gate_locations, gate_vartype=gate_vartype, metrics_table_list=metrics_table_list)
 
     metrics_df_masked_time_period = None
     if calib_plot_template_dict is not None:
@@ -225,7 +225,7 @@ def build_and_save_plot(config_data, studies, location, vartype, gate_studies=No
         if create_second_panel:
             calib_plot_template_masked_time_period_dict, metrics_df_masked_time_period = build_plot(config_data, studies, location, vartype, \
                 gate_studies=gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, invert_timewindow_exclusion=True, \
-                    remove_data_above_threshold=False)
+                    remove_data_above_threshold=False, metrics_table_list=metrics_table_list)
             # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
             if calib_plot_template_masked_time_period_dict is None:
                 print('failed to create plots for masked time period')
@@ -296,7 +296,7 @@ def merge_statistics_files(vartype, config_data):
                         'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
                         'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
                         'mnly_nmean_error': 'Mnly NMean Err', 'mnly_nmse': 'Mnly NMSE', 
-                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 'mnly_percent_bias': 'Mnly PBIAS', 'mnly_rsr': 'Mnly RSR', 
+                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 'mnly_kge': 'Mnly KGE', 'mnly_percent_bias': 'Mnly PBIAS', 'mnly_rsr': 'Mnly RSR', 
                         'mnly_rmse': 'Mnly RMSE', 'Study': 'Study', 'Amp Avg %Err': 'Amp Avg %Err', 'Avg Phase Err': 'Avg Phase Err'}
 
     import glob, os
@@ -388,7 +388,8 @@ def postpro_plots(cluster, config_data, use_dask):
     write_graphics = False if ('write_graphics' in options_dict and not options_dict['write_graphics']) else True
     write_html = False if ('write_html' in options_dict and not options_dict['write_html']) else True
     gate_location_file_dict = config_data['gate_location_file_dict'] if 'gate_location_file_dict' in config_data else None
-    
+    metrics_table_list = options_dict['metrics_table_list'] if 'metrics_table_list' in options_dict else None
+
     vartype_timewindow_dict = config_data['vartype_timewindow_dict']
 
     ## Set options and run processes. If using dask, create delayed tasks
@@ -429,7 +430,7 @@ def postpro_plots(cluster, config_data, use_dask):
                     print('using dask')
                     tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
                                                     write_html=write_html,write_graphics=write_graphics, gate_studies = gate_studies, 
-                                                    gate_locations=gate_locations, gate_vartype=gate_vartype,
+                                                    gate_locations=gate_locations, gate_vartype=gate_vartype, metrics_table_list=metrics_table_list,
                                                     dask_key_name=f'build_and_save::{location}:{vartype}') for location in locations]
                     # tasks = [dask.delayed(build_and_save_plot)(config_data, studies, location, vartype, 
                     #                                 write_html=True,write_graphics=False,                                                     
@@ -439,7 +440,7 @@ def postpro_plots(cluster, config_data, use_dask):
                     print('not using dask')
                     for location in locations:
                         build_and_save_plot(config_data, studies, location, vartype, write_html=write_html,write_graphics=write_graphics,
-                                            gate_studies = gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype)
+                                            gate_studies = gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, metrics_table_list=metrics_table_list)
                 merge_statistics_files(vartype, config_data)
     finally:
         if use_dask:

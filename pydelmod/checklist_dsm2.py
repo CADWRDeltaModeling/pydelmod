@@ -254,7 +254,7 @@ def checklist_plots(cluster, config_data, use_dask):
                         # print('not using dask')
                         for location in locations:
                             build_and_save_plot(config_data, studies, location, vartype, write_html=True,write_graphics=True,
-                                                gate_studies=None, gate_locations=None, gate_vartype=None)
+                                                gate_studies=None, gate_locations=None, gate_vartype=None,metrics_table_list=None)
 
                     merge_statistics_files(vartype, config_data)
 

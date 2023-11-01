@@ -309,7 +309,8 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
     dfr = dfa.drop(columns=dfa.columns[index_x])
     names.remove(names[index_x])
     slopes, interceps, equations, r2s, pvals, stds = [], [], [], [], [], []
-    mean_errors, nmean_errors, ses, nmses, mses, nmses, rmses, nrmses, percent_biases, nses, rsrs = [], [], [], [], [], [], [], [], [], [], []
+    mean_errors, nmean_errors, ses, nmses, mses, nmses, rmses, nrmses, \
+        percent_biases, nses, kges, rsrs = [], [], [], [], [], [], [], [], [], [], [], []
 
     metrics_calculated = False
     if len(x_series) > 0:
@@ -334,6 +335,7 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
                 nrmses.append(tsmath.nrmse(y_series, x_series))
                 percent_biases.append(tsmath.percent_bias(y_series, x_series))
                 nses.append(tsmath.nash_sutcliffe(y_series, x_series))
+                kges.append(tsmath.kling_gupta_efficiency(y_series, x_series))
                 rsrs.append(tsmath.rsr(y_series, x_series))
                 metrics_calculated = True
             else:
@@ -350,10 +352,11 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
     if metrics_calculated:
         dfmetrics = pd.concat([pd.DataFrame(arr)
                             for arr in (slopes, interceps, equations, r2s, pvals, stds, mean_errors, nmean_errors, mses, nmses, rmses, nrmses, \
-                                percent_biases, nses, rsrs)], axis=1)
+                                percent_biases, nses, kges, rsrs)], axis=1)
         dfmetrics.columns = ['regression_slope', 'regression_intercep', 'regression_equation',
                             'r2', 'pval', 'std', 'mean_error', 'nmean_error', 
-                            'mse', 'nmse', 'rmse', 'nrmse', 'percent_bias', 'nash_sutcliffe', 'rsr']
+                            'mse', 'nmse', 'rmse', 'nrmse', 'percent_bias', 'nash_sutcliffe', 
+                            'kling_gupta', 'rsr']
 
         dfmetrics.index = names
     return dfmetrics
@@ -490,7 +493,7 @@ def sanitize_name(name):
 def build_calib_plot_template(studies, location, vartype, timewindow, include_inst_plot, tidal_template=False, manuscript_layout=False, flow_in_thousands=False, \
     units=None, inst_plot_timewindow=None, layout_nash_sutcliffe=False, obs_data_included=True, include_kde_plots=False, \
         zoom_inst_plot=False, gate_studies=None, gate_locations=None, gate_vartype=None, invert_timewindow_exclusion=False, \
-            remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False):
+            remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False, metrics_table_list=None):
     """Builds calibration plot template
 
     Args:
@@ -516,6 +519,7 @@ def build_calib_plot_template(studies, location, vartype, timewindow, include_in
         include_kde_plots (bool): If true, kde plots will be included. This is temporary for debugging
         zoom_inst_plot (bool): If true, instantaneous plots will display on data in the inst_plot_timewindow
         time_window_exclusion_list (list of time window strings in format yyyy-mm-dd hh:mm:ss_yyyy-mm-dd hh:mm:ss)
+        metrics_table_list (list): if specified, will override all other metrics specifications
     Returns:
         dict of holoviews Column objects. Keys=['with', 'without'], meaning with toolbars and without toolbars. 
             values are holoviews Column objects, which are templates ready for rendering by display or save.
@@ -588,13 +592,14 @@ def build_calib_plot_template(studies, location, vartype, timewindow, include_in
         #     metrics_table_dict.update({'open': metrics_table_open})
         #     metrics_table_dict.update({'closed': metrics_table_closed})
         # else:
-        manuscript_metrics = manuscript_layout and flow_in_thousands
+        # manuscript_metrics = manuscript_layout and flow_in_thousands
+        manuscript_metrics = manuscript_layout
 
         dfdisplayed_metrics, metrics_table = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, flow_in_thousands=flow_in_thousands, \
             units=units, layout_nash_sutcliffe=False, time_window_exclusion_list=time_window_exclusion_list, \
                 invert_timewindow_exclusion=invert_timewindow_exclusion,\
                     threshold_value=location.threshold_value, remove_data_above_threshold=remove_data_above_threshold, mask_data=mask_data, \
-                        tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_metrics=manuscript_metrics)
+                        tech_memo_validation_metrics=tech_memo_validation_metrics, manuscript_metrics=manuscript_metrics, metrics_table_list=metrics_table_list)
         # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
         # metrics_table_dict.update({'all': metrics_table})
 
@@ -1010,46 +1015,101 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
     '''
     Create a Holoviews table displaying calibration metrics.
     '''
+    print('*****************************************************************')
+    print('before error: metrics_list_dict='+str(metrics_list_dict))
+    print('*****************************************************************')
+    print('metrics_list='+str(metrics_list))
+    print('*****************************************************************')
+
+
     metrics_list_list = [study_list.copy()]
+
     for m in metrics_list:
+        if m not in metrics_list_dict:
+            print('error in calibplot.create_hv_metrics_table: ' + m + ' was not a valid metric specification. exiting.')
+            exit(0)
         if m is not 'Study':
+            print('before error: m: '+ str(m))
+            print('before error: metrics_list_dict[m]:'+str(metrics_list_dict[m]))
             metrics_list_list.append(metrics_list_dict[m])
     metrics_list_tuple = tuple(metrics_list_list)
     metrics_table = hv.Table(metrics_list_tuple, metrics_list). opts(width=width, fontscale=fontscale)
     return metrics_table
 
 def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data, pp, tidal_template, amp_avg_pct_errors, \
-    amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics=False, manuscript_metrics=False):
+    amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics=False, manuscript_metrics=False, metrics_table_list=None):
     '''
     Create dataframe and holoviews metrics table for calibration metrics.
     Metrics are selected based on options passed to method 
+    metrics_table_list (list): Strings specifying metrics to use. Will override all other specified metrics options.
     '''
     dfdisplayed_metrics = None
     metrics_table = None
     # this is used for renaming column headers that come from the method that calculates metrics.
     # Don't make them too long, because they need to be displayed in a holoviews table with no wrapping.
-    col_rename_dict = {'regression_equation': 'Equation', 'r2': 'R Squared', 'mean_error': 'Mean Error', 'nmean_error': 'NMean Error', 'nmse': 'NMSE', 
-                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
-                        'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
+    col_rename_dict = {'regression_equation': 'Equation', 'r2': 'R Squared', 
+                       'mean_error': 'Mean Error', 'nmean_error': 'NMean Error', 'nmse': 'NMSE', 
+                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'kling_gupta':'KGE', 
+                        'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
+                        'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 
+                        'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
                         'mnly_nmean_error': 'Mnly NMean Err', 'mnly_nmse': 'Mnly NMSE', 
-                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 'mnly_percent_bias': 'Mnly PBIAS', 'mnly_rsr': 'Mnly RSR', 
-                        'mnly_rmse': 'Mnly RMSE', 'Study': 'Study', 'Amp Avg %Err': 'Amp Avg %Err', 'Avg Phase Err': 'Avg Phase Err'}
+                        'mnly_nrmse': 'Mnly NRMSE', 'mnly_nash_sutcliffe': 'Mnly NSE', 
+                        'mnly_kling_gupta': 'Mnly KGE', 'mnly_percent_bias': 'Mnly PBIAS', 
+                        'mnly_rsr': 'Mnly RSR', 'mnly_rmse': 'Mnly RMSE', 'Study': 'Study', 
+                        'Amp Avg %Err': 'Amp Avg %Err', 'Avg Phase Err': 'Avg Phase Err'}
+
+
 
     if dfmetrics is not None:
         if tidal_template:
-            # ok to include things you don't need here, but don't exclude anything you might need later
-            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
-            if tech_memo_validation_metrics:
-                cols.append('rmse')
-            if manuscript_metrics:
-                cols = ['r2', 'percent_bias', 'rsr']
 
-            dfdisplayed_metrics = dfmetrics.loc[:, cols]
+            # ok to include things you don't need here, but don't exclude anything you might need later
+            df_displayed_metrics_cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
+            if tech_memo_validation_metrics:
+                df_displayed_metrics_cols.append('rmse')
+            if manuscript_metrics:
+                df_displayed_metrics_cols = ['r2', 'percent_bias', 'rsr', 'kling_gupta']
+
+            # if you need to change the list of metrics that will be displayed in the table, do it here.
+            # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
+            metrics_list_for_hv_table = None
+            if layout_nash_sutcliffe:
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr', 'kge']
+            else:
+                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr', 'kge']
+
+            if tech_memo_validation_metrics:
+                metrics_list_for_hv_table.append('rmse')
+            metrics_list_for_hv_table.append('Amp Avg %Err')
+            metrics_list_for_hv_table.append('Avg Phase Err')
+
+            if manuscript_metrics:
+                metrics_list_for_hv_table = ['r2', 'percent_bias', 'rsr', 'kling_gupta']
+
+            # override all metrics specifications if metrics list specified
+            if metrics_table_list is not None:
+                metrics_list_ok = True
+                for m in metrics_table_list:
+                    if m not in col_rename_dict:
+                        metrics_list_ok = False
+                        print('unrecognized: '+m)
+                if metrics_list_ok:
+                    metrics_list_for_hv_table = metrics_table_list
+                    for m in metrics_table_list:
+                        if m not in df_displayed_metrics_cols:
+                            df_displayed_metrics_cols.append(m)
+                else:
+                    print('WARNING: metrics_table_list specified, but 1 or more values is not acceptable')
+
+
+            dfdisplayed_metrics = dfmetrics.loc[:, df_displayed_metrics_cols]
             dfdisplayed_metrics['Amp Avg %Err'] = amp_avg_pct_errors
             dfdisplayed_metrics['Avg Phase Err'] = amp_avg_phase_errors
             dfdisplayed_metrics.index.name = 'DSM2 Run'
 
             # now create a holoviews table object displaying the metrics
+            # every name in metrics_list_for_hv_table must be a key in metrics_list_dict
             metrics_list_dict = {}
             for m in dfdisplayed_metrics.columns:
                 if m is 'Equation':
@@ -1057,18 +1117,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
                 else:
                     # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
                     metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
-            # if you need to change the list of metrics that will be displayed in the table, do it here.
-            # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
-            metrics_list_for_hv_table = None
-            if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
-            else:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
 
-            if tech_memo_validation_metrics:
-                metrics_list_for_hv_table.append('rmse')
-            metrics_list_for_hv_table.append('Amp Avg %Err')
-            metrics_list_for_hv_table.append('Avg Phase Err')
             # we now have metrics_list_for_hv_table, which is a list of metrics that we want to use
             # and metrics_list_dict, with key = metric name, value = list of values. Included is a list of Study names.
             # rename all the metrics names in the list, and in the dict (the keys)
@@ -1077,9 +1126,6 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             # rename dictionary keys; see https://codereview.stackexchange.com/questions/263904/efficient-renaming-of-dict-keys-from-another-dicts-values-python
             # metrics_list_dict_renamed = {col_rename_dict[k]: v for k, v in metrics_list_dict.items()}
             metrics_list_dict_renamed = {col_rename_dict.get(k, k): v for k, v in metrics_list_dict.items()}
-
-            # if manuscript_metrics:
-            #     metrics_list_for_hv_table = ['Study', 'R Squared', 'PBIAS', 'RSR']
 
             metrics_table = create_hv_metrics_table(study_list, metrics_list_dict_renamed, metrics_list_for_hv_table_renamed)
         else:
@@ -1091,9 +1137,28 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
 
             # template for nontidal (EC) data
             # ok to include things you don't need here, but don't exclude anything you might need later
-            cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
+            df_displayed_metrics_cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'rmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
 
-            dfdisplayed_metrics = dfmetrics.loc[:, cols]
+
+            # override all metrics specifications if metrics list specified
+            # override all metrics specifications if metrics list specified
+            if metrics_table_list is not None:
+                metrics_list_ok = True
+                for m in metrics_table_list:
+                    if m not in col_rename_dict:
+                        metrics_list_ok = False
+                        print('unrecognized: '+m)
+                if metrics_list_ok:
+                    metrics_list_for_hv_table = metrics_table_list
+                    for m in metrics_table_list:
+                        if m not in df_displayed_metrics_cols:
+                            df_displayed_metrics_cols.append(m)
+                else:
+                    print('WARNING: metrics_table_list specified, but 1 or more values is not acceptable')
+
+
+
+            dfdisplayed_metrics = dfmetrics.loc[:, df_displayed_metrics_cols]
             dfdisplayed_metrics = pd.concat(
                 [dfdisplayed_metrics, dfmetrics_monthly.loc[:, ['mnly_mean_error', 'mnly_rmse', 'mnly_nmean_error', 'mnly_nrmse']]], axis=1)
             dfdisplayed_metrics.index.name = 'DSM2 Run'
@@ -1121,6 +1186,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             if tech_memo_validation_metrics:
                 metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'rmse', 'mnly_mean_error', 'mnly_rmse']
 
+
             # we now have metrics_list_for_hv_table, which is a list of metrics that we want to use
             # and metrics_list_dict, with key = metric name, value = list of values. Included is a list of Study names.
             # rename all the metrics names in the list, and in the dict (the keys)
@@ -1139,7 +1205,8 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
 def build_metrics_table(studies, pp, location, vartype, tidal_template=False, flow_in_thousands=False, units=None,
                               layout_nash_sutcliffe=False, gate_pp=None, data_masking_df_dict=None, gate_open=True, 
                               time_window_exclusion_list=None, invert_timewindow_exclusion=False, threshold_value=None,
-                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False, manuscript_metrics=False):
+                              remove_data_above_threshold=True, mask_data=True, tech_memo_validation_metrics=False, 
+                              manuscript_metrics=False, metrics_table_list=None):
     """Builds calibration plot template
 
     Args:
@@ -1163,7 +1230,8 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
         gate_open (bool): if true, calculate metrics for gate open condition (gate pos > 0) only.
         time_window_exclusion_list (list of strings): contains a list of time windows. Data within these time windows
             will not be used to calculate metrics or scatter plots.
-
+        metrics_table_list (list): if specified, will override all other metrics specifications
+            
     Returns:
         a list containing one or more table object(s). Will contain more then one object if a DSS path is specified
             in the location file in the gate_time_series field.
@@ -1218,23 +1286,23 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     # using a Table object because the dataframe object, when added to a layout, doesn't always display all the values.
     # This could have something to do with inconsistent types.
     metrics_table = None
-    format_dict = {'Equation': '{:s}', 'R Squared': '{:.2f}', 'Mean Error': '{:.1f}', 'NMean Error': '{:.3f}', 'NMSE': '{:.1}', 'NRMSE': '{:.4}',
-            'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
-            'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}', 'RMSE': '{:.2f}',
-            'Mnly Equation': '{:s}', 'Mnly R Squared': '{:.2f}', 'Mnly Mean Error': '{:.1f}', 'Mnly NMean Error': '{:.3f}', 'Mnly NMSE': '{:.1}', 'Mnly NRMSE': '{:.4}',
-            'Mnly Amp Avg %Err': '{:.1f}', 'Mnly Avg Phase Err': '{:.2f}', 'Mnly NSE': '{:.2f}', 'Mnly PBIAS': '{:.1f}', 'Mnly RSR': '{:.2f}',
-
-            'regression_equation': '{:s}', 'r2': '{:.2f}', 'mean_error': '{:.1f}', 'nmean_error': '{:.3f}', 'nmse': '{:.1}', 'nrmse': '{:.4}',
-            'rmse': '{:.4}', 'mnly_nmean_error': '{:4}','mnly_mean_err': '{:4}','mnly_mean_error': '{:4}', 'mnly_nrmse': '{:.4}', 'mnly_rmse': '{:.4}',
-            'nash_sutcliffe': '{:.2f}', 'percent_bias': '{:.1f}', 'rsr': '{:.2f}'
-            
+    format_dict = {'Equation': '{:s}', 'R Squared': '{:.2f}', 'Mean Error': '{:.1f}', 'NMean Error': '{:.3f}', 
+                   'NMSE': '{:.1}', 'NRMSE': '{:.4}', 'Amp Avg %Err': '{:.1f}', 'Avg Phase Err': '{:.2f}', 
+                   'NSE': '{:.2f}', 'PBIAS': '{:.1f}', 'RSR': '{:.2f}',
+                   'Mnly Mean Err': '{:.1f}', 'Mnly RMSE': '{:.1f}', 'RMSE': '{:.2f}',
+                   'Mnly Equation': '{:s}', 'Mnly R Squared': '{:.2f}', 'Mnly Mean Error': '{:.1f}', 
+                   'Mnly NMean Error': '{:.3f}', 'Mnly NMSE': '{:.1}', 'Mnly NRMSE': '{:.4}',
+                   'Mnly Amp Avg %Err': '{:.1f}', 'Mnly Avg Phase Err': '{:.2f}', 'Mnly NSE': '{:.2f}', 
+                   'Mnly PBIAS': '{:.1f}', 'Mnly RSR': '{:.2f}',
+                   'regression_equation': '{:s}', 'r2': '{:.2f}', 'mean_error': '{:.1f}', 'nmean_error': '{:.3f}', 
+                   'nmse': '{:.1}', 'nrmse': '{:.4}','rmse': '{:.4}', 'mnly_nmean_error': '{:4}','mnly_mean_err': '{:4}',
+                   'mnly_mean_error': '{:4}', 'mnly_nrmse': '{:.4}', 'mnly_rmse': '{:.4}', 'nash_sutcliffe': '{:.2f}', 
+                   'percent_bias': '{:.1f}', 'rsr': '{:.2f}', 'KGE': '{:.2f}', 'Mnly KGE': '{:.2f}', 'kling_gupta': '{:.2f}'            
             }
-
-
 
     dfdisplayed_metrics, metrics_table = create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype, gtsp_plot_data,\
          pp, tidal_template, amp_avg_pct_errors, amp_avg_phase_errors, layout_nash_sutcliffe, format_dict, tech_memo_validation_metrics,\
-            manuscript_metrics=manuscript_metrics)
+            manuscript_metrics=manuscript_metrics, metrics_table_list=metrics_table_list)
 
     return dfdisplayed_metrics, metrics_table
 
@@ -1336,7 +1404,7 @@ def _process_df_for_validation_bar_charts(vartype, vartype_to_station_list_dict,
 
 def create_validation_bar_charts(validation_plot_output_folder, validation_metric_csv_filenames_dict, vartype_to_station_list_dict):
     '''
-    Create bar charts for selected locations
+    Create bar charts for selected locations. Used to create figures for technical memos
     '''
     # these could be read from a file, but for now it's easier to hardcode, since we don't expect this info to change
     mu='\u03BC'
