@@ -1014,14 +1014,10 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
 def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=580, fontscale=8):
     '''
     Create a Holoviews table displaying calibration metrics.
+    metrics_list (list(str)): Names of all the metrics, including (eventually) Study name. Used to create table column headers
+    metrics_list_dict: (dict): key=metric name (should match column headers), value = metric value
+    metrics_list_tuple: contains metrics values
     '''
-    print('*****************************************************************')
-    print('before error: metrics_list_dict='+str(metrics_list_dict))
-    print('*****************************************************************')
-    print('metrics_list='+str(metrics_list))
-    print('*****************************************************************')
-
-
     metrics_list_list = [study_list.copy()]
 
     for m in metrics_list:
@@ -1029,10 +1025,12 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
             print('error in calibplot.create_hv_metrics_table: ' + m + ' was not a valid metric specification. exiting.')
             exit(0)
         if m is not 'Study':
-            print('before error: m: '+ str(m))
-            print('before error: metrics_list_dict[m]:'+str(metrics_list_dict[m]))
+            # print('before error: m: '+ str(m))
+            # print('before error: metrics_list_dict[m]:'+str(metrics_list_dict[m]))
             metrics_list_list.append(metrics_list_dict[m])
     metrics_list_tuple = tuple(metrics_list_list)
+    metrics_list = ['Study'] + metrics_list
+
     metrics_table = hv.Table(metrics_list_tuple, metrics_list). opts(width=width, fontscale=fontscale)
     return metrics_table
 
@@ -1063,7 +1061,6 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
 
     if dfmetrics is not None:
         if tidal_template:
-
             # ok to include things you don't need here, but don't exclude anything you might need later
             df_displayed_metrics_cols = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nash_sutcliffe', 'percent_bias', 'rsr']
             if tech_memo_validation_metrics:
@@ -1075,9 +1072,9 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
             metrics_list_for_hv_table = None
             if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr', 'kge']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr', 'kge']
             else:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr', 'kge']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr', 'kge']
 
             if tech_memo_validation_metrics:
                 metrics_list_for_hv_table.append('rmse')
@@ -1101,7 +1098,6 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
                             df_displayed_metrics_cols.append(m)
                 else:
                     print('WARNING: metrics_table_list specified, but 1 or more values is not acceptable')
-
 
             dfdisplayed_metrics = dfmetrics.loc[:, df_displayed_metrics_cols]
             dfdisplayed_metrics['Amp Avg %Err'] = amp_avg_pct_errors
@@ -1130,6 +1126,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             metrics_table = create_hv_metrics_table(study_list, metrics_list_dict_renamed, metrics_list_for_hv_table_renamed)
         else:
             # not tidal: EC data
+
             dfmetrics_monthly = calculate_metrics(
                 [g.resample('M').mean() if g is not None else None for g in gtsp_plot_data], [p.study.name for p in pp])
             # rename columns to include mnly (monthly)
@@ -1179,12 +1176,12 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             metrics_list_for_hv_table = None
 
             if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
             else:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
 
             if tech_memo_validation_metrics:
-                metrics_list_for_hv_table = ['Study', 'regression_equation', 'r2', 'mean_error', 'rmse', 'mnly_mean_error', 'mnly_rmse']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'rmse', 'mnly_mean_error', 'mnly_rmse']
 
 
             # we now have metrics_list_for_hv_table, which is a list of metrics that we want to use

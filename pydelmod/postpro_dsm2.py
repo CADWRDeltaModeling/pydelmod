@@ -441,6 +441,7 @@ def postpro_plots(cluster, config_data, use_dask):
                     for location in locations:
                         build_and_save_plot(config_data, studies, location, vartype, write_html=write_html,write_graphics=write_graphics,
                                             gate_studies = gate_studies, gate_locations=gate_locations, gate_vartype=gate_vartype, metrics_table_list=metrics_table_list)
+
                 merge_statistics_files(vartype, config_data)
     finally:
         if use_dask:
