@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python
+  - python<3.12
   - pip
   # pip install these
   - ipykernel
@@ -12,6 +12,9 @@ dependencies:
   - pyhecdss
   - vtools3
   - schimpy
+  - dms-datastore
+  - pydsm
+  - pydelmod
   # then basics
   - click
   - aiohttp
@@ -20,7 +23,7 @@ dependencies:
   - pandas
   - xarray
   - h5py
-  - scipy
+  - scipy<1.12
   # geo stuff
   - geopandas
   # then plot stuff
@@ -43,9 +46,9 @@ dependencies:
   - firefox
   - geckodriver
   # finally misc 
-  - autopep8
+  - black
 # pip install pydelmod and pydsm from github. use the -e flag to install in editable mode as indicated below
-  - pip:
-     - -e git+https://github.com/CADWRDeltaModeling/pydelmod#egg=pydelmod
-     - -e git+https://github.com/CADWRDeltaModeling/pydsm#egg=pydsm
+#  - pip:
+#     - -e git+https://github.com/CADWRDeltaModeling/pydelmod#egg=pydelmod
+#     - -e git+https://github.com/CADWRDeltaModeling/pydsm#egg=pydsm
 
