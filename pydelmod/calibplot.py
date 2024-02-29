@@ -957,7 +957,7 @@ def build_scatter_plots(pp, flow_in_thousands=False, units=None, gate_pp=None, t
         # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
         # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
         gpd.dropna(inplace=True)
-        if gpd.notnull().sum()[0] <= 0:
+        if gpd.notnull().sum().iloc[0] <= 0:
             any_data_left = False
         else:
             spd_plot = None
@@ -1022,9 +1022,9 @@ def create_hv_metrics_table(study_list, metrics_list_dict, metrics_list, width=5
 
     for m in metrics_list:
         if m not in metrics_list_dict:
-            print('error in calibplot.create_hv_metrics_table: ' + m + ' was not a valid metric specification. exiting.')
+            print(f'error in calibplot.create_hv_metrics_table: {m} was not a valid metric specification. exiting.')
             exit(0)
-        if m is not 'Study':
+        if m != 'Study':
             # print('before error: m: '+ str(m))
             # print('before error: metrics_list_dict[m]:'+str(metrics_list_dict[m]))
             metrics_list_list.append(metrics_list_dict[m])
@@ -1047,7 +1047,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
     # Don't make them too long, because they need to be displayed in a holoviews table with no wrapping.
     col_rename_dict = {'regression_equation': 'Equation', 'r2': 'R Squared', 
                        'mean_error': 'Mean Error', 'nmean_error': 'NMean Error', 'nmse': 'NMSE', 
-                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'kling_gupta':'KGE', 
+                        'nrmse': 'NRMSE', 'nash_sutcliffe': 'NSE', 'kling_gupta':'KGE', 'kge': 'kling_gupta',
                         'percent_bias': 'PBIAS', 'rsr': 'RSR', 'rmse': 'RMSE',
                         'mnly_regression_equation': 'Mnly Equation', 'mnly_r2': 'Mnly R Squared', 
                         'mnly_mean_err': 'Mnly Mean Err', 'mnly_mean_error': 'Mnly Mean Err', 
@@ -1072,9 +1072,9 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             # every column name in metrics_list_for_hv_table must match a column name in dfdisplayed_metrics
             metrics_list_for_hv_table = None
             if layout_nash_sutcliffe:
-                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr', 'kge']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'nse', 'percent_bias', 'rsr']
             else:
-                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr', 'kge']
+                metrics_list_for_hv_table = ['regression_equation', 'r2', 'mean_error', 'nmean_error', 'nmse', 'nrmse', 'percent_bias', 'rsr']
 
             if tech_memo_validation_metrics:
                 metrics_list_for_hv_table.append('rmse')
@@ -1108,7 +1108,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             # every name in metrics_list_for_hv_table must be a key in metrics_list_dict
             metrics_list_dict = {}
             for m in dfdisplayed_metrics.columns:
-                if m is 'Equation':
+                if m == 'Equation':
                     metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
                 else:
                     # metrics_list_dict.update({m: ['{:.2f}'.format(item) for item in dfdisplayed_metrics[m].to_list()] })
@@ -1166,7 +1166,7 @@ def create_metrics_table_and_metrics_df(study_list, dfmetrics, location, vartype
             metrics_list_dict = {}
 
             for m in dfdisplayed_metrics.columns:
-                if m is 'Equation':
+                if m == 'Equation':
                     metrics_list_dict.update({m: dfdisplayed_metrics[m].to_list()})
                 else:
                     metrics_list_dict.update({m: [format_dict[m].format(item) for item in dfdisplayed_metrics[m].to_list()] })
@@ -1277,7 +1277,7 @@ def build_metrics_table(studies, pp, location, vartype, tidal_template=False, fl
     amp_avg_phase_errors = []
     for p in pp[1:]:  # TODO: move this out of here. Nothing to do with plotting!
         p.process_diff(pp[0])
-        amp_avg_pct_errors.append(float(p.amp_diff_pct.mean(axis=0)))
+        amp_avg_pct_errors.append(float(p.amp_diff_pct.iloc[:,0].mean(axis=0)))
         amp_avg_phase_errors.append(float(p.phase_diff.mean(axis=0)))
 
     # using a Table object because the dataframe object, when added to a layout, doesn't always display all the values.
@@ -1330,7 +1330,7 @@ def build_kde_plots(pp, amp_title='(e)', phase_title='(f)', include_toolbar=True
     amp_avg_phase_errors = []
     for p in pp[1:]:  # TODO: move this out of here. Nothing to do with plotting!
         p.process_diff(pp[0])
-        amp_avg_pct_errors.append(float(p.amp_diff_pct.mean(axis=0)))
+        amp_avg_pct_errors.append(float(p.amp_diff_pct.mean(axis=0).iloc[0]))
         amp_avg_phase_errors.append(float(p.phase_diff.mean(axis=0)))
 
     # create kernel density estimate plots
