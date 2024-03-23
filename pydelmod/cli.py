@@ -5,14 +5,16 @@ from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
 from pydelmod import create_ann_inputs
-
+from pydelmod import datastore2dss
 import sys
 import click
 import panel as pn
+
 pn.extension()
 
 
-CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 def main():
@@ -20,60 +22,186 @@ def main():
 
 
 @click.command()
-@click.argument("flowline_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.option("-c","--colored-by", type=click.Choice(['MANNING', 'DISPERSION', 'LENGTH', 'ALL'],case_sensitive=False), default='MANNING')
-@click.option("--base-file","-b", type=click.Path(dir_okay=False, exists=True, readable=True))
+@click.argument(
+    "flowline_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.argument(
+    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.option(
+    "-c",
+    "--colored-by",
+    type=click.Choice(["MANNING", "DISPERSION", "LENGTH", "ALL"], case_sensitive=False),
+    default="MANNING",
+)
+@click.option(
+    "--base-file", "-b", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
 def map_channels_colored(flowline_shapefile, hydro_echo_file, colored_by, base_file):
     mapui = DSM2FlowlineMap(flowline_shapefile, hydro_echo_file, base_file)
-    if colored_by == 'ALL':
-        return pn.panel(pn.Column(*[mapui.show_map_colored_by_column(c.upper()) for c in ['MANNING','DISPERSION', 'LENGTH']])).show()
+    if colored_by == "ALL":
+        return pn.panel(
+            pn.Column(
+                *[
+                    mapui.show_map_colored_by_column(c.upper())
+                    for c in ["MANNING", "DISPERSION", "LENGTH"]
+                ]
+            )
+        ).show()
     else:
         return pn.panel(mapui.show_map_colored_by_column(colored_by.upper())).show()
 
+
 @click.command()
-@click.argument("channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.option("-v","--variable", type=click.Choice(['flow', 'stage'],case_sensitive=False), default='flow')
+@click.argument(
+    "channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.argument(
+    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.option(
+    "-v",
+    "--variable",
+    type=click.Choice(["flow", "stage"], case_sensitive=False),
+    default="flow",
+)
 def output_map_plotter(channel_shapefile, hydro_echo_file, variable):
     plotter = build_output_plotter(channel_shapefile, hydro_echo_file, variable)
-    pn.serve(plotter.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
+    pn.serve(
+        plotter.get_panel(), kwargs={"websocket-max-message-size": 100 * 1024 * 1024}
+    )
+
 
 @click.command()
-@click.argument("node_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True))
+@click.argument(
+    "node_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.argument(
+    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
 def node_map_flow_splits(node_shapefile, hydro_echo_file):
     netmap = dsm2ui.DSM2GraphNetworkMap(node_shapefile, hydro_echo_file)
-    pn.serve(netmap.get_panel(),kwargs={'websocket-max-message-size':100*1024*1024})
+    pn.serve(
+        netmap.get_panel(), kwargs={"websocket-max-message-size": 100 * 1024 * 1024}
+    )
+
 
 @click.command()
-@click.argument("process_name", type=click.Choice(['observed', 'model', 'plots', 'heatmaps', 'validation_bar_charts', 'copy_plot_files'], case_sensitive=False), default='')
+@click.argument(
+    "process_name",
+    type=click.Choice(
+        [
+            "observed",
+            "model",
+            "plots",
+            "heatmaps",
+            "validation_bar_charts",
+            "copy_plot_files",
+        ],
+        case_sensitive=False,
+    ),
+    default="",
+)
 @click.argument("json_config_file")
 @click.option("--dask/--no-dask", default=False)
 def exec_postpro_dsm2(process_name, json_config_file, dask):
-    print(process_name, dask,json_config_file)
+    print(process_name, dask, json_config_file)
     postpro_dsm2.run_process(process_name, json_config_file, dask)
 
-@click.command()
-@click.argument("chan_to_group_filename", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("chan_group_mann_disp_filename", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("dsm2_channels_input_filename", type=click.Path(dir_okay=False, exists=True, readable=True))
-@click.argument("dsm2_channels_output_filename", type=click.Path(dir_okay=False, exists=False, readable=False))
-def exec_dsm2_chan_mann_disp(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename):
-    dsm2_chan_mann_disp.prepro(chan_to_group_filename, chan_group_mann_disp_filename, dsm2_channels_input_filename, dsm2_channels_output_filename)
 
 @click.command()
-@click.argument("process_name", type=click.Choice(['resample', 'extract', 'plot'], case_sensitive=False), default='')
+@click.argument(
+    "chan_to_group_filename",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+@click.argument(
+    "chan_group_mann_disp_filename",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+@click.argument(
+    "dsm2_channels_input_filename",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+@click.argument(
+    "dsm2_channels_output_filename",
+    type=click.Path(dir_okay=False, exists=False, readable=False),
+)
+def exec_dsm2_chan_mann_disp(
+    chan_to_group_filename,
+    chan_group_mann_disp_filename,
+    dsm2_channels_input_filename,
+    dsm2_channels_output_filename,
+):
+    dsm2_chan_mann_disp.prepro(
+        chan_to_group_filename,
+        chan_group_mann_disp_filename,
+        dsm2_channels_input_filename,
+        dsm2_channels_output_filename,
+    )
+
+
+@click.command()
+@click.argument(
+    "process_name",
+    type=click.Choice(["resample", "extract", "plot"], case_sensitive=False),
+    default="",
+)
 @click.argument("json_config_file")
 def exec_checklist_dsm2(process_name, json_config_file):
     print(process_name, json_config_file)
     checklist_dsm2.run_checklist(process_name, json_config_file)
 
+
 @click.command()
 def exec_create_ann_inputs():
-    print('create ann inputs')
+    print("create ann inputs")
     create_ann_inputs.create_ann_inputs()
 
+
+@click.command(name="todss")
+@click.argument(
+    "datastore_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True),
+)
+@click.argument(
+    "dssfile", type=click.Path(dir_okay=False, exists=False, readable=False)
+)
+@click.argument(
+    "param",
+    type=click.Choice(
+        [
+            "elev",
+            "predictions",
+            "flow",
+            "temp",
+            "do",
+            "ec",
+            "ssc",
+            "turbidity",
+            "ph",
+            "velocity",
+            "cla",
+        ],
+        case_sensitive=False,
+    ),
+)
+@click.option(
+    "--repo-level",
+    type=click.Choice(["screened"], case_sensitive=False),
+    default="screened",
+)
+def todss(datastore_dir, dssfile, param, repo_level="screened"):
+    datastore2dss.read_from_datastore_write_to_dss(
+        datastore_dir, dssfile, param, repo_level
+    )
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
+def datastore():
+    pass
+
+
+datastore.add_command(todss)
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
@@ -82,6 +210,7 @@ main.add_command(exec_postpro_dsm2)
 main.add_command(exec_dsm2_chan_mann_disp)
 main.add_command(exec_checklist_dsm2)
 main.add_command(exec_create_ann_inputs)
+main.add_command(datastore)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
