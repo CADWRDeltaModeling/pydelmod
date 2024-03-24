@@ -296,9 +296,11 @@ def dsm2():
 
 
 from pydelmod import geoheatmap
+from pydelmod import dssui
 
 dsm2.add_command(stations_output_file)
 
+main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
 main.add_command(output_map_plotter)

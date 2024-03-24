@@ -23,7 +23,7 @@ dependencies:
   - pandas
   - xarray
   - h5py
-  - scipy<1.12
+  - scipy
   # geo stuff
   - geopandas
   # then plot stuff
