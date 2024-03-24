@@ -60,3 +60,29 @@ def read_from_datastore_write_to_dss(
             print("Writing to ", pathname)
             f.write_rts(pathname, ts, row["unit"], "INST-VAL")
     print("Done")
+
+
+def write_station_lat_lng(datastore_dir, station_file, param):
+    """
+    Writes station_id, latitude, longitude to a csv file
+
+    Parameters
+    ----------
+    datastore_dir : str
+        Directory where Datastore files are stored
+    station_file : str
+        Filename to write to
+    param : str
+        e.g one of "flow","elev", "ec", etc.
+    """
+    inventory_file, mtime = find_lastest_fname(
+        f"inventory_datasets_screened*.csv", datastore_dir
+    )
+    print("Using inventory file:", inventory_file)
+    inventory = pd.read_csv(inventory_file)
+    inventory = inventory[inventory["param"] == param]
+    inventory = inventory.drop_duplicates(subset=["station_id"])
+    inventory = inventory[["station_id", "lat", "lon"]]
+    inventory.to_csv(station_file, index=False)
+    print("Wrote to ", station_file)
+    print("Done")

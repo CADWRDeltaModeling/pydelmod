@@ -196,12 +196,96 @@ def todss(datastore_dir, dssfile, param, repo_level="screened"):
     )
 
 
+@click.command(name="tostationfile")
+@click.argument(
+    "datastore_dir",
+    type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True),
+)
+@click.argument(
+    "stationfile", type=click.Path(dir_okay=False, exists=False, readable=False)
+)
+@click.argument(
+    "param",
+    type=click.Choice(
+        [
+            "elev",
+            "predictions",
+            "flow",
+            "temp",
+            "do",
+            "ec",
+            "ssc",
+            "turbidity",
+            "ph",
+            "velocity",
+            "cla",
+        ],
+        case_sensitive=False,
+    ),
+)
+def tostationfile(datastore_dir, stationfile, param):
+    datastore2dss.write_station_lat_lng(datastore_dir, stationfile, param)
+
+
 @click.group(context_settings=CONTEXT_SETTINGS)
 def datastore():
     pass
 
 
 datastore.add_command(todss)
+datastore.add_command(tostationfile)
+
+
+@click.command(name="stations_output_file")
+@click.argument(
+    "stations_file",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+@click.argument(
+    "centerlines_file",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+@click.argument(
+    "output_file", type=click.Path(dir_okay=False, exists=False, readable=False)
+)
+@click.option(
+    "--distance-tolerance",
+    type=click.INT,
+    default=100,
+    help="Maximum distance from a line that a station can be to be considered on that line",
+)
+def stations_output_file(
+    stations_file, centerlines_file, output_file, distance_tolerance=100
+):
+    """
+    Create DSM2 channels output compatible file for given stations info (station_id, lat lon)
+    and centerlines geojson file (DSM2 channels centerlines) and writing out output_file
+
+    stations_file :  The stations file should be a csv file with columns 'station_id', 'lat', 'lon'
+        You can generate this file from a shapefile using the `pydelmod datastsore tostationfile` command
+
+    centerlines_file : Path to the centerlines geojson file for dsm2 channel centerlines
+
+    output_file : Path to the output file, the format will be a pandas dataframe with columns 'NAME', 'CHAN_NO', 'DISTANCE' and space separated
+
+    distance_tolerance : default 100
+    """
+    from pydelmod import dsm2gis
+
+    dsm2gis.create_stations_output_file(
+        stations_file=stations_file,
+        centerlines_file=centerlines_file,
+        output_file=output_file,
+        distance_tolerance=distance_tolerance,
+    )
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
+def dsm2():
+    pass
+
+
+dsm2.add_command(stations_output_file)
 
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
@@ -211,6 +295,7 @@ main.add_command(exec_dsm2_chan_mann_disp)
 main.add_command(exec_checklist_dsm2)
 main.add_command(exec_create_ann_inputs)
 main.add_command(datastore)
+main.add_command(dsm2)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
