@@ -241,7 +241,7 @@ datastore.add_command(todss)
 datastore.add_command(tostationfile)
 
 
-@click.command(name="stations_output_file")
+@click.command()
 @click.argument(
     "stations_file",
     type=click.Path(dir_okay=False, exists=True, readable=True),
@@ -295,6 +295,8 @@ def dsm2():
     pass
 
 
+from pydelmod import geoheatmap
+
 dsm2.add_command(stations_output_file)
 
 main.add_command(map_channels_colored)
@@ -304,6 +306,7 @@ main.add_command(exec_postpro_dsm2)
 main.add_command(exec_dsm2_chan_mann_disp)
 main.add_command(exec_checklist_dsm2)
 main.add_command(exec_create_ann_inputs)
+main.add_command(geoheatmap.show_metrics_geo_heatmap)
 main.add_command(datastore)
 main.add_command(dsm2)
 
