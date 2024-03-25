@@ -229,6 +229,11 @@ def tostationfile(datastore_dir, stationfile, param):
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 def datastore():
+    """
+    CLI for interacting with the datastore.
+    pydelmod datastore -h
+    for more info
+    """
     pass
 
 
@@ -282,6 +287,11 @@ def stations_output_file(
 
 @click.group(context_settings=CONTEXT_SETTINGS)
 def dsm2():
+    """
+    CLI for DSM2 related commands
+    pydelmod dsm2 -h
+    for more info
+    """
     pass
 
 
