@@ -158,7 +158,7 @@ def exec_create_ann_inputs():
     create_ann_inputs.create_ann_inputs()
 
 
-@click.command(name="todss")
+@click.command()
 @click.argument(
     "datastore_dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True),
@@ -190,13 +190,26 @@ def exec_create_ann_inputs():
     type=click.Choice(["screened"], case_sensitive=False),
     default="screened",
 )
-def todss(datastore_dir, dssfile, param, repo_level="screened"):
+def datastore_to_dss(datastore_dir, dssfile, param, repo_level="screened"):
+    """
+    Reads datastore timeseries files and writes to a DSS file
+
+    Parameters
+    datastore_dir : str
+        Directory where Datastore files are stored
+    repo_level : str
+        default is screened
+    dssfile : str
+        Filename to write to
+    param : str
+        e.g one of "flow","elev", "ec", etc.
+    """
     datastore2dss.read_from_datastore_write_to_dss(
         datastore_dir, dssfile, param, repo_level
     )
 
 
-@click.command(name="tostationfile")
+@click.command()
 @click.argument(
     "datastore_dir",
     type=click.Path(exists=True, file_okay=False, dir_okay=True, readable=True),
@@ -223,22 +236,19 @@ def todss(datastore_dir, dssfile, param, repo_level="screened"):
         case_sensitive=False,
     ),
 )
-def tostationfile(datastore_dir, stationfile, param):
+def datastore_to_stationfile(datastore_dir, stationfile, param):
+    """
+    Writes station_id, latitude, longitude to a csv file
+
+    Parameters
+    datastore_dir : str
+        Directory where Datastore files are stored
+    station_file : str
+        Filename to write to
+    param : str
+        e.g one of "flow","elev", "ec", etc.
+    """
     datastore2dss.write_station_lat_lng(datastore_dir, stationfile, param)
-
-
-@click.group(context_settings=CONTEXT_SETTINGS)
-def datastore():
-    """
-    CLI for interacting with the datastore.
-    pydelmod datastore -h
-    for more info
-    """
-    pass
-
-
-datastore.add_command(todss)
-datastore.add_command(tostationfile)
 
 
 @click.command()
@@ -285,20 +295,9 @@ def stations_output_file(
     )
 
 
-@click.group(context_settings=CONTEXT_SETTINGS)
-def dsm2():
-    """
-    CLI for DSM2 related commands
-    pydelmod dsm2 -h
-    for more info
-    """
-    pass
-
-
 from pydelmod import geoheatmap
 from pydelmod import dssui
 
-dsm2.add_command(stations_output_file)
 
 main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
@@ -309,8 +308,9 @@ main.add_command(exec_dsm2_chan_mann_disp)
 main.add_command(exec_checklist_dsm2)
 main.add_command(exec_create_ann_inputs)
 main.add_command(geoheatmap.show_metrics_geo_heatmap)
-main.add_command(datastore)
-main.add_command(dsm2)
+main.add_command(datastore_to_dss)
+main.add_command(datastore_to_stationfile)
+main.add_command(stations_output_file)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
