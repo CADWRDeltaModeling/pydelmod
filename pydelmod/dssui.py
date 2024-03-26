@@ -201,19 +201,24 @@ class DSSUI(param.Parameterized):
         dfcatpath["pathname"] = dfcatpath.apply(self._build_pathname, axis=1)
         return dfcatpath
 
-    def get_data_for_time_range(self, dssfile, r):
+    def get_data_for_time_range(self, dssfile, r, irreg):
         try:
-            if r["E"].startswith("IR-"):
-                raise ValueError(f"IR- data not supported yet!")
             dssfh = self.dssfh[dssfile]
             dfcatp = self.dsscats[dssfile]
             dfcatp = dfcatp[dfcatp["pathname"] == self._build_pathname(r)]
             pathname = dssfh.get_pathnames(dfcatp)[0]
-            df, unit, ptype = dssfh.read_rts(
-                pathname,
-                self.time_range[0].strftime("%Y-%m-%d"),
-                self.time_range[1].strftime("%Y-%m-%d"),
-            )
+            if irreg:
+                df, unit, ptype = dssfh.read_its(
+                    pathname,
+                    self.time_range[0].strftime("%Y-%m-%d"),
+                    self.time_range[1].strftime("%Y-%m-%d"),
+                )
+            else:
+                df, unit, ptype = dssfh.read_rts(
+                    pathname,
+                    self.time_range[0].strftime("%Y-%m-%d"),
+                    self.time_range[1].strftime("%Y-%m-%d"),
+                )
         except Exception as e:
             print(full_stack())
             if pn.state.notifications:
@@ -254,12 +259,14 @@ class DSSUI(param.Parameterized):
             )
             color_df = get_color_dataframe(stationids, hv.Cycle())
             for _, r in df.iterrows():
-                data, unit, _ = self.get_data_for_time_range(r["filename"], r)
+                irreg = r["E"].startswith("IR-")
+                data, unit, _ = self.get_data_for_time_range(r["filename"], r, irreg)
                 crv = self._create_crv(
                     data,
                     f'{r["B"]}/{r["C"]}',
                     f'{r["C"]} ({unit})',
                     f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})',
+                    irreg=irreg,
                 )
                 if unit not in layout_map:
                     layout_map[unit] = []
@@ -285,6 +292,9 @@ class DSSUI(param.Parameterized):
                                 opts.Curve(color=get_colors(station_map[k], color_df))
                             )
                             .opts(
+                                opts.Scatter(color=get_colors(station_map[k], color_df))
+                            )
+                            .opts(
                                 show_legend=self.show_legend,
                                 legend_position=self.legend_position,
                                 ylim=(
@@ -306,8 +316,11 @@ class DSSUI(param.Parameterized):
             pn.state.notifications.error(f"Error while fetching data for {e}")
             return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
 
-    def _create_crv(self, df, crvlabel, ylabel, title):
-        crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False):
+        if irreg:
+            crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        else:
+            crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
