@@ -128,8 +128,6 @@ class DSSUI(param.Parameterized):
     def update_data_table(self, dfs):
         if not hasattr(self, "display_table"):
             column_width_map = {
-                "index": "5%",
-                "T": "5%",
                 "A": "15%",
                 "B": "15%",
                 "C": "15%",
@@ -137,13 +135,20 @@ class DSSUI(param.Parameterized):
                 "F": "15%",
                 "D": "20%",
             }
-
+            table_filters = {
+                "A": {"type": "input", "func": "like", "placeholder": "Enter match"},
+                "B": {"type": "input", "func": "like", "placeholder": "Enter match"},
+                "C": {"type": "input", "func": "like", "placeholder": "Enter match"},
+                "E": {"type": "input", "func": "like", "placeholder": "Enter match"},
+                "F": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            }
             self.display_table = pn.widgets.Tabulator(
                 dfs,
                 disabled=True,
                 widths=column_width_map,
                 show_index=False,
                 sizing_mode="stretch_width",
+                header_filters=table_filters,
             )
 
             self.plot_button = pn.widgets.Button(
