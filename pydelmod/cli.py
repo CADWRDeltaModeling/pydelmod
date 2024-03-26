@@ -297,7 +297,7 @@ def stations_output_file(
 
 from pydelmod import geoheatmap
 from pydelmod import dssui
-
+from pydelmod import dsm2gis
 
 main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
@@ -311,6 +311,7 @@ main.add_command(geoheatmap.show_metrics_geo_heatmap)
 main.add_command(datastore_to_dss)
 main.add_command(datastore_to_stationfile)
 main.add_command(stations_output_file)
+main.add_command(dsm2gis.geolocate_output_locations)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

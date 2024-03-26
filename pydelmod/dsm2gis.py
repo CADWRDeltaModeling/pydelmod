@@ -1,11 +1,13 @@
 # Functions to help with DSM2 and GIS related tasks
-# %%
 import math
 import pandas as pd
 import geopandas as gpd
+import click
 import shapely
 from shapely.geometry import Point, MultiLineString
 from shapely.ops import nearest_points
+import pydsm
+from pydsm.input import parser
 
 
 def find_closest_line_and_distance(point: Point, gdf):
@@ -93,3 +95,55 @@ def create_stations_output_file(
     )
     print("Writing to hydro compatible format: ", output_file)
     dfstation_dist.to_csv(output_file, index=False, sep=" ")
+
+
+@click.command()
+@click.argument("dsm2_echo_file", type=click.Path(exists=True, readable=True))
+@click.argument("centerlines_geojson_file", type=click.Path(exists=True, readable=True))
+@click.argument("output_geojson_file", type=click.Path())
+def geolocate_output_locations(
+    dsm2_echo_file, centerlines_geojson_file, output_geojson_file
+):
+    """
+    Create stations output file from DSM2 echo file and the centerlines for the channels
+    and writing out output_file
+
+    The output file is a geojson file with the names of the stations and their locations
+
+    Returns the GeoDataFrame of the output stations
+
+    Parameters
+    ----------
+    dsm2_echo_file : str
+        Path to the DSM2 file
+    centerlines_geojson_file : str
+        Path to the centerlines file
+    output_geojson_file : str
+        Path to the output file
+    """
+    tables = parser.read_input(dsm2_echo_file)
+    channels_table = tables["CHANNEL"]
+    output_table = tables["OUTPUT_CHANNEL"]
+    centerlines = gpd.read_file(centerlines_geojson_file).to_crs(epsg=26910)
+    geometry = []
+    for idx, row in output_table.iterrows():
+        cline = centerlines[centerlines.id == row["CHAN_NO"]]
+        channel = channels_table[channels_table["CHAN_NO"] == row["CHAN_NO"]]
+        channel_length = channel["LENGTH"].values[0]
+        if row["DISTANCE"].strip().upper() == "LENGTH":
+            distance = 1
+        else:
+            distance = float(row["DISTANCE"]) / channel_length
+        multi_line = cline.geometry.values[0]
+        point = multi_line.interpolate(distance, normalized=True)
+        geometry.append(point)
+    dsm2_output_stations = output_table[["NAME", "CHAN_NO", "DISTANCE"]].copy()
+    dsm2_output_stations = gpd.GeoDataFrame(
+        dsm2_output_stations, geometry=geometry, crs="EPSG:26910"
+    )
+    dsm2_output_stations = dsm2_output_stations.drop_duplicates(
+        subset=["NAME"]
+    ).reset_index(drop=True)
+    dsm2_output_stations.to_file(output_geojson_file, driver="GeoJSON")
+    print("Writing to geojson format: ", output_geojson_file)
+    return dsm2_output_stations
