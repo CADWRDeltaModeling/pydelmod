@@ -16,148 +16,147 @@ hv.extension("bokeh")
 pn.extension()
 
 
-def build_output_plotter(channel_shapefile, hydro_echo_file, variable="flow"):
-    hydro_tables = load_echo_file(hydro_echo_file)
-    dsm2_chan_lines = load_dsm2_channelline_shapefile(channel_shapefile)
-    dsm2_chan_lines = join_channels_info_with_dsm2_channel_line(
-        dsm2_chan_lines, hydro_tables
-    )
-    output_channels = hydro_tables["OUTPUT_CHANNEL"]
-    output_dir = os.path.dirname(hydro_echo_file)
-    output_channels["FILE"] = output_channels["FILE"].str.replace(
-        "./output", output_dir, regex=False
-    )
-    pts = output_channels.apply(
-        lambda row: get_location_on_channel_line(
-            row["CHAN_NO"], row["DISTANCE"], dsm2_chan_lines
-        ).values[0],
-        axis=1,
-        result_type="reduce",
-    )
-    output_channels = gpd.GeoDataFrame(
-        output_channels, geometry=pts, crs={"init": "epsg:26910"}
-    )
-    time_range = get_runtime(hydro_tables)
-    plotter = DSM2StationPlotter(
-        output_channels[output_channels.VARIABLE == variable], time_range
-    )
-    return plotter
+import pyhecdss as dss
+
+from .dataui import DataUI, DataUIManager
+from .dataui import full_stack
 
 
-class DSM2StationPlotter(param.Parameterized):
-    """Plots all data for single selected station"""
+class DSM2DataUIManager(DataUIManager):
+    def __init__(self, output_channels, **kwargs):
+        """
+        output_channels is a geopandas dataframe with columns:
+        NAME  CHAN_NO  DISTANCE  VARIABLE  INTERVAL  PERIOD_OP  FILE
+        """
+        self.time_range = kwargs.get("time_range", None)
+        self.output_channels = output_channels
+        self.station_id_column = "NAME"
 
-    selected = param.List(default=[0], doc="Selected node indices to display in plot")
-    date_range = param.DateRange()  # filter by date range
-    godin = param.Boolean()  # godin filter and display
+    # data related methods
+    def get_data_catalog(self):
+        return self.output_channels
 
-    def __init__(self, stations, time_range, **kwargs):
-        super().__init__(**kwargs)
-        self.date_range = time_range
-        self.godin = False
-        self.stations = stations
-        self.points_map = self.stations.hvplot.points(
-            "easting",
-            "northing",
-            geo=True,
-            tiles="CartoLight",
-            crs="EPSG:3857",
-            project=True,
-            frame_height=400,
-            frame_width=300,
-            fill_alpha=0.9,
-            line_alpha=0.4,
-            hover_cols=["CHAN_NO", "NAME", "VARIABLE"],
-        )
-        self.points_map = self.points_map.opts(
-            opts.Points(
-                tools=["tap", "hover"],
-                size=5,
-                nonselection_color="red",
-                nonselection_alpha=0.3,
-                active_tools=["wheel_zoom"],
-            )
-        )
-        self.map_pane = pn.Row(self.points_map)
-        # create a selection and add it to a dynamic map calling back show_ts
-        self.select_stream = hv.streams.Selection1D(source=self.points_map, index=[0])
-        self.select_stream.add_subscriber(self.set_selected)
-        self.meta_pane = pn.Row()
-        self.ts_pane = pn.Row()
+    def get_time_range(self, dfcat):
+        return self.time_range
 
-    def set_selected(self, index):
-        if index is None or len(index) == 0:
-            pass  # keep the previous selections
+    def get_station_ids(self, df):
+        return df["NAME"].unique()
+
+    def get_table_column_width_map(self):
+        """only columns to be displayed in the table should be included in the map"""
+        column_width_map = {
+            "NAME": "15%",
+            "CHAN_NO": "10%",
+            "DISTANCE": "10%",
+            "VARIABLE": "10%",
+            "INTERVAL": "5%",
+            "PERIOD_OP": "5%",
+            "FILE": "25%",
+        }
+        return column_width_map
+
+    def get_table_filters(self):
+        table_filters = {
+            "NAME": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "CHAN_NO": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "DISTANCE": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "VARIABLE": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "INTERVAL": {"type": "input", "func": "like", "placeholder": "Enter match"},
+        }
+        return table_filters
+
+    def _append_to_title_map(self, title_map, unit, r):
+        value = title_map[unit]
+        if r["VARIABLE"] not in value[0]:
+            value[0] += f',{r["VARIABLE"]}'
+        if r["NAME"] not in value[1]:
+            value[1] += f',{r["NAME"]}'
+        if str(r["CHAN_NO"]) not in value[2]:
+            value[2] += f',{r["CHAN_NO"]}'
+        if r["DISTANCE"] not in value[3]:
+            value[3] += f',{r["DISTANCE"]}'
+        title_map[unit] = value
+
+    def _create_title(self, v):
+        title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
+        return title
+
+    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False):
+        if irreg:
+            crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         else:
-            self.selected = index
+            crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        return crv.opts(
+            xlabel="Time",
+            ylabel=ylabel,
+            title=title,
+            responsive=True,
+            active_tools=["wheel_zoom"],
+            tools=["hover"],
+        )
 
-    @lru_cache(maxsize=25)
-    def _get_all_sensor_data(self, name, var, intvl, file):
-        # get data for location
-        return [next(pyhecdss.get_ts(file, f"//{name}/{var}//{intvl}//"))[0]]
+    def get_data_for_time_range(self, dssfile, r, time_range):
+        try:
+            dssfile = r["FILE"]
+            pathname = f'//{r["NAME"]}/{r["VARIABLE"]}////'
+            df, unit, ptype = next(
+                dss.get_matching_ts(dssfile, pathname)
+            )  # get first matching time series
+        except Exception as e:
+            print(full_stack())
+            if pn.state.notifications:
+                pn.state.notifications.error(
+                    f"Error while fetching data for {dssfile}/{pathname}: {e}"
+                )
+            df = pd.DataFrame(columns=["value"], dtype=float)
+            unit = "X"
+            ptype = "INST-VAL"
+        df = df[slice(*time_range)]
+        return df, unit, ptype
 
-    def _get_selected_data_row(self):
-        index = self.selected
-        if index is None or len(index) == 0:
-            index = self.selected
-        # Use only the first index in the array
-        first_index = index[0]
-        return self.stations.iloc[first_index, :]
+    def build_station_name(self, r):
+        return f'{r["NAME"]}'  # unique within units...
 
-    # @@ callback to get data for index
-    def get_selected_data(self):
-        dfselected = self._get_selected_data_row()
-        # NAME	CHAN_NO	DISTANCE	VARIABLE	INTERVAL	PERIOD_OP	FILE
-        stn_name = dfselected["NAME"]
-        chan_id = dfselected["CHAN_NO"]
-        dist = dfselected["DISTANCE"]
-        var = dfselected["VARIABLE"]
-        intvl = dfselected["INTERVAL"]
-        file = dfselected["FILE"]
-        data_array = self._get_all_sensor_data(stn_name, var, intvl, file)
-        stn_id = f"{chan_id}-{dist}_{var}"
-        return data_array, stn_id, stn_name
-
-    # @@ callback to display ..
-    @param.depends("selected")
-    def show_meta(self):
-        dfselected = self._get_selected_data_row()
-        # Points is not serializable to JSON https://github.com/bokeh/bokeh/issues/8423
-        dfselected = dfselected.drop("geometry")
-        self.data_frame = pn.widgets.DataFrame(dfselected.to_frame())
-        return self.data_frame
-
-    # @ callback to display ..
-    @param.depends("selected", "date_range", "godin")
-    def show_ts(self):
-        data_array, stn_id, stn_name = self.get_selected_data()
-        crv_list = []  # left here for multi curve later
-        for data in data_array:
-            if self.godin:
-                el = hv.Curve(godin(data), label="godin filtered")
-            else:
-                el = hv.Curve(data)
-            el = el.opts(
-                title=f"Station: {stn_id} :: {stn_name}",
-                xlim=self.date_range,
-                ylabel="Time",
+    def create_layout(self, df, time_range):
+        layout_map = {}
+        title_map = {}
+        range_map = {}
+        station_map = {}  # list of stations for each unit
+        for _, r in df.iterrows():
+            data, unit, _ = self.get_data_for_time_range(r["FILE"], r, time_range)
+            crv = self._create_crv(
+                data,
+                f'{r["NAME"]}/{r["VARIABLE"]}',
+                f'{r["VARIABLE"]} ({unit})',
+                f'{r["VARIABLE"]} @ {r["NAME"]} ({r["CHAN_NO"]}/{r["DISTANCE"]})',
             )
-            crv_list.append(el)
-        layout = hv.Layout(crv_list).cols(1).opts(opts.Curve(width=900))
-        return layout.opts(title=f"{stn_id}: {stn_name}")
+            if unit not in layout_map:
+                layout_map[unit] = []
+                title_map[unit] = [
+                    r["VARIABLE"],
+                    r["NAME"],
+                    str(r["CHAN_NO"]),
+                    r["DISTANCE"],
+                ]
+                range_map[unit] = None
+                station_map[unit] = []
+            layout_map[unit].append(crv)
+            station_map[unit].append(self.build_station_name(r))
+            self._append_to_title_map(title_map, unit, r)
+        title_map = {k: self._create_title(v) for k, v in title_map.items()}
+        return layout_map, station_map, range_map, title_map
 
-    def get_panel(self):
-        slider = pn.Param(
-            self.param.date_range,
-            widgets={"date_range": pn.widgets.DatetimeRangePicker},
-        )
-        godin_box = pn.Param(self.param.godin, widgets={"godin": pn.widgets.Checkbox})
-        self.meta_pane = pn.Row(self.show_meta)
-        self.ts_pane = pn.Row(self.show_ts)
-        return pn.Column(
-            pn.Row(pn.Column(self.map_pane, slider, godin_box), self.meta_pane),
-            self.ts_pane,
-        )
+    # methods below if geolocation data is available
+    def get_tooltips(self):
+        return [
+            ("NAME", "@NAME"),
+            ("CHAN_NO", "@CHAN_NO"),
+            ("DISTANCE", "@DISTANCE"),
+            ("VARIABLE", "@VARIABLE"),
+        ]
+
+    def get_map_color_category(self):
+        return "VARIABLE"
 
 
 class DSM2FlowlineMap:
@@ -358,3 +357,66 @@ class DSM2GraphNetworkMap(param.Parameterized):
             ),
             self.ts_pane,
         )
+
+
+#### functions for cli
+
+
+def build_output_plotter(channel_line_geojson_file, hydro_echo_file):
+    hydro_tables = load_echo_file(hydro_echo_file)
+    time_range = get_runtime(hydro_tables)
+    output_channels = hydro_tables["OUTPUT_CHANNEL"]
+    output_dir = os.path.dirname(hydro_echo_file)
+    output_channels["FILE"] = output_channels["FILE"].str.replace(
+        "./output", output_dir, regex=False
+    )
+
+    dsm2_chan_lines = load_dsm2_channelline_shapefile(channel_line_geojson_file)
+    dsm2_chan_lines = join_channels_info_with_dsm2_channel_line(
+        dsm2_chan_lines, hydro_tables
+    )
+    pts = output_channels.apply(
+        lambda row: get_location_on_channel_line(
+            row["CHAN_NO"], row["DISTANCE"], dsm2_chan_lines
+        ).values[0],
+        axis=1,
+        result_type="reduce",
+    )
+    output_channels = gpd.GeoDataFrame(
+        output_channels, geometry=pts, crs={"init": "epsg:26910"}
+    )
+    plotter = DSM2DataUIManager(output_channels, time_range=time_range)
+
+    return plotter
+
+
+from . import dataui
+import click
+
+
+@click.command()
+@click.argument(
+    "channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+@click.argument(
+    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
+)
+def show_dsm2_output_ui(channel_shapefile, hydro_echo_file):
+    """
+    Show a user interface for viewing DSM2 output data
+
+    The channel centerlines are used with the hydro_echo file to display the output data at the output locations
+    CHAN_NO is assumed to be the channel number in the hydro_echo file and the in the channel centerlines file
+    DISTANCE is projected in a normalized way to the channel length (LENGTH keyword is converted to 1)
+
+    Parameters
+    ----------
+
+    channel_shapefile : GeoJSON file for channel centerlines with DSM2 channel information
+
+    hydro_echo_file : DSM2 hydro_echo file
+
+    """
+    plotter = build_output_plotter(channel_shapefile, hydro_echo_file)
+    ui = dataui.DataUI(plotter)
+    ui.create_view().show()

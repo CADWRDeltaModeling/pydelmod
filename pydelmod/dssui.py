@@ -6,86 +6,37 @@ import warnings
 warnings.filterwarnings("ignore")
 #
 import pandas as pd
+import geopandas as gpd
 
 # viz and ui
 import holoviews as hv
 from holoviews import opts
 
 hv.extension("bokeh")
+import cartopy
 import geoviews as gv
 
 gv.extension("bokeh")
 import param
 import panel as pn
 
-pn.extension("tabulator", notifications=True, design="native")
 #
 import pyhecdss as dss
-from pydelmod import fullscreen
+
+from .dataui import DataUI, DataUIManager
+from .dataui import full_stack
 
 
-def get_colors(stations, dfc):
-    """
-    Create a dictionary with station names and colors
-    """
-    return hv.Cycle(list(dfc.loc[stations].values.flatten()))
-
-
-# from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
-def full_stack():
-    import traceback, sys
-
-    exc = sys.exc_info()[0]
-    stack = traceback.extract_stack()[:-1]  # last one would be full_stack()
-    if exc is not None:  # i.e. an exception is present
-        del stack[-1]  # remove call of full_stack, the printed exception
-        # will contain the caught exception caller instead
-    trc = "Traceback (most recent call last):\n"
-    stackstr = trc + "".join(traceback.format_list(stack))
-    if exc is not None:
-        stackstr += "  " + traceback.format_exc().lstrip(trc)
-    return stackstr
-
-
-def get_color_dataframe(stations, color_cycle=hv.Cycle()):
-    """
-    Create a dataframe with station names and colors
-    """
-    cc = color_cycle.values
-    # extend cc to the size of stations
-    while len(cc) < len(stations):
-        cc = cc + cc
-    dfc = pd.DataFrame({"stations": stations, "color": cc[: len(stations)]})
-    dfc.set_index("stations", inplace=True)
-    return dfc
-
-
-def get_colors(stations, dfc):
-    """
-    Create a dictionary with station names and colors
-    """
-    return hv.Cycle(list(dfc.loc[stations].values.flatten()))
-
-
-class DSSUI(param.Parameterized):
-    """
-    Show table of data from DSS file
-    Furthermore select the data rows and click on button to display plots for selected rows
-    """
-
-    time_range = param.CalendarDateRange(
-        default=(datetime.now() - timedelta(days=10), datetime.now()),
-        doc="Time window for data. Default is last 10 days",
-    )
-    show_legend = param.Boolean(default=True, doc="Show legend")
-    legend_position = param.Selector(
-        objects=["top_right", "top_left", "bottom_right", "bottom_left"],
-        default="top_right",
-        doc="Legend position",
-    )
-
+class DSSDataManager(param.Parameterized):
     def __init__(self, *dssfiles, **kwargs):
+        self.time_range = kwargs.pop("time_range", None)
+        self.geo_locations = kwargs.pop("geo_locations", None)
+        self.geo_id_column = kwargs.pop("geo_id_column", "station_id")
+        self.station_id_column = kwargs.pop(
+            "station_id_column", "B"
+        )  # The column in the data catalog that contains the station id
         super().__init__(**kwargs)
+        self.dssfiles = dssfiles
         dfcats = []
         dssfh = {}
         dsscats = {}
@@ -100,87 +51,33 @@ class DSSUI(param.Parameterized):
         self.dsscats = dsscats
         self.dfcat = pd.concat(dfcats)
         self.dfcat = self.dfcat.drop_duplicates().reset_index(drop=True)
+        # add in the geo locations
+        if self.geo_locations is not None:
+            # DSS names are always in upper case
+            self.geo_locations[self.geo_id_column] = (
+                self.geo_locations[self.geo_id_column].astype(str).str.upper()
+            )
+            self.dfcat = pd.merge(
+                self.geo_locations,
+                self.dfcat,
+                left_on=self.geo_id_column,
+                right_on=self.station_id_column,
+            )
         self.dssfiles = dssfiles
-        self.time_range = self.calculate_time_range(self.dfcat)
         self.dfcatpath = self._build_map_pathname_to_catalog(self.dfcat)
 
     def __del__(self):
-        for dssfile in self.dssfiles:
-            self.dssfh[dssfile].close()
+        if hasattr(self, "dssfiles"):
+            for dssfile in self.dssfiles:
+                self.dssfh[dssfile].close()
 
-    def calculate_time_range(self, dfcat):
-        """
-        Calculate time range from the data catalog
-        """
-        dftw = dfcat.D.str.split("-", expand=True)
-        dftw.columns = ["Tmin", "Tmax"]
-        dftw["Tmin"] = pd.to_datetime(dftw["Tmin"])
-        dftw["Tmax"] = pd.to_datetime(dftw["Tmax"])
-        tmin = dftw["Tmin"].min()
-        tmax = dftw["Tmax"].max()
-        return tmin, tmax
+    def build_pathname(self, r):
+        return f'/{r["A"]}/{r["B"]}/{r["C"]}//{r["E"]}/{r["F"]}/'
 
-    def show_data_catalog(self):
-        dfs = self.dfcat.iloc[:]  # FIXME: later add filters
-        # return a UI with controls to plot and show data
-        return self.update_data_table(dfs)
-
-    def update_data_table(self, dfs):
-        if not hasattr(self, "display_table"):
-            column_width_map = {
-                "A": "15%",
-                "B": "15%",
-                "C": "15%",
-                "E": "10%",
-                "F": "15%",
-                "D": "20%",
-            }
-            table_filters = {
-                "A": {"type": "input", "func": "like", "placeholder": "Enter match"},
-                "B": {"type": "input", "func": "like", "placeholder": "Enter match"},
-                "C": {"type": "input", "func": "like", "placeholder": "Enter match"},
-                "E": {"type": "input", "func": "like", "placeholder": "Enter match"},
-                "F": {"type": "input", "func": "like", "placeholder": "Enter match"},
-            }
-            self.display_table = pn.widgets.Tabulator(
-                dfs,
-                disabled=True,
-                widths=column_width_map,
-                show_index=False,
-                sizing_mode="stretch_width",
-                header_filters=table_filters,
-            )
-
-            self.plot_button = pn.widgets.Button(
-                name="Plot", button_type="primary", icon="chart-line"
-            )
-            self.plot_button.on_click(self.update_plots)
-            self.plot_panel = pn.panel(
-                hv.Div("<h3>Select rows from table and click on button</h3>"),
-                sizing_mode="stretch_both",
-            )
-            gspec = pn.GridStack(
-                sizing_mode="stretch_both", allow_resize=True, allow_drag=False
-            )  # ,
-            gspec[0, 0:5] = pn.Row(
-                self.plot_button,
-                pn.layout.HSpacer(),
-            )
-            gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-            gspec[6:15, 0:10] = fullscreen.FullScreen(pn.Row(self.plot_panel))
-            self.plots_panel = pn.Row(
-                gspec
-            )  # fails with object of type 'GridSpec' has no len()
-
-        else:
-            self.display_table.value = dfs
-
-        return self.plots_panel
-
-    def update_plots(self, event):
-        self.plot_panel.loading = True
-        self.plot_panel.object = self.create_plots(event)
-        self.plot_panel.loading = False
+    def _build_map_pathname_to_catalog(self, dfcat):
+        dfcatpath = dfcat.copy()
+        dfcatpath["pathname"] = dfcatpath.apply(self.build_pathname, axis=1)
+        return dfcatpath
 
     def _slice_df(self, df, time_range):
         sdf = df.loc[slice(*time_range), :]
@@ -193,31 +90,43 @@ class DSSUI(param.Parameterized):
         else:
             return sdf
 
-    def _build_pathname(self, r):
-        return f'/{r["A"]}/{r["B"]}/{r["C"]}//{r["E"]}/{r["F"]}/'
+    def get_data_catalog(self):
+        return self.dfcat
 
-    def _build_map_pathname_to_catalog(self, dfcat):
-        dfcatpath = dfcat.copy()
-        dfcatpath["pathname"] = dfcatpath.apply(self._build_pathname, axis=1)
-        return dfcatpath
+    def get_time_range(self, dfcat):
+        """
+        Calculate time range from the data catalog
+        """
+        if self.time_range is None:  # guess from catalog of DSS files
+            dftw = dfcat.D.str.split("-", expand=True)
+            dftw.columns = ["Tmin", "Tmax"]
+            dftw["Tmin"] = pd.to_datetime(dftw["Tmin"])
+            dftw["Tmax"] = pd.to_datetime(dftw["Tmax"])
+            tmin = dftw["Tmin"].min()
+            tmax = dftw["Tmax"].max()
+            self.time_range = (tmin, tmax)
+        return self.time_range
 
-    def get_data_for_time_range(self, dssfile, r, irreg):
+    def get_station_ids(self, df):
+        return list((df.apply(self.build_pathname, axis=1).astype(str).unique()))
+
+    def get_data_for_time_range(self, dssfile, r, irreg, time_range):
         try:
             dssfh = self.dssfh[dssfile]
             dfcatp = self.dsscats[dssfile]
-            dfcatp = dfcatp[dfcatp["pathname"] == self._build_pathname(r)]
+            dfcatp = dfcatp[dfcatp["pathname"] == self.build_pathname(r)]
             pathname = dssfh.get_pathnames(dfcatp)[0]
             if irreg:
                 df, unit, ptype = dssfh.read_its(
                     pathname,
-                    self.time_range[0].strftime("%Y-%m-%d"),
-                    self.time_range[1].strftime("%Y-%m-%d"),
+                    time_range[0].strftime("%Y-%m-%d"),
+                    time_range[1].strftime("%Y-%m-%d"),
                 )
             else:
                 df, unit, ptype = dssfh.read_rts(
                     pathname,
-                    self.time_range[0].strftime("%Y-%m-%d"),
-                    self.time_range[1].strftime("%Y-%m-%d"),
+                    time_range[0].strftime("%Y-%m-%d"),
+                    time_range[1].strftime("%Y-%m-%d"),
                 )
         except Exception as e:
             print(full_stack())
@@ -230,6 +139,48 @@ class DSSUI(param.Parameterized):
             ptype = "INST-VAL"
         df = df[slice(df.first_valid_index(), df.last_valid_index())]
         return df, unit, ptype
+
+
+class DSSDataUIManager(DataUIManager):
+    def __init__(self, *dssfiles, **kwargs):
+        """
+        geolocations is a geodataframe with station_id, and geometry columns
+        This is merged with the data catalog to get the station locations.
+        """
+        self.data_manager = DSSDataManager(*dssfiles, **kwargs)
+
+    # data related methods
+    def get_data_catalog(self):
+        return self.data_manager.get_data_catalog()
+
+    def get_station_ids(self, df):
+        return self.data_manager.get_station_ids(df)
+
+    def get_time_range(self, dfcat):
+        return self.data_manager.get_time_range(dfcat)
+
+    def get_table_column_width_map(self):
+        """only columns to be displayed in the table should be included in the map"""
+        column_width_map = {
+            "A": "15%",
+            "B": "15%",
+            "C": "15%",
+            "E": "10%",
+            "F": "15%",
+            "D": "20%",
+            "filename": "10%",
+        }
+        return column_width_map
+
+    def get_table_filters(self):
+        table_filters = {
+            "A": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "B": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "C": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "E": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "F": {"type": "input", "func": "like", "placeholder": "Enter match"},
+        }
+        return table_filters
 
     def _append_to_title_map(self, title_map, unit, r):
         value = title_map[unit]
@@ -247,75 +198,6 @@ class DSSUI(param.Parameterized):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
-    def create_plots(self, event):
-        df = self.display_table.value.iloc[self.display_table.selection]
-        try:
-            layout_map = {}
-            title_map = {}
-            range_map = {}
-            station_map = {}  # list of stations for each unit
-            stationids = list(
-                (df.apply(self._build_pathname, axis=1).astype(str).unique())
-            )
-            color_df = get_color_dataframe(stationids, hv.Cycle())
-            for _, r in df.iterrows():
-                irreg = r["E"].startswith("IR-")
-                data, unit, _ = self.get_data_for_time_range(r["filename"], r, irreg)
-                crv = self._create_crv(
-                    data,
-                    f'{r["B"]}/{r["C"]}',
-                    f'{r["C"]} ({unit})',
-                    f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})',
-                    irreg=irreg,
-                )
-                if unit not in layout_map:
-                    layout_map[unit] = []
-                    title_map[unit] = [
-                        r["C"],
-                        r["B"],
-                        r["A"],
-                        r["F"],
-                    ]
-                    range_map[unit] = None
-                    station_map[unit] = []
-                layout_map[unit].append(crv)
-                station_map[unit].append(self._build_pathname(r))
-                self._append_to_title_map(title_map, unit, r)
-            if len(layout_map) == 0:
-                return hv.Div("<h3>Select rows from table and click on button</h3>")
-            else:
-                return (
-                    hv.Layout(
-                        [
-                            hv.Overlay(layout_map[k])
-                            .opts(
-                                opts.Curve(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                opts.Scatter(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                show_legend=self.show_legend,
-                                legend_position=self.legend_position,
-                                ylim=(
-                                    tuple(range_map[k])
-                                    if range_map[k] is not None
-                                    else (None, None)
-                                ),
-                                title=self._create_title(title_map[k]),
-                            )
-                            for k in layout_map
-                        ]
-                    )
-                    .cols(1)
-                    .opts(axiswise=True, sizing_mode="stretch_both")
-                )
-        except Exception as e:
-            stackmsg = full_stack()
-            print(stackmsg)
-            pn.state.notifications.error(f"Error while fetching data for {e}")
-            return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
-
     def _create_crv(self, df, crvlabel, ylabel, title, irreg=False):
         if irreg:
             crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
@@ -330,74 +212,119 @@ class DSSUI(param.Parameterized):
             tools=["hover"],
         )
 
-    def get_about_text(self):
-        version = "0.1.0"
+    def create_layout(self, df, time_range):
+        layout_map = {}
+        title_map = {}
+        range_map = {}
+        station_map = {}  # list of stations for each unit
+        for _, r in df.iterrows():
+            irreg = r["E"].startswith("IR-")
+            data, unit, _ = self.data_manager.get_data_for_time_range(
+                r["filename"], r, irreg, time_range
+            )
+            crv = self._create_crv(
+                data,
+                f'{r["B"]}/{r["C"]}',
+                f'{r["C"]} ({unit})',
+                f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})',
+                irreg=irreg,
+            )
+            if unit not in layout_map:
+                layout_map[unit] = []
+                title_map[unit] = [
+                    r["C"],
+                    r["B"],
+                    r["A"],
+                    r["F"],
+                ]
+                range_map[unit] = None
+                station_map[unit] = []
+            layout_map[unit].append(crv)
+            station_map[unit].append(self.data_manager.build_pathname(r))
+            self._append_to_title_map(title_map, unit, r)
+        title_map = {k: self._create_title(v) for k, v in title_map.items()}
+        return layout_map, station_map, range_map, title_map
 
-        # insert app version with date time of last commit and commit id
-        version_string = f"DSS UI: {version}"
-        about_text = f"""
-        ## App version:
-        ### {version}
+    # methods below if geolocation data is available
+    def get_tooltips(self):
+        return [
+            ("station_id", "@station_id"),
+            ("A", "@A"),
+            ("B", "@B"),
+            ("C", "@C"),
+            ("E", "@E"),
+            ("F", "@F"),
+        ]
 
-        ## An App to view DSS data using Holoviews and Panel
-        """
-        return about_text
-
-    def create_about_button(self, template):
-        about_btn = pn.widgets.Button(
-            name="About App", button_type="primary", icon="info-circle"
-        )
-
-        def about_callback(event):
-            template.open_modal()
-
-        about_btn.on_click(about_callback)
-        return about_btn
-
-    def create_view(self):
-        control_widgets = pn.Row(
-            pn.Column(
-                pn.Param(
-                    self.param.time_range,
-                    widgets={
-                        "time_range": {
-                            "widget_type": pn.widgets.DatetimeRangeInput,
-                            "format": "%Y-%m-%d %H:%M",
-                        }
-                    },
-                ),
-                pn.WidgetBox(
-                    self.param.show_legend,
-                    self.param.legend_position,
-                ),
-            ),
-        )
-        sidebar_view = pn.Column(control_widgets)
-        main_view = pn.Column(pn.bind(self.show_data_catalog))
-
-        template = pn.template.VanillaTemplate(
-            title="DSS User Interface",
-            sidebar=[sidebar_view],
-            sidebar_width=450,
-            header_color="lightgray",
-        )
-        template.main.append(main_view)
-        # Adding about button
-        template.modal.append(self.get_about_text())
-        control_widgets[0].append(self.create_about_button(template))
-        return template
+    def get_map_color_category(self):
+        return "C"
 
 
-# %%
 import glob
 import click
 
 
 @click.command()
 @click.argument("dssfiles", nargs=-1)
-def show_dss_ui(dssfiles):
+@click.option(
+    "--location-file",
+    default=None,
+    help="Location file as geojson containing station locations as lat and lon columns",
+)
+@click.option(
+    "--location-id-column",
+    default="station_id",
+    help="Station ID column in location file",
+)
+@click.option(
+    "--station-id-column",
+    default="B",
+    help="Station ID column in data catalog, e.g. B part for DSS file pathname",
+)
+def show_dss_ui(
+    dssfiles, location_file=None, location_id_column="station_id", station_id_column="B"
+):
     """
     Show DSS UI for the given DSS files
+
+    dssfiles : list of DSS files
+    location_file : Location file as geojson containing station locations as lat and lon columns
+    location_id_column : Station ID column in location file
+    station_id_column : Station ID column in data catalog, e.g. B part for DSS file pathname
     """
-    ui = DSSUI(*dssfiles)
+    geodf = None
+    # TODO: Add support for other location file formats and move to a utility module
+    if location_file is not None:
+        if location_file.endswith(".shp") or location_file.endswith(".geojson"):
+            geodf = gpd.read_file(location_file)
+        elif location_file.endswith(".csv"):
+            df = pd.read_csv(location_file)
+            if all(column in df.columns for column in ["lat", "lon"]):
+                geodf = gpd.GeoDataFrame(
+                    df, geometry=gpd.points_from_xy(df.lon, df.lat, crs="EPSG:4326")
+                )
+            elif all(
+                column in df.columns for column in ["utm_easting", "utm_northing"]
+            ) or all(column in df.columns for column in ["utm_x", "utm_y"]):
+                geodf = gpd.GeoDataFrame(
+                    df,
+                    geometry=gpd.points_from_xy(df.utm_easting, df.utm_northing),
+                    crs="EPSG:26910",
+                )
+            else:
+                raise ValueError(
+                    "Location file should be a geojson file or should have lat and lon or utm_easting and utm_northing columns"
+                )
+        if not (location_id_column in geodf.columns):
+            raise ValueError(
+                f"Station ID column {location_id_column} not found in location file"
+            )
+
+    dssuimgr = DSSDataUIManager(
+        *dssfiles,
+        geo_locations=geodf,
+        geo_id_column=location_id_column,
+        station_id_column=station_id_column,
+    )
+    ui = DataUI(dssuimgr)
     ui.create_view().show()

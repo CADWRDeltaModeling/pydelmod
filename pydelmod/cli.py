@@ -54,26 +54,6 @@ def map_channels_colored(flowline_shapefile, hydro_echo_file, colored_by, base_f
 
 @click.command()
 @click.argument(
-    "channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
-)
-@click.argument(
-    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
-)
-@click.option(
-    "-v",
-    "--variable",
-    type=click.Choice(["flow", "stage"], case_sensitive=False),
-    default="flow",
-)
-def output_map_plotter(channel_shapefile, hydro_echo_file, variable):
-    plotter = build_output_plotter(channel_shapefile, hydro_echo_file, variable)
-    pn.serve(
-        plotter.get_panel(), kwargs={"websocket-max-message-size": 100 * 1024 * 1024}
-    )
-
-
-@click.command()
-@click.argument(
     "node_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
 )
 @click.argument(
@@ -298,8 +278,10 @@ def stations_output_file(
 from pydelmod import geoheatmap
 from pydelmod import dssui
 from pydelmod import dsm2gis
+from pydelmod import dsm2ui
 from pydelmod import deltacdui
 
+main.add_command(dsm2ui.show_dsm2_output_ui)
 main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)
