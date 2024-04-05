@@ -1,6 +1,5 @@
 # %%
 # organize imports by category
-from datetime import datetime, timedelta
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -22,52 +21,7 @@ import panel as pn
 
 pn.extension("tabulator", notifications=True, design="native")
 #
-from vtools.functions.filter import godin, cosine_lanczos
-
 from . import fullscreen
-
-
-def get_colors(stations, dfc):
-    """
-    Create a dictionary with station names and colors
-    """
-    return hv.Cycle(list(dfc.loc[stations].values.flatten()))
-
-
-# from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
-def full_stack():
-    import traceback, sys
-
-    exc = sys.exc_info()[0]
-    stack = traceback.extract_stack()[:-1]  # last one would be full_stack()
-    if exc is not None:  # i.e. an exception is present
-        del stack[-1]  # remove call of full_stack, the printed exception
-        # will contain the caught exception caller instead
-    trc = "Traceback (most recent call last):\n"
-    stackstr = trc + "".join(traceback.format_list(stack))
-    if exc is not None:
-        stackstr += "  " + traceback.format_exc().lstrip(trc)
-    return stackstr
-
-
-def get_color_dataframe(stations, color_cycle=hv.Cycle()):
-    """
-    Create a dataframe with station names and colors
-    """
-    cc = color_cycle.values
-    # extend cc to the size of stations
-    while len(cc) < len(stations):
-        cc = cc + cc
-    dfc = pd.DataFrame({"stations": stations, "color": cc[: len(stations)]})
-    dfc.set_index("stations", inplace=True)
-    return dfc
-
-
-def get_colors(stations, dfc):
-    """
-    Create a dictionary with station names and colors
-    """
-    return hv.Cycle(list(dfc.loc[stations].values.flatten()))
 
 
 from bokeh.models import HoverTool
@@ -75,27 +29,12 @@ from bokeh.core.enums import MarkerType
 
 
 class DataUIManager(param.Parameterized):
-    show_legend = param.Boolean(default=True, doc="Show legend")
-    legend_position = param.Selector(
-        objects=["top_right", "top_left", "bottom_right", "bottom_left"],
-        default="top_right",
-        doc="Legend position",
-    )
 
     def get_widgets(self):
-        return pn.WidgetBox(
-            self.param.show_legend,
-            self.param.legend_position,
-        )
+        return pn.pane.Markdown("No widgets available")
 
     # data related methods
     def get_data_catalog(self):
-        pass
-
-    def get_station_ids(self, df):
-        pass
-
-    def get_time_range(self, dfcat):
         pass
 
     # display related support for tables
@@ -108,53 +47,9 @@ class DataUIManager(param.Parameterized):
     def get_table_filters(self):
         pass
 
-    # display related methods for plots
-    def create_layout(self, df, time_range):
+    def create_panel(self, df):
         pass
 
-    def create_panel(self, df, time_range):
-        try:
-            stationids = self.get_station_ids(df)
-            color_df = get_color_dataframe(stationids, hv.Cycle())
-            layout_map, station_map, range_map, title_map = self.create_layout(
-                df, time_range
-            )
-            if len(layout_map) == 0:
-                return hv.Div("<h3>Select rows from table and click on button</h3>")
-            else:
-                return (
-                    hv.Layout(
-                        [
-                            hv.Overlay(layout_map[k])
-                            .opts(
-                                opts.Curve(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                opts.Scatter(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                show_legend=self.show_legend,
-                                legend_position=self.legend_position,
-                                ylim=(
-                                    tuple(range_map[k])
-                                    if range_map[k] is not None
-                                    else (None, None)
-                                ),
-                                title=title_map[k],
-                            )
-                            for k in layout_map
-                        ]
-                    )
-                    .cols(1)
-                    .opts(axiswise=True, sizing_mode="stretch_both")
-                )
-        except Exception as e:
-            stackmsg = full_stack()
-            print(stackmsg)
-            pn.state.notifications.error(f"Error while fetching data for {e}")
-            return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
-
-    # methods below if geolocation data is available
     def get_tooltips(self):
         pass
 
@@ -168,16 +63,10 @@ class DataUI(param.Parameterized):
     Furthermore select the data rows and click on button to display plots for selected rows
     """
 
-    time_range = param.CalendarDateRange(
-        default=(datetime.now() - timedelta(days=10), datetime.now()),
-        doc="Time window for data. Default is last 10 days",
-    )
-
     def __init__(self, dataui_manager, **kwargs):
         super().__init__(**kwargs)
         self.dataui_manager = dataui_manager
         self.dfcat = self.dataui_manager.get_data_catalog()
-        self.time_range = self.dataui_manager.get_time_range(self.dfcat)
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
             tooltips = self.dataui_manager.get_tooltips()
@@ -206,7 +95,7 @@ class DataUI(param.Parameterized):
     def show_data_catalog(self, index=slice(None)):
         if index == []:
             index = [0]
-        dfs = self.dfcat.iloc[index]  # FIXME: later add filters
+        dfs = self.dfcat.iloc[index]
         dfs = dfs[self.dataui_manager.get_table_columns()]
         # return a UI with controls to plot and show data
         return self.update_data_table(dfs)
@@ -240,9 +129,7 @@ class DataUI(param.Parameterized):
             )
             gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
             gspec[6:15, 0:10] = fullscreen.FullScreen(pn.Row(self.plot_panel))
-            self.plots_panel = pn.Row(
-                gspec
-            )  # fails with object of type 'GridSpec' has no len()
+            self.plots_panel = pn.Row(gspec)
 
         else:
             self.display_table.value = dfs
@@ -251,8 +138,8 @@ class DataUI(param.Parameterized):
 
     def update_plots(self, event):
         self.plot_panel.loading = True
-        df = self.display_table.value.iloc[self.display_table.selection]
-        self.plot_panel.object = self.dataui_manager.create_panel(df, self.time_range)
+        dfselected = self.display_table.value.iloc[self.display_table.selection]
+        self.plot_panel.object = self.dataui_manager.create_panel(dfselected)
         self.plot_panel.loading = False
 
     def get_about_text(self):
@@ -280,21 +167,7 @@ class DataUI(param.Parameterized):
         return about_btn
 
     def create_view(self):
-        control_widgets = pn.Row(
-            pn.Column(
-                pn.pane.HTML("Change time range of data to display:"),
-                pn.Param(
-                    self.param.time_range,
-                    widgets={
-                        "time_range": {
-                            "widget_type": pn.widgets.DatetimeRangeInput,
-                            "format": "%Y-%m-%d %H:%M",
-                        }
-                    },
-                ),
-                self.dataui_manager.get_widgets(),
-            ),
-        )
+        control_widgets = self.dataui_manager.get_widgets()
         sidebar_view = pn.Column(control_widgets)
         if hasattr(self, "map_stations"):
             map_tooltip = pn.widgets.TooltipIcon(
@@ -327,6 +200,3 @@ class DataUI(param.Parameterized):
         template.modal.append(self.get_about_text())
         control_widgets[0].append(self.create_about_button(template))
         return template
-
-
-# %%

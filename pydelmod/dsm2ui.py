@@ -2,28 +2,28 @@
 import panel as pn
 import param
 import colorcet as cc
-from pandas import date_range
-from .dsm2study import *
 
 # viz imports
 import geoviews as gv
-import hvplot.pandas
 import holoviews as hv
 from holoviews import opts
 
 hv.extension("bokeh")
+import hvplot.pandas
+
 #
+import panel as pn
+
 pn.extension()
 
 
 import pyhecdss as dss
-
-from .dataui import DataUI, DataUIManager
-from .dataui import full_stack
 from vtools.functions.filter import cosine_lanczos
+from .dsm2study import *
+from .tsdataui import TimeSeriesDataUIManager, full_stack
 
 
-class DSM2DataUIManager(DataUIManager):
+class DSM2DataUIManager(TimeSeriesDataUIManager):
     do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
 
     def __init__(self, output_channels, **kwargs):
@@ -32,9 +32,9 @@ class DSM2DataUIManager(DataUIManager):
         NAME  CHAN_NO  DISTANCE  VARIABLE  INTERVAL  PERIOD_OP  FILE
         """
         self.time_range = kwargs.pop("time_range", None)
-        super().__init__(**kwargs)
         self.output_channels = output_channels
         self.station_id_column = "NAME"
+        super().__init__(**kwargs)
 
     def get_widgets(self):
         super_widgets = super().get_widgets()

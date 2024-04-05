@@ -7,34 +7,35 @@ warnings.filterwarnings("ignore")
 #
 import pandas as pd
 import geopandas as gpd
-
-# viz and ui
 import holoviews as hv
-from holoviews import opts
 
 hv.extension("bokeh")
-import cartopy
-import geoviews as gv
-
-gv.extension("bokeh")
+# viz and ui
 import param
 import panel as pn
 
+pn.extension()
 #
 import pyhecdss as dss
 
-from .dataui import DataUI, DataUIManager
-from .dataui import full_stack
+from .dataui import DataUI
+from .tsdataui import TimeSeriesDataUIManager, full_stack
 
 
 class DSSDataManager(param.Parameterized):
-    def __init__(self, *dssfiles, **kwargs):
-        self.time_range = kwargs.pop("time_range", None)
-        self.geo_locations = kwargs.pop("geo_locations", None)
-        self.geo_id_column = kwargs.pop("geo_id_column", "station_id")
-        self.station_id_column = kwargs.pop(
-            "station_id_column", "B"
-        )  # The column in the data catalog that contains the station id
+    def __init__(
+        self,
+        *dssfiles,
+        time_range=None,
+        geo_locations=None,
+        geo_id_column="station_id",
+        station_id_column="B",
+        **kwargs,
+    ):
+        self.time_range = time_range
+        self.geo_locations = geo_locations
+        self.geo_id_column = geo_id_column
+        self.station_id_column = station_id_column  # The column in the data catalog that contains the station id
         super().__init__(**kwargs)
         self.dssfiles = dssfiles
         dfcats = []
@@ -141,13 +142,27 @@ class DSSDataManager(param.Parameterized):
         return df, unit, ptype
 
 
-class DSSDataUIManager(DataUIManager):
+class DSSDataUIManager(TimeSeriesDataUIManager):
     def __init__(self, *dssfiles, **kwargs):
         """
         geolocations is a geodataframe with station_id, and geometry columns
         This is merged with the data catalog to get the station locations.
         """
-        self.data_manager = DSSDataManager(*dssfiles, **kwargs)
+        time_range = kwargs.pop("time_range", None)
+        geo_locations = kwargs.pop("geo_locations", None)
+        geo_id_column = kwargs.pop("geo_id_column", "station_id")
+        station_id_column = kwargs.pop(
+            "station_id_column", "B"
+        )  # The column in the data catalog that contains the station id
+        self.data_manager = DSSDataManager(
+            *dssfiles,
+            time_range=time_range,
+            geo_locations=geo_locations,
+            geo_id_column=geo_id_column,
+            station_id_column=station_id_column,
+            **kwargs,
+        )
+        super().__init__(**kwargs)
 
     # data related methods
     def get_data_catalog(self):
