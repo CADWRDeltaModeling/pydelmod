@@ -20,17 +20,25 @@ import pyhecdss as dss
 
 from .dataui import DataUI, DataUIManager
 from .dataui import full_stack
+from vtools.functions.filter import cosine_lanczos
 
 
 class DSM2DataUIManager(DataUIManager):
+    do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
+
     def __init__(self, output_channels, **kwargs):
         """
         output_channels is a geopandas dataframe with columns:
         NAME  CHAN_NO  DISTANCE  VARIABLE  INTERVAL  PERIOD_OP  FILE
         """
-        self.time_range = kwargs.get("time_range", None)
+        self.time_range = kwargs.pop("time_range", None)
+        super().__init__(**kwargs)
         self.output_channels = output_channels
         self.station_id_column = "NAME"
+
+    def get_widgets(self):
+        super_widgets = super().get_widgets()
+        return pn.Column(super_widgets, self.param.do_tidal_filter)
 
     # data related methods
     def get_data_catalog(self):
@@ -73,7 +81,7 @@ class DSM2DataUIManager(DataUIManager):
             value[1] += f',{r["NAME"]}'
         if str(r["CHAN_NO"]) not in value[2]:
             value[2] += f',{r["CHAN_NO"]}'
-        if r["DISTANCE"] not in value[3]:
+        if str(r["DISTANCE"]) not in value[3]:
             value[3] += f',{r["DISTANCE"]}'
         title_map[unit] = value
 
@@ -112,6 +120,8 @@ class DSM2DataUIManager(DataUIManager):
             unit = "X"
             ptype = "INST-VAL"
         df = df[slice(*time_range)]
+        if self.do_tidal_filter:
+            df = cosine_lanczos(df, "40h")
         return df, unit, ptype
 
     def build_station_name(self, r):
@@ -136,7 +146,7 @@ class DSM2DataUIManager(DataUIManager):
                     r["VARIABLE"],
                     r["NAME"],
                     str(r["CHAN_NO"]),
-                    r["DISTANCE"],
+                    str(r["DISTANCE"]),
                 ]
                 range_map[unit] = None
                 station_map[unit] = []
@@ -362,10 +372,16 @@ class DSM2GraphNetworkMap(param.Parameterized):
 #### functions for cli
 
 
-def build_output_plotter(channel_line_geojson_file, hydro_echo_file):
+def build_output_plotter(
+    channel_line_geojson_file, hydro_echo_file, qual_echo_file=None
+):
     hydro_tables = load_echo_file(hydro_echo_file)
     time_range = get_runtime(hydro_tables)
     output_channels = hydro_tables["OUTPUT_CHANNEL"]
+    if qual_echo_file:
+        qual_tables = load_echo_file(qual_echo_file)
+        qual_output_channels = qual_tables["OUTPUT_CHANNEL"]
+        output_channels = pd.concat([output_channels, qual_output_channels])
     output_dir = os.path.dirname(hydro_echo_file)
     output_channels["FILE"] = output_channels["FILE"].str.replace(
         "./output", output_dir, regex=False
@@ -401,7 +417,12 @@ import click
 @click.argument(
     "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
 )
-def show_dsm2_output_ui(channel_shapefile, hydro_echo_file):
+@click.argument(
+    "qual_echo_file",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+    required=False,
+)
+def show_dsm2_output_ui(channel_shapefile, hydro_echo_file, qual_echo_file=None):
     """
     Show a user interface for viewing DSM2 output data
 
@@ -416,7 +437,9 @@ def show_dsm2_output_ui(channel_shapefile, hydro_echo_file):
 
     hydro_echo_file : DSM2 hydro_echo file
 
+    qual_echo_file : DSM2 qual_echo file (optional for water quality data). Channel information is assumed to be the same as in the hydro_echo file
+
     """
-    plotter = build_output_plotter(channel_shapefile, hydro_echo_file)
+    plotter = build_output_plotter(channel_shapefile, hydro_echo_file, qual_echo_file)
     ui = dataui.DataUI(plotter)
     ui.create_view().show()

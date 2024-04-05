@@ -75,6 +75,19 @@ from bokeh.core.enums import MarkerType
 
 
 class DataUIManager(param.Parameterized):
+    show_legend = param.Boolean(default=True, doc="Show legend")
+    legend_position = param.Selector(
+        objects=["top_right", "top_left", "bottom_right", "bottom_left"],
+        default="top_right",
+        doc="Legend position",
+    )
+
+    def get_widgets(self):
+        return pn.WidgetBox(
+            self.param.show_legend,
+            self.param.legend_position,
+        )
+
     # data related methods
     def get_data_catalog(self):
         pass
@@ -99,6 +112,48 @@ class DataUIManager(param.Parameterized):
     def create_layout(self, df, time_range):
         pass
 
+    def create_panel(self, df, time_range):
+        try:
+            stationids = self.get_station_ids(df)
+            color_df = get_color_dataframe(stationids, hv.Cycle())
+            layout_map, station_map, range_map, title_map = self.create_layout(
+                df, time_range
+            )
+            if len(layout_map) == 0:
+                return hv.Div("<h3>Select rows from table and click on button</h3>")
+            else:
+                return (
+                    hv.Layout(
+                        [
+                            hv.Overlay(layout_map[k])
+                            .opts(
+                                opts.Curve(color=get_colors(station_map[k], color_df))
+                            )
+                            .opts(
+                                opts.Scatter(color=get_colors(station_map[k], color_df))
+                            )
+                            .opts(
+                                show_legend=self.show_legend,
+                                legend_position=self.legend_position,
+                                ylim=(
+                                    tuple(range_map[k])
+                                    if range_map[k] is not None
+                                    else (None, None)
+                                ),
+                                title=title_map[k],
+                            )
+                            for k in layout_map
+                        ]
+                    )
+                    .cols(1)
+                    .opts(axiswise=True, sizing_mode="stretch_both")
+                )
+        except Exception as e:
+            stackmsg = full_stack()
+            print(stackmsg)
+            pn.state.notifications.error(f"Error while fetching data for {e}")
+            return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
+
     # methods below if geolocation data is available
     def get_tooltips(self):
         pass
@@ -116,12 +171,6 @@ class DataUI(param.Parameterized):
     time_range = param.CalendarDateRange(
         default=(datetime.now() - timedelta(days=10), datetime.now()),
         doc="Time window for data. Default is last 10 days",
-    )
-    show_legend = param.Boolean(default=True, doc="Show legend")
-    legend_position = param.Selector(
-        objects=["top_right", "top_left", "bottom_right", "bottom_left"],
-        default="top_right",
-        doc="Legend position",
     )
 
     def __init__(self, dataui_manager, **kwargs):
@@ -202,51 +251,9 @@ class DataUI(param.Parameterized):
 
     def update_plots(self, event):
         self.plot_panel.loading = True
-        self.plot_panel.object = self.create_plots(event)
-        self.plot_panel.loading = False
-
-    def create_plots(self, event):
         df = self.display_table.value.iloc[self.display_table.selection]
-        try:
-            stationids = self.dataui_manager.get_station_ids(df)
-            color_df = get_color_dataframe(stationids, hv.Cycle())
-            layout_map, station_map, range_map, title_map = (
-                self.dataui_manager.create_layout(df, self.time_range)
-            )
-            if len(layout_map) == 0:
-                return hv.Div("<h3>Select rows from table and click on button</h3>")
-            else:
-                return (
-                    hv.Layout(
-                        [
-                            hv.Overlay(layout_map[k])
-                            .opts(
-                                opts.Curve(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                opts.Scatter(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                show_legend=self.show_legend,
-                                legend_position=self.legend_position,
-                                ylim=(
-                                    tuple(range_map[k])
-                                    if range_map[k] is not None
-                                    else (None, None)
-                                ),
-                                title=title_map[k],
-                            )
-                            for k in layout_map
-                        ]
-                    )
-                    .cols(1)
-                    .opts(axiswise=True, sizing_mode="stretch_both")
-                )
-        except Exception as e:
-            stackmsg = full_stack()
-            print(stackmsg)
-            pn.state.notifications.error(f"Error while fetching data for {e}")
-            return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
+        self.plot_panel.object = self.dataui_manager.create_panel(df, self.time_range)
+        self.plot_panel.loading = False
 
     def get_about_text(self):
         version = "0.1.0"
@@ -285,10 +292,7 @@ class DataUI(param.Parameterized):
                         }
                     },
                 ),
-                pn.WidgetBox(
-                    self.param.show_legend,
-                    self.param.legend_position,
-                ),
+                self.dataui_manager.get_widgets(),
             ),
         )
         sidebar_view = pn.Column(control_widgets)
