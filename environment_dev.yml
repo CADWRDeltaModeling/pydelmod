@@ -39,11 +39,12 @@ dependencies:
   - pytables
   - openpyxl
   - jinja2
+  - diskcache
   # browsers
   - selenium
   - firefox
   - geckodriver
-  # finally misc and dev related
+  # finally misc 
   - black
   - sphinx
   - pytest

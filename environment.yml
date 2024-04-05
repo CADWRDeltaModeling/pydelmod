@@ -41,6 +41,7 @@ dependencies:
   - pytables
   - openpyxl
   - jinja2
+  - diskcache
   # browsers
   - selenium
   - firefox
