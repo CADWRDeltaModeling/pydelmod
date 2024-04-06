@@ -116,6 +116,7 @@ class CalibPlotUIManager(DataUIManager):
             },
             errors="raise",
         )
+        gdf = gdf.dropna(subset=["Latitude", "Longitude"])
         return gdf
 
     def get_table_column_width_map(self):

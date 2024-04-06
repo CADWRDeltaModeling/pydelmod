@@ -377,6 +377,7 @@ def build_output_plotter(
 ):
     hydro_tables = load_echo_file(hydro_echo_file)
     time_range = get_runtime(hydro_tables)
+    # TODO: add ability to take multiple echo files as long as one of them as an OUTPUT_CHANNEL
     output_channels = hydro_tables["OUTPUT_CHANNEL"]
     if qual_echo_file:
         qual_tables = load_echo_file(qual_echo_file)
@@ -401,6 +402,7 @@ def build_output_plotter(
     output_channels = gpd.GeoDataFrame(
         output_channels, geometry=pts, crs={"init": "epsg:26910"}
     )
+    output_channels = output_channels.dropna(subset=["geometry"])
     plotter = DSM2DataUIManager(output_channels, time_range=time_range)
 
     return plotter
@@ -440,6 +442,8 @@ def show_dsm2_output_ui(channel_shapefile, hydro_echo_file, qual_echo_file=None)
     qual_echo_file : DSM2 qual_echo file (optional for water quality data). Channel information is assumed to be the same as in the hydro_echo file
 
     """
+    import cartopy.crs as ccrs
+
     plotter = build_output_plotter(channel_shapefile, hydro_echo_file, qual_echo_file)
-    ui = dataui.DataUI(plotter)
+    ui = dataui.DataUI(plotter, crs=ccrs.GOOGLE_MERCATOR)
     ui.create_view().show()

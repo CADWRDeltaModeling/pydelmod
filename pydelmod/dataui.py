@@ -64,6 +64,7 @@ class DataUI(param.Parameterized):
     """
 
     def __init__(self, dataui_manager, **kwargs):
+        crs = kwargs.pop("crs", ccrs.PlateCarree())
         super().__init__(**kwargs)
         self.dataui_manager = dataui_manager
         self.dfcat = self.dataui_manager.get_data_catalog()
@@ -73,9 +74,9 @@ class DataUI(param.Parameterized):
 
             map_color_category = self.dataui_manager.get_map_color_category()
             hover = HoverTool(tooltips=tooltips)
-            self.map_stations = gv.Points(self.dfcat, crs=ccrs.PlateCarree()).opts(
-                # color=dim(map_color_category),
-                # cmap="Category10",
+            self.map_stations = gv.Points(self.dfcat, crs=crs).opts(
+                color=dim(map_color_category),
+                cmap="Category10",
             )
             self.map_stations = self.map_stations.opts(
                 opts.Points(

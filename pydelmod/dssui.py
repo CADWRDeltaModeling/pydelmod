@@ -8,6 +8,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import geopandas as gpd
 import holoviews as hv
+import cartopy.crs as ccrs
 
 hv.extension("bokeh")
 # viz and ui
@@ -17,12 +18,14 @@ import panel as pn
 pn.extension()
 #
 import pyhecdss as dss
+from vtools.functions.filter import cosine_lanczos
 
 from .dataui import DataUI
 from .tsdataui import TimeSeriesDataUIManager, full_stack
 
 
 class DSSDataManager(param.Parameterized):
+
     def __init__(
         self,
         *dssfiles,
@@ -111,7 +114,9 @@ class DSSDataManager(param.Parameterized):
     def get_station_ids(self, df):
         return list((df.apply(self.build_pathname, axis=1).astype(str).unique()))
 
-    def get_data_for_time_range(self, dssfile, r, irreg, time_range):
+    def get_data_for_time_range(
+        self, dssfile, r, irreg, time_range, do_tidal_filter=False
+    ):
         try:
             dssfh = self.dssfh[dssfile]
             dfcatp = self.dsscats[dssfile]
@@ -138,11 +143,15 @@ class DSSDataManager(param.Parameterized):
             df = pd.DataFrame(columns=["value"], dtype=float)
             unit = "X"
             ptype = "INST-VAL"
+        if do_tidal_filter:
+            df = cosine_lanczos(df, "40h")
         df = df[slice(df.first_valid_index(), df.last_valid_index())]
         return df, unit, ptype
 
 
 class DSSDataUIManager(TimeSeriesDataUIManager):
+    do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
+
     def __init__(self, *dssfiles, **kwargs):
         """
         geolocations is a geodataframe with station_id, and geometry columns
@@ -163,6 +172,10 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             **kwargs,
         )
         super().__init__(**kwargs)
+
+    def get_widgets(self):
+        super_widgets = super().get_widgets()
+        return pn.Column(super_widgets, self.param.do_tidal_filter)
 
     # data related methods
     def get_data_catalog(self):
@@ -235,7 +248,11 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         for _, r in df.iterrows():
             irreg = r["E"].startswith("IR-")
             data, unit, _ = self.data_manager.get_data_for_time_range(
-                r["filename"], r, irreg, time_range
+                r["filename"],
+                r,
+                irreg,
+                time_range,
+                self.do_tidal_filter,
             )
             crv = self._create_crv(
                 data,
