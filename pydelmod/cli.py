@@ -280,6 +280,7 @@ from pydelmod import dssui
 from pydelmod import dsm2gis
 from pydelmod import dsm2ui
 from pydelmod import deltacdui
+from pydelmod import calibplotui
 
 main.add_command(dsm2ui.show_dsm2_output_ui)
 main.add_command(dssui.show_dss_ui)
@@ -295,6 +296,7 @@ main.add_command(datastore_to_stationfile)
 main.add_command(stations_output_file)
 main.add_command(dsm2gis.geolocate_output_locations)
 main.add_command(deltacdui.dcd_geomap)
+main.add_command(calibplotui.calib_plot_ui)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

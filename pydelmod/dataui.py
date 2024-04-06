@@ -12,7 +12,7 @@ import holoviews as hv
 from holoviews import opts, dim, streams
 
 hv.extension("bokeh")
-from cartopy.crs import GOOGLE_MERCATOR
+import cartopy.crs as ccrs
 import geoviews as gv
 
 gv.extension("bokeh")
@@ -73,9 +73,9 @@ class DataUI(param.Parameterized):
 
             map_color_category = self.dataui_manager.get_map_color_category()
             hover = HoverTool(tooltips=tooltips)
-            self.map_stations = gv.Points(self.dfcat, crs=GOOGLE_MERCATOR).opts(
-                color=dim(map_color_category),
-                cmap="Category10",
+            self.map_stations = gv.Points(self.dfcat, crs=ccrs.PlateCarree()).opts(
+                # color=dim(map_color_category),
+                # cmap="Category10",
             )
             self.map_stations = self.map_stations.opts(
                 opts.Points(
@@ -120,6 +120,7 @@ class DataUI(param.Parameterized):
                 hv.Div("<h3>Select rows from table and click on button</h3>"),
                 sizing_mode="stretch_both",
             )
+            self.plots_panel = pn.Row(self.plot_panel)
             gspec = pn.GridStack(
                 sizing_mode="stretch_both", allow_resize=True, allow_drag=False
             )  # ,
@@ -128,19 +129,19 @@ class DataUI(param.Parameterized):
                 pn.layout.HSpacer(),
             )
             gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-            gspec[6:15, 0:10] = fullscreen.FullScreen(pn.Row(self.plot_panel))
-            self.plots_panel = pn.Row(gspec)
+            gspec[6:15, 0:10] = fullscreen.FullScreen(self.plots_panel)
+            self.main_panel = pn.Row(gspec)
 
         else:
             self.display_table.value = dfs
 
-        return self.plots_panel
+        return self.main_panel
 
     def update_plots(self, event):
-        self.plot_panel.loading = True
+        self.plots_panel.loading = True
         dfselected = self.display_table.value.iloc[self.display_table.selection]
-        self.plot_panel.object = self.dataui_manager.create_panel(dfselected)
-        self.plot_panel.loading = False
+        self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
+        self.plots_panel.loading = False
 
     def get_about_text(self):
         version = "0.1.0"
@@ -198,5 +199,5 @@ class DataUI(param.Parameterized):
         template.main.append(main_view)
         # Adding about button
         template.modal.append(self.get_about_text())
-        control_widgets[0].append(self.create_about_button(template))
+        sidebar_view.append(self.create_about_button(template))
         return template
