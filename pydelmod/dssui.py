@@ -329,12 +329,17 @@ def show_dss_ui(
     if location_file is not None:
         if location_file.endswith(".shp") or location_file.endswith(".geojson"):
             geodf = gpd.read_file(location_file)
+            # Extract EPSG code
+            epsg_code = geodf.crs.to_epsg()
+            # Create Cartopy CRS from EPSG
+            crs_cartopy = ccrs.epsg(epsg_code)
         elif location_file.endswith(".csv"):
             df = pd.read_csv(location_file)
             if all(column in df.columns for column in ["lat", "lon"]):
                 geodf = gpd.GeoDataFrame(
                     df, geometry=gpd.points_from_xy(df.lon, df.lat, crs="EPSG:4326")
                 )
+                crs_cartopy = ccrs.PlateCarree()
             elif all(
                 column in df.columns for column in ["utm_easting", "utm_northing"]
             ) or all(column in df.columns for column in ["utm_x", "utm_y"]):
@@ -343,6 +348,7 @@ def show_dss_ui(
                     geometry=gpd.points_from_xy(df.utm_easting, df.utm_northing),
                     crs="EPSG:26910",
                 )
+                crs_cartopy = ccrs.UTM(10)
             else:
                 raise ValueError(
                     "Location file should be a geojson file or should have lat and lon or utm_easting and utm_northing columns"
@@ -358,5 +364,5 @@ def show_dss_ui(
         geo_id_column=location_id_column,
         station_id_column=station_id_column,
     )
-    ui = DataUI(dssuimgr)
+    ui = DataUI(dssuimgr, crs=crs_cartopy)
     ui.create_view().show()
