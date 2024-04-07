@@ -29,6 +29,8 @@ import panel as pn
 
 pn.extension()
 
+from .hecutils import parse_military_date
+
 
 def load_echo_file(fname):
     with open(fname, "r") as file:
@@ -101,7 +103,7 @@ def get_data_for_source(sn):
 
 
 def load_dsm2_channelline_shapefile(channel_shapefile):
-    return gpd.read_file(channel_shapefile).to_crs(epsg=3857)
+    return gpd.read_file(channel_shapefile).to_crs(epsg=26910)
 
 
 def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables):
@@ -147,7 +149,8 @@ def get_runtime(tables):
     tmap = dict(zip(rs["NAME"], rs["VALUE"]))
     stime = tmap["run_start_date"] + " " + tmap["run_start_time"]
     etime = tmap["run_end_date"] + " " + tmap["run_end_time"]
-    return pd.to_datetime(stime), pd.to_datetime(etime)
+    return parse_military_date(stime), parse_military_date(etime)
+    # return pd.to_datetime(stime), pd.to_datetime(etime)
 
 
 class DSM2Study:

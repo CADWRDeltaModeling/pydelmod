@@ -22,6 +22,8 @@ from vtools.functions.filter import cosine_lanczos
 from .dsm2study import *
 from .tsdataui import TimeSeriesDataUIManager, full_stack
 
+LINE_DASH_MAP = ["solid", "dashed", "dotted", "dotdash", "dashdot"]
+
 
 class DSM2DataUIManager(TimeSeriesDataUIManager):
     do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
@@ -33,6 +35,13 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         """
         self.time_range = kwargs.pop("time_range", None)
         self.output_channels = output_channels
+        self.display_fileno = False
+        unique_files = self.output_channels["FILE"].unique()
+        if len(unique_files) > 1:
+            output_channels["FILE_NO"] = output_channels["FILE"].apply(
+                lambda x: unique_files.tolist().index(x)
+            )
+            self.display_fileno = True
         self.station_id_column = "NAME"
         super().__init__(**kwargs)
 
@@ -61,6 +70,8 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             "PERIOD_OP": "5%",
             "FILE": "25%",
         }
+        if self.display_fileno:
+            column_width_map["FILE_NO"] = "5%"
         return column_width_map
 
     def get_table_filters(self):
@@ -89,11 +100,13 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
-    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False):
+    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False, file_index=None):
         if irreg:
             crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         else:
             crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        if file_index:
+            crv = crv.opts(line_dash=LINE_DASH_MAP[file_index % len(LINE_DASH_MAP)])
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
@@ -132,13 +145,22 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         title_map = {}
         range_map = {}
         station_map = {}  # list of stations for each unit
+        local_unique_files = df["FILE"].unique()
         for _, r in df.iterrows():
             data, unit, _ = self.get_data_for_time_range(r["FILE"], r, time_range)
+            if len(local_unique_files) > 0:
+                file_index = local_unique_files.tolist().index(r["FILE"])
+            else:
+                file_index = ""
+            file_index_label = (
+                str(r["FILE_NO"]) + ":" if len(local_unique_files) > 1 else ""
+            )
             crv = self._create_crv(
                 data,
-                f'{r["NAME"]}/{r["VARIABLE"]}',
+                f'{file_index_label}{r["NAME"]}/{r["VARIABLE"]}',
                 f'{r["VARIABLE"]} ({unit})',
                 f'{r["VARIABLE"]} @ {r["NAME"]} ({r["CHAN_NO"]}/{r["DISTANCE"]})',
+                file_index=file_index,
             )
             if unit not in layout_map:
                 layout_map[unit] = []
@@ -372,37 +394,58 @@ class DSM2GraphNetworkMap(param.Parameterized):
 #### functions for cli
 
 
-def build_output_plotter(
-    channel_line_geojson_file, hydro_echo_file, qual_echo_file=None
-):
-    hydro_tables = load_echo_file(hydro_echo_file)
-    time_range = get_runtime(hydro_tables)
-    # TODO: add ability to take multiple echo files as long as one of them as an OUTPUT_CHANNEL
-    output_channels = hydro_tables["OUTPUT_CHANNEL"]
-    if qual_echo_file:
-        qual_tables = load_echo_file(qual_echo_file)
-        qual_output_channels = qual_tables["OUTPUT_CHANNEL"]
-        output_channels = pd.concat([output_channels, qual_output_channels])
-    output_dir = os.path.dirname(hydro_echo_file)
-    output_channels["FILE"] = output_channels["FILE"].str.replace(
-        "./output", output_dir, regex=False
-    )
-
-    dsm2_chan_lines = load_dsm2_channelline_shapefile(channel_line_geojson_file)
-    dsm2_chan_lines = join_channels_info_with_dsm2_channel_line(
-        dsm2_chan_lines, hydro_tables
-    )
-    pts = output_channels.apply(
-        lambda row: get_location_on_channel_line(
-            row["CHAN_NO"], row["DISTANCE"], dsm2_chan_lines
-        ).values[0],
-        axis=1,
-        result_type="reduce",
-    )
-    output_channels = gpd.GeoDataFrame(
-        output_channels, geometry=pts, crs={"init": "epsg:26910"}
-    )
-    output_channels = output_channels.dropna(subset=["geometry"])
+def build_output_plotter(*echo_files, channel_shapefile=None):
+    output_channels = {}
+    time_range = None
+    channels_table = None
+    for file in echo_files:
+        if not os.path.isfile(file):
+            raise FileNotFoundError(f"File {file} not found")
+        tables = load_echo_file(file)
+        try:
+            current_time_range = get_runtime(tables)
+        except Exception as exc:
+            print("Error getting runtime for file:", file)
+            raise exc
+        print("Time range:", current_time_range, "for file:", file)
+        if time_range is None:
+            time_range = current_time_range
+        else:
+            time_range = (
+                min(time_range[0], current_time_range[0]),
+                max(time_range[1], current_time_range[1]),
+            )
+        if "OUTPUT_CHANNEL" in tables:
+            output_channel = tables["OUTPUT_CHANNEL"]
+            output_dir = os.path.dirname(
+                file
+            )  # assume that location of echo file is the output directory
+            output_channel["FILE"] = output_channel["FILE"].str.replace(
+                "./output", output_dir, regex=False
+            )
+            output_channels[file] = output_channel
+        if "CHANNEL" in tables:
+            channels_table = tables["CHANNEL"]
+    if channels_table is None:
+        raise ValueError("No CHANNEL table found in any of the echo files")
+    output_channels = pd.concat(output_channels.values())
+    output_channels.reset_index(drop=True, inplace=True)
+    if channel_shapefile is not None:
+        dsm2_chan_lines = load_dsm2_channelline_shapefile(channel_shapefile)
+        dsm2_chan_lines = join_channels_info_with_dsm2_channel_line(
+            dsm2_chan_lines, {"CHANNEL": channels_table}
+        )
+        pts = output_channels.apply(
+            lambda row: get_location_on_channel_line(
+                row["CHAN_NO"], row["DISTANCE"], dsm2_chan_lines
+            ).values[0],
+            axis=1,
+            result_type="reduce",
+        )
+        output_channels = gpd.GeoDataFrame(
+            output_channels, geometry=pts, crs={"init": "epsg:26910"}
+        )
+    # output_channels = output_channels.dropna(subset=["geometry"])
     plotter = DSM2DataUIManager(output_channels, time_range=time_range)
 
     return plotter
@@ -413,18 +456,12 @@ import click
 
 
 @click.command()
-@click.argument(
-    "channel_shapefile", type=click.Path(dir_okay=False, exists=True, readable=True)
+@click.argument("echo_files", nargs=-1)
+@click.option(
+    "--channel-shapefile",
+    help="GeoJSON file for channel centerlines with DSM2 channel information",
 )
-@click.argument(
-    "hydro_echo_file", type=click.Path(dir_okay=False, exists=True, readable=True)
-)
-@click.argument(
-    "qual_echo_file",
-    type=click.Path(dir_okay=False, exists=True, readable=True),
-    required=False,
-)
-def show_dsm2_output_ui(channel_shapefile, hydro_echo_file, qual_echo_file=None):
+def show_dsm2_output_ui(echo_files, channel_shapefile=None):
     """
     Show a user interface for viewing DSM2 output data
 
@@ -435,15 +472,13 @@ def show_dsm2_output_ui(channel_shapefile, hydro_echo_file, qual_echo_file=None)
     Parameters
     ----------
 
+    dsm2_echo_files : list of strings atlease one of which should be a echo file containing 'CHANNELS' table (hydro echo file)
+
     channel_shapefile : GeoJSON file for channel centerlines with DSM2 channel information
-
-    hydro_echo_file : DSM2 hydro_echo file
-
-    qual_echo_file : DSM2 qual_echo file (optional for water quality data). Channel information is assumed to be the same as in the hydro_echo file
 
     """
     import cartopy.crs as ccrs
 
-    plotter = build_output_plotter(channel_shapefile, hydro_echo_file, qual_echo_file)
-    ui = dataui.DataUI(plotter, crs=ccrs.GOOGLE_MERCATOR)
+    plotter = build_output_plotter(*echo_files, channel_shapefile=channel_shapefile)
+    ui = dataui.DataUI(plotter, crs=ccrs.UTM(10))
     ui.create_view().show()
