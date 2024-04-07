@@ -140,7 +140,8 @@ class DataUI(param.Parameterized):
 
     def update_plots(self, event):
         self.plots_panel.loading = True
-        dfselected = self.display_table.value.iloc[self.display_table.selection]
+        # FIXME: needs a PR to panel to fix this
+        dfselected = self.display_table._processed.iloc[self.display_table.selection]
         self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
         self.plots_panel.loading = False
 
