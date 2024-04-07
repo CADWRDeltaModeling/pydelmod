@@ -325,6 +325,7 @@ def show_dss_ui(
     station_id_column : Station ID column in data catalog, e.g. B part for DSS file pathname
     """
     geodf = None
+    crs_cartopy = None
     # TODO: Add support for other location file formats and move to a utility module
     if location_file is not None:
         if location_file.endswith(".shp") or location_file.endswith(".geojson"):
