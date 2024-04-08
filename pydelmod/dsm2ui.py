@@ -22,11 +22,8 @@ from vtools.functions.filter import cosine_lanczos
 from .dsm2study import *
 from .tsdataui import TimeSeriesDataUIManager, full_stack
 
-LINE_DASH_MAP = ["solid", "dashed", "dotted", "dotdash", "dashdot"]
-
 
 class DSM2DataUIManager(TimeSeriesDataUIManager):
-    do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
 
     def __init__(self, output_channels, **kwargs):
         """
@@ -36,18 +33,20 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         self.time_range = kwargs.pop("time_range", None)
         self.output_channels = output_channels
         self.display_fileno = False
-        unique_files = self.output_channels["FILE"].unique()
+        filename_column = "FILE"
+        unique_files = self.output_channels[filename_column].unique()
         if len(unique_files) > 1:
-            output_channels["FILE_NO"] = output_channels["FILE"].apply(
+            output_channels["FILE_NO"] = output_channels[filename_column].apply(
                 lambda x: unique_files.tolist().index(x)
             )
-            self.display_fileno = True
         self.station_id_column = "NAME"
         super().__init__(**kwargs)
 
-    def get_widgets(self):
-        super_widgets = super().get_widgets()
-        return pn.Column(super_widgets, self.param.do_tidal_filter)
+    def build_station_name(self, r):
+        if self.display_fileno:
+            return f'{r["FILE_NO"]}:{r["NAME"]}'
+        else:
+            return f'{r["NAME"]}'
 
     # data related methods
     def get_data_catalog(self):
@@ -56,10 +55,10 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
     def get_time_range(self, dfcat):
         return self.time_range
 
-    def get_station_ids(self, df):
-        return df["NAME"].unique()
+    def _get_station_ids(self, df):
+        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
 
-    def get_table_column_width_map(self):
+    def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
             "NAME": "15%",
@@ -68,10 +67,7 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             "VARIABLE": "10%",
             "INTERVAL": "5%",
             "PERIOD_OP": "5%",
-            "FILE": "25%",
         }
-        if self.display_fileno:
-            column_width_map["FILE_NO"] = "5%"
         return column_width_map
 
     def get_table_filters(self):
@@ -84,29 +80,36 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         }
         return table_filters
 
+    def _append_value(self, new_value, value):
+        if new_value not in value:
+            value += f'{", " if value else ""}{new_value}'
+        return value
+
     def _append_to_title_map(self, title_map, unit, r):
-        value = title_map[unit]
-        if r["VARIABLE"] not in value[0]:
-            value[0] += f',{r["VARIABLE"]}'
-        if r["NAME"] not in value[1]:
-            value[1] += f',{r["NAME"]}'
-        if str(r["CHAN_NO"]) not in value[2]:
-            value[2] += f',{r["CHAN_NO"]}'
-        if str(r["DISTANCE"]) not in value[3]:
-            value[3] += f',{r["DISTANCE"]}'
+        if unit in title_map:
+            value = title_map[unit]
+        else:
+            value = ["", "", "", ""]
+        value[0] = self._append_value(r["VARIABLE"], value[0])
+        value[1] = self._append_value(r["NAME"], value[1])
+        value[2] = self._append_value(str(r["CHAN_NO"]), value[2])
+        value[3] = self._append_value(str(r["DISTANCE"]), value[3])
         title_map[unit] = value
 
     def _create_title(self, v):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
-    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False, file_index=None):
+    def _create_crv(self, df, r, unit, file_index=None):
+        file_index_label = f"{file_index}:" if file_index is not None else ""
+        crvlabel = f'{file_index_label}{r["NAME"]}/{r["VARIABLE"]}'
+        ylabel = f'{r["VARIABLE"]} ({unit})'
+        title = f'{r["VARIABLE"]} @ {r["NAME"]} ({r["CHAN_NO"]}/{r["DISTANCE"]})'
+        irreg = df.index.freq is None  # irregular time series
         if irreg:
             crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         else:
             crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
-        if file_index:
-            crv = crv.opts(line_dash=LINE_DASH_MAP[file_index % len(LINE_DASH_MAP)])
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
@@ -116,67 +119,14 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
-    def get_data_for_time_range(self, dssfile, r, time_range):
-        try:
-            dssfile = r["FILE"]
-            pathname = f'//{r["NAME"]}/{r["VARIABLE"]}////'
-            df, unit, ptype = next(
-                dss.get_matching_ts(dssfile, pathname)
-            )  # get first matching time series
-        except Exception as e:
-            print(full_stack())
-            if pn.state.notifications:
-                pn.state.notifications.error(
-                    f"Error while fetching data for {dssfile}/{pathname}: {e}"
-                )
-            df = pd.DataFrame(columns=["value"], dtype=float)
-            unit = "X"
-            ptype = "INST-VAL"
+    def _get_data_for_time_range(self, r, time_range):
+        dssfile = r[self.filename_column]
+        pathname = f'//{r["NAME"]}/{r["VARIABLE"]}////'
+        df, unit, ptype = next(
+            dss.get_matching_ts(dssfile, pathname)
+        )  # get first matching time series
         df = df[slice(*time_range)]
-        if self.do_tidal_filter:
-            df = cosine_lanczos(df, "40h")
         return df, unit, ptype
-
-    def build_station_name(self, r):
-        return f'{r["NAME"]}'  # unique within units...
-
-    def create_layout(self, df, time_range):
-        layout_map = {}
-        title_map = {}
-        range_map = {}
-        station_map = {}  # list of stations for each unit
-        local_unique_files = df["FILE"].unique()
-        for _, r in df.iterrows():
-            data, unit, _ = self.get_data_for_time_range(r["FILE"], r, time_range)
-            if len(local_unique_files) > 0:
-                file_index = local_unique_files.tolist().index(r["FILE"])
-            else:
-                file_index = ""
-            file_index_label = (
-                str(r["FILE_NO"]) + ":" if len(local_unique_files) > 1 else ""
-            )
-            crv = self._create_crv(
-                data,
-                f'{file_index_label}{r["NAME"]}/{r["VARIABLE"]}',
-                f'{r["VARIABLE"]} ({unit})',
-                f'{r["VARIABLE"]} @ {r["NAME"]} ({r["CHAN_NO"]}/{r["DISTANCE"]})',
-                file_index=file_index,
-            )
-            if unit not in layout_map:
-                layout_map[unit] = []
-                title_map[unit] = [
-                    r["VARIABLE"],
-                    r["NAME"],
-                    str(r["CHAN_NO"]),
-                    str(r["DISTANCE"]),
-                ]
-                range_map[unit] = None
-                station_map[unit] = []
-            layout_map[unit].append(crv)
-            station_map[unit].append(self.build_station_name(r))
-            self._append_to_title_map(title_map, unit, r)
-        title_map = {k: self._create_title(v) for k, v in title_map.items()}
-        return layout_map, station_map, range_map, title_map
 
     # methods below if geolocation data is available
     def get_tooltips(self):

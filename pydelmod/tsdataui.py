@@ -13,9 +13,12 @@ from holoviews import opts
 hv.extension("bokeh")
 import param
 import panel as pn
+import colorcet as cc
 
 pn.extension("tabulator", notifications=True, design="native")
 #
+LINE_DASH_MAP = ["solid", "dashed", "dotted", "dotdash", "dashdot"]
+from vtools.functions.filter import cosine_lanczos
 
 
 def get_colors(stations, dfc):
@@ -63,8 +66,8 @@ def get_colors(stations, dfc):
 
 class TimeSeriesDataUIManager(DataUIManager):
     time_range = param.CalendarDateRange(
-        default=(datetime.now() - timedelta(days=10), datetime.now()),
-        doc="Time window for data. Default is last 10 days",
+        default=None,
+        doc="Time window for data. If None, all data is displayed. Format: (start, end)",
     )
     show_legend = param.Boolean(default=True, doc="Show legend")
     legend_position = param.Selector(
@@ -72,10 +75,24 @@ class TimeSeriesDataUIManager(DataUIManager):
         default="top_right",
         doc="Legend position",
     )
+    do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
+    file_number_column_name = param.String(default="FILE_NUM")
 
     def __init__(self, **params):
-        super().__init__(**params)
+        self.color_cycle = hv.Cycle(cc.glasbey_dark)
+        # modify catalog if filename_column is present to include file number if multiple files are present
+        catalog = self.get_data_catalog()
+        self.filename_column = params.pop("filename_column", "FILE")
+        self.display_fileno = False
+        if self.filename_column in catalog.columns:
+            unique_files = catalog[self.filename_column].unique()
+            if len(unique_files) > 1:
+                catalog[self.file_number_column_name] = catalog[
+                    self.filename_column
+                ].apply(lambda x: unique_files.tolist().index(x))
+                self.display_fileno = True
         self.time_range = self.get_time_range(self.get_data_catalog())
+        super().__init__(**params)
 
     def get_widgets(self):
         control_widgets = pn.Row(
@@ -94,6 +111,7 @@ class TimeSeriesDataUIManager(DataUIManager):
                     self.param.show_legend,
                     self.param.legend_position,
                 ),
+                self.param.do_tidal_filter,
             ),
         )
         return control_widgets
@@ -102,7 +120,7 @@ class TimeSeriesDataUIManager(DataUIManager):
     def get_data_catalog(self):
         raise NotImplementedError("Method get_data_catalog not implemented")
 
-    def get_station_ids(self, df):
+    def _get_station_ids(self, df):
         raise NotImplementedError("Method get_station_ids not implemented")
 
     def get_time_range(self, dfcat):
@@ -112,17 +130,78 @@ class TimeSeriesDataUIManager(DataUIManager):
     def get_table_columns(self):
         return list(self.get_table_column_width_map().keys())
 
+    def get_table_width_sum(self, column_width_map):
+        width = 0
+        for k, v in column_width_map.items():
+            width += float(v[:-1])  # drop % sign
+        return width
+
+    def adjust_column_width(self, column_width_map, max_width=100):
+        width_sum = self.get_table_width_sum(column_width_map)
+        if width_sum > max_width:
+            for k, v in column_width_map.items():
+                column_width_map[k] = f"{(float(v[:-1]) / width_sum) * max_width}%"
+        return column_width_map
+
     def get_table_column_width_map(self):
+        column_width_map = self._get_table_column_width_map()
+        column_width_map[self.filename_column] = "10%"
+        if self.display_fileno:
+            column_width_map[self.file_number_column_name] = "5%"
+        self.adjust_column_width(column_width_map)
+        return column_width_map
+
         raise NotImplementedError("Method get_table_column_width_map not implemented")
 
     def get_table_filters(self):
         raise NotImplementedError("Method get_table_filters not implemented")
 
+    def create_layout(self, df, time_range):
+        layout_map = {}
+        title_map = {}
+        range_map = {}
+        station_map = {}  # list of stations for each unit
+        if self.display_fileno:
+            local_unique_files = df[self.filename_column].unique()
+        for _, r in df.iterrows():
+            try:
+                data, unit, _ = self._get_data_for_time_range(r, time_range)
+                data = data[slice(*time_range)]
+                if self.do_tidal_filter:
+                    data = cosine_lanczos(data, "40h")
+            except Exception as e:
+                print(full_stack())
+                if pn.state.notifications:
+                    pn.state.notifications.error(
+                        f"Error while fetching data for row: {r}: {e}"
+                    )
+                data = pd.DataFrame(columns=["value"], dtype=float)
+                unit = "X"
+            file_index = r[self.file_number_column_name] if self.display_fileno else ""
+            crv = self._create_crv(
+                data,
+                r,
+                unit,
+                file_index=file_index,
+            )
+            # if file_index:
+            #    crv = crv.opts(line_dash=LINE_DASH_MAP[file_index % len(LINE_DASH_MAP)])
+
+            if unit not in layout_map:
+                layout_map[unit] = []
+                range_map[unit] = None
+                station_map[unit] = []
+            layout_map[unit].append(crv)
+            station_map[unit].append(self.build_station_name(r))
+            self._append_to_title_map(title_map, unit, r)
+        title_map = {k: self._create_title(v) for k, v in title_map.items()}
+        return layout_map, station_map, range_map, title_map
+
     def create_panel(self, df):
         time_range = self.time_range
         try:
-            stationids = self.get_station_ids(df)
-            color_df = get_color_dataframe(stationids, hv.Cycle())
+            stationids = self._get_station_ids(df)
+            color_df = get_color_dataframe(stationids, self.color_cycle)
             layout_map, station_map, range_map, title_map = self.create_layout(
                 df, time_range
             )

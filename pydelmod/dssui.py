@@ -24,22 +24,19 @@ from .dataui import DataUI
 from .tsdataui import TimeSeriesDataUIManager, full_stack
 
 
-class DSSDataManager(param.Parameterized):
+class DSSDataUIManager(TimeSeriesDataUIManager):
 
-    def __init__(
-        self,
-        *dssfiles,
-        time_range=None,
-        geo_locations=None,
-        geo_id_column="station_id",
-        station_id_column="B",
-        **kwargs,
-    ):
-        self.time_range = time_range
-        self.geo_locations = geo_locations
-        self.geo_id_column = geo_id_column
-        self.station_id_column = station_id_column  # The column in the data catalog that contains the station id
-        super().__init__(**kwargs)
+    def __init__(self, *dssfiles, **kwargs):
+        """
+        geolocations is a geodataframe with station_id, and geometry columns
+        This is merged with the data catalog to get the station locations.
+        """
+        self.time_range = kwargs.pop("time_range", None)
+        self.geo_locations = kwargs.pop("geo_locations", None)
+        self.geo_id_column = kwargs.pop("geo_id_column", "station_id")
+        self.station_id_column = kwargs.pop(
+            "station_id_column", "B"
+        )  # The column in the data catalog that contains the station id
         self.dssfiles = dssfiles
         dfcats = []
         dssfh = {}
@@ -69,6 +66,7 @@ class DSSDataManager(param.Parameterized):
             )
         self.dssfiles = dssfiles
         self.dfcatpath = self._build_map_pathname_to_catalog(self.dfcat)
+        super().__init__(**kwargs)
 
     def __del__(self):
         if hasattr(self, "dssfiles"):
@@ -78,22 +76,19 @@ class DSSDataManager(param.Parameterized):
     def build_pathname(self, r):
         return f'/{r["A"]}/{r["B"]}/{r["C"]}//{r["E"]}/{r["F"]}/'
 
+    def build_station_name(self, r):
+        pathname = self.build_pathname(r)
+        if "FILE_NUM" not in r:
+            return f"{pathname}"
+        else:
+            return f'{r["FILE_NUM"]}:{pathname}'
+
     def _build_map_pathname_to_catalog(self, dfcat):
         dfcatpath = dfcat.copy()
         dfcatpath["pathname"] = dfcatpath.apply(self.build_pathname, axis=1)
         return dfcatpath
 
-    def _slice_df(self, df, time_range):
-        sdf = df.loc[slice(*time_range), :]
-        if sdf.empty:
-            return pd.DataFrame(
-                columns=["value"],
-                index=pd.date_range(*time_range, freq="D"),
-                dtype=float,
-            )
-        else:
-            return sdf
-
+    # data related methods
     def get_data_catalog(self):
         return self.dfcat
 
@@ -111,83 +106,10 @@ class DSSDataManager(param.Parameterized):
             self.time_range = (tmin, tmax)
         return self.time_range
 
-    def get_station_ids(self, df):
-        return list((df.apply(self.build_pathname, axis=1).astype(str).unique()))
+    def _get_station_ids(self, df):
+        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
 
-    def get_data_for_time_range(
-        self, dssfile, r, irreg, time_range, do_tidal_filter=False
-    ):
-        try:
-            dssfh = self.dssfh[dssfile]
-            dfcatp = self.dsscats[dssfile]
-            dfcatp = dfcatp[dfcatp["pathname"] == self.build_pathname(r)]
-            pathname = dssfh.get_pathnames(dfcatp)[0]
-            if irreg:
-                df, unit, ptype = dssfh.read_its(
-                    pathname,
-                    time_range[0].strftime("%Y-%m-%d"),
-                    time_range[1].strftime("%Y-%m-%d"),
-                )
-            else:
-                df, unit, ptype = dssfh.read_rts(
-                    pathname,
-                    time_range[0].strftime("%Y-%m-%d"),
-                    time_range[1].strftime("%Y-%m-%d"),
-                )
-        except Exception as e:
-            print(full_stack())
-            if pn.state.notifications:
-                pn.state.notifications.error(
-                    f"Error while fetching data for {dssfile}/{pathname}: {e}"
-                )
-            df = pd.DataFrame(columns=["value"], dtype=float)
-            unit = "X"
-            ptype = "INST-VAL"
-        if do_tidal_filter:
-            df = cosine_lanczos(df, "40h")
-        df = df[slice(df.first_valid_index(), df.last_valid_index())]
-        return df, unit, ptype
-
-
-class DSSDataUIManager(TimeSeriesDataUIManager):
-    do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
-
-    def __init__(self, *dssfiles, **kwargs):
-        """
-        geolocations is a geodataframe with station_id, and geometry columns
-        This is merged with the data catalog to get the station locations.
-        """
-        time_range = kwargs.pop("time_range", None)
-        geo_locations = kwargs.pop("geo_locations", None)
-        geo_id_column = kwargs.pop("geo_id_column", "station_id")
-        station_id_column = kwargs.pop(
-            "station_id_column", "B"
-        )  # The column in the data catalog that contains the station id
-        self.data_manager = DSSDataManager(
-            *dssfiles,
-            time_range=time_range,
-            geo_locations=geo_locations,
-            geo_id_column=geo_id_column,
-            station_id_column=station_id_column,
-            **kwargs,
-        )
-        super().__init__(**kwargs)
-
-    def get_widgets(self):
-        super_widgets = super().get_widgets()
-        return pn.Column(super_widgets, self.param.do_tidal_filter)
-
-    # data related methods
-    def get_data_catalog(self):
-        return self.data_manager.get_data_catalog()
-
-    def get_station_ids(self, df):
-        return self.data_manager.get_station_ids(df)
-
-    def get_time_range(self, dfcat):
-        return self.data_manager.get_time_range(dfcat)
-
-    def get_table_column_width_map(self):
+    def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
             "A": "15%",
@@ -196,7 +118,6 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             "E": "10%",
             "F": "15%",
             "D": "20%",
-            "filename": "10%",
         }
         return column_width_map
 
@@ -210,23 +131,32 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         }
         return table_filters
 
+    def _append_value(self, new_value, value):
+        if new_value not in value:
+            value += f'{", " if value else ""}{new_value}'
+        return value
+
     def _append_to_title_map(self, title_map, unit, r):
-        value = title_map[unit]
-        if r["C"] not in value[0]:
-            value[0] += f',{r["C"]}'
-        if r["B"] not in value[1]:
-            value[1] += f',{r["B"]}'
-        if r["A"] not in value[2]:
-            value[2] += f',{r["A"]}'
-        if r["F"] not in value[3]:
-            value[3] += f',{r["F"]}'
+        if unit in title_map:
+            value = title_map[unit]
+        else:
+            value = ["", "", "", ""]
+        value[0] = self._append_value(r["C"], value[0])
+        value[1] = self._append_value(r["B"], value[1])
+        value[2] = self._append_value(r["A"], value[2])
+        value[3] = self._append_value(r["F"], value[3])
         title_map[unit] = value
 
     def _create_title(self, v):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
-    def _create_crv(self, df, crvlabel, ylabel, title, irreg=False):
+    def _create_crv(self, df, r, unit, file_index=None):
+        file_index_label = f"{file_index}:" if file_index is not None else ""
+        crvlabel = f'{file_index_label}{r["B"]}/{r["C"]}'
+        ylabel = f'{r["C"]} ({unit})'
+        title = f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})'
+        irreg = r["E"].startswith("IR-")
         if irreg:
             crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         else:
@@ -240,42 +170,27 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
-    def create_layout(self, df, time_range):
-        layout_map = {}
-        title_map = {}
-        range_map = {}
-        station_map = {}  # list of stations for each unit
-        for _, r in df.iterrows():
-            irreg = r["E"].startswith("IR-")
-            data, unit, _ = self.data_manager.get_data_for_time_range(
-                r["filename"],
-                r,
-                irreg,
-                time_range,
-                self.do_tidal_filter,
+    def _get_data_for_time_range(self, r, time_range):
+        irreg = r["E"].startswith("IR-")
+        dssfile = r[self.filename_column]
+        dssfh = self.dssfh[dssfile]
+        dfcatp = self.dsscats[dssfile]
+        dfcatp = dfcatp[dfcatp["pathname"] == self.build_pathname(r)]
+        pathname = dssfh.get_pathnames(dfcatp)[0]
+        if irreg:
+            df, unit, ptype = dssfh.read_its(
+                pathname,
+                time_range[0].strftime("%Y-%m-%d"),
+                time_range[1].strftime("%Y-%m-%d"),
             )
-            crv = self._create_crv(
-                data,
-                f'{r["B"]}/{r["C"]}',
-                f'{r["C"]} ({unit})',
-                f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})',
-                irreg=irreg,
+        else:
+            df, unit, ptype = dssfh.read_rts(
+                pathname,
+                time_range[0].strftime("%Y-%m-%d"),
+                time_range[1].strftime("%Y-%m-%d"),
             )
-            if unit not in layout_map:
-                layout_map[unit] = []
-                title_map[unit] = [
-                    r["C"],
-                    r["B"],
-                    r["A"],
-                    r["F"],
-                ]
-                range_map[unit] = None
-                station_map[unit] = []
-            layout_map[unit].append(crv)
-            station_map[unit].append(self.data_manager.build_pathname(r))
-            self._append_to_title_map(title_map, unit, r)
-        title_map = {k: self._create_title(v) for k, v in title_map.items()}
-        return layout_map, station_map, range_map, title_map
+        df = df[slice(df.first_valid_index(), df.last_valid_index())]
+        return df, unit, ptype
 
     # methods below if geolocation data is available
     def get_tooltips(self):
@@ -364,6 +279,7 @@ def show_dss_ui(
         geo_locations=geodf,
         geo_id_column=location_id_column,
         station_id_column=station_id_column,
+        filename_column="filename",
     )
     ui = DataUI(dssuimgr, crs=crs_cartopy)
     ui.create_view().show()
