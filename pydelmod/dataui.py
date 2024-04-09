@@ -95,7 +95,7 @@ class DataUI(param.Parameterized):
 
     def show_data_catalog(self, index=slice(None)):
         if index == []:
-            index = [0]
+            index = slice(None)
         dfs = self.dfcat.iloc[index]
         dfs = dfs[self.dataui_manager.get_table_columns()]
         # return a UI with controls to plot and show data
