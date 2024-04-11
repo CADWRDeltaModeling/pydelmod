@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore")
 #
 import pandas as pd
 import geopandas as gpd
+from io import StringIO
 
 # viz and ui
 import holoviews as hv
@@ -45,6 +46,9 @@ class DataUIManager(param.Parameterized):
         pass
 
     def get_table_filters(self):
+        pass
+
+    def get_data(self, df):
         pass
 
     def create_panel(self, df):
@@ -117,6 +121,7 @@ class DataUI(param.Parameterized):
                 name="Plot", button_type="primary", icon="chart-line"
             )
             self.plot_button.on_click(self.update_plots)
+            self.download_button = self.create_save_button()
             self.plot_panel = pn.panel(
                 hv.Div("<h3>Select rows from table and click on button</h3>"),
                 sizing_mode="stretch_both",
@@ -127,6 +132,7 @@ class DataUI(param.Parameterized):
             )  # ,
             gspec[0, 0:5] = pn.Row(
                 self.plot_button,
+                self.download_button,
                 pn.layout.HSpacer(),
             )
             gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
@@ -144,6 +150,31 @@ class DataUI(param.Parameterized):
         dfselected = self.display_table._processed.iloc[self.display_table.selection]
         self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
         self.plots_panel.loading = False
+
+    def download_data(self):
+        self.download_button.loading = True
+        try:
+            dfselected = self.display_table._processed.iloc[
+                self.display_table.selection
+            ]
+            dfdata = self.dataui_manager.get_data(dfselected)
+            sio = StringIO()
+            dfdata.to_csv(sio)
+            sio.seek(0)
+            return sio
+        finally:
+            self.download_button.loading = False
+
+    def create_save_button(self):
+        # add a button to trigger the save function
+        return pn.widgets.FileDownload(
+            label="Save Data",
+            callback=self.download_data,
+            filename="data.csv",
+            button_type="primary",
+            icon="file-download",
+            embed=False,
+        )
 
     def get_about_text(self):
         version = "0.1.0"
