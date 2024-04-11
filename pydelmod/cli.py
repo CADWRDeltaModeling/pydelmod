@@ -281,7 +281,9 @@ from pydelmod import dsm2gis
 from pydelmod import dsm2ui
 from pydelmod import deltacdui
 from pydelmod import calibplotui
+from pydelmod import schismui
 
+main.add_command(schismui.show_schism_output_ui)
 main.add_command(dsm2ui.show_dsm2_output_ui)
 main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
