@@ -78,11 +78,14 @@ class TimeSeriesDataUIManager(DataUIManager):
     do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
     file_number_column_name = param.String(default="FILE_NUM")
 
-    def __init__(self, filename_column="FILE", **params):
+    def __init__(
+        self, filename_column="FILE", file_number_column_name="FILE_NUM", **params
+    ):
         self.color_cycle = hv.Cycle(cc.glasbey_dark)
         # modify catalog if filename_column is present to include file number if multiple files are present
         catalog = self.get_data_catalog()
         self.filename_column = filename_column
+        self.file_number_column_name = file_number_column_name
         self.display_fileno = False
         if self.filename_column in catalog.columns:
             unique_files = catalog[self.filename_column].unique()

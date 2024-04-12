@@ -40,7 +40,7 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
                 lambda x: unique_files.tolist().index(x)
             )
         self.station_id_column = "NAME"
-        super().__init__(**kwargs)
+        super().__init__(file_number_column_name="FILE_NO", **kwargs)
 
     def build_station_name(self, r):
         if self.display_fileno:
