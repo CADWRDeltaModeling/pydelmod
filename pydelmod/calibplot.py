@@ -351,6 +351,7 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
     # y_series contains model output for each of the studies
     x_series = dfa.iloc[:, index_x]
     dfr = dfa.drop(columns=dfa.columns[index_x])
+    names = names.copy()
     names.remove(names[index_x])
     slopes, interceps, equations, r2s, pvals, stds = [], [], [], [], [], []
     (
@@ -370,8 +371,8 @@ def calculate_metrics(dflist, names, index_x=0, location=None):
 
     metrics_calculated = False
     if len(x_series) > 0:
-        for col in dfr.columns:
-            y_series = dfr.loc[:, col]
+        for i in range(len(dfr.columns)):
+            y_series = dfr.iloc[:, i]
 
             if len(y_series) > 0:
                 slope, intercep, rval, pval, std = stats.linregress(x_series, y_series)

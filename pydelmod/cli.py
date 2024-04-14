@@ -282,9 +282,12 @@ from pydelmod import dsm2ui
 from pydelmod import deltacdui
 from pydelmod import calibplotui
 from pydelmod import schismui
+from pydelmod import schismcalibplotui
 
 main.add_command(schismui.show_schism_output_ui)
+main.add_command(schismcalibplotui.schism_calib_plot_ui)
 main.add_command(dsm2ui.show_dsm2_output_ui)
+main.add_command(dsm2ui.show_dsm2_tidefile_ui)
 main.add_command(dssui.show_dss_ui)
 main.add_command(map_channels_colored)
 main.add_command(node_map_flow_splits)

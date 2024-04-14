@@ -78,7 +78,7 @@ class SchismStudy(param.Parameterized):
         **kwargs
     ):
         self.base_dir = pathlib.Path(base_dir)
-        self.cache = diskcache.Cache(self.base_dir / ".schismstudy-cache")
+        self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
         self.reftime = pd.Timestamp(reftime)
         self.flux_xsect_file = self.interpret_file_relative_to(
             self.base_dir, pathlib.Path(flux_xsect_file)
@@ -96,11 +96,27 @@ class SchismStudy(param.Parameterized):
         stations = stations.reset_index()
         stations["station_id"] = stations["id"] + "_" + stations["subloc"]
         self.stations_gdf = convert_station_to_gdf(stations)
-        flux_df = load_flux_dataframe(self.flux_xsect_file)
-        flux_df["station_id"] = flux_df["name"].str.lower() + "_default"
-        self.flux_gdf = convert_flux_to_gdf(flux_df)
-        self.flux_pts_gdf = convert_flux_to_points_gdf(flux_df)
-        self.flux_names = flux_df["name"].tolist()
+        if self.flux_xsect_file.suffix in [".yaml", ".yml"]:
+            flux_df = load_flux_dataframe(self.flux_xsect_file)
+            flux_df["station_id"] = flux_df["name"].str.lower() + "_default"
+            self.flux_gdf = convert_flux_to_gdf(flux_df)
+            self.flux_pts_gdf = convert_flux_to_points_gdf(flux_df)
+            self.flux_names = flux_df["name"].tolist()
+        else:
+            print(
+                "flux xsect file is not a yaml file, so only names loaded with no geometry.\n"
+                + "Filling in with matching stations.in geometry where station_id matches.\n"
+            )
+            names = station.station_names_from_file(str(self.flux_xsect_file))
+            flux_df = pd.DataFrame(names, columns=["flux_name"])
+            flux_df["station_id"] = flux_df["flux_name"].str.lower() + "_default"
+            self.flux_pts_gdf = flux_df.merge(
+                self.stations_gdf, on="station_id", how="left"
+            )
+            self.flux_pts_gdf = self.flux_pts_gdf.rename(
+                columns={"name": "station_name"}
+            )
+            self.flux_names = names
 
     def interpret_file_relative_to(self, base_dir, fpath):
         full_path = base_dir / fpath
@@ -110,12 +126,16 @@ class SchismStudy(param.Parameterized):
             return fpath
 
     def get_unit_for_variable(self, var):
-        if var in ["elev", "air pressure", "temp"]:
+        if var in ["elev"]:
             return "m"
+        elif var in ["flow"]:
+            return "cms"
+        elif var in ["temp"]:
+            return "deg C"
         elif var in ["wind_x", "wind_y", "u", "v", "w"]:
             return "m/s"
         elif var in ["salt"]:
-            return "ppt"
+            return "PSU"
         elif var in ["ssc"]:
             return "mg/L"
         else:
@@ -135,16 +155,18 @@ class SchismStudy(param.Parameterized):
                 s.drop(columns=["id", "subloc", "x", "y", "z"], inplace=True)
                 s.rename(columns={"station_id": "id"}, inplace=True)
                 var_stations.append(s)
-            flux_stations = self.flux_pts_gdf.copy()
-            flux_stations = flux_stations.drop(
-                columns=["name", "new_name", "comment", "agency_id"],
-            )
-            flux_stations.rename(
-                columns={"station_id": "id", "station_name": "name"}, inplace=True
-            )
-            flux_stations["variable"] = "flow"
-            flux_stations["unit"] = "m^3/s"
-            flux_stations["filename"] = str(self.flux_out)
+            # TODO: if flux_pts_gdf is empty, then use the flux_names to create geometry
+            if self.flux_pts_gdf is not None:
+                flux_stations = self.flux_pts_gdf.copy()
+                flux_stations = flux_stations[
+                    ["station_id", "station_name", "geometry"]
+                ]
+                flux_stations.rename(
+                    columns={"station_id": "id", "station_name": "name"}, inplace=True
+                )
+                flux_stations["variable"] = "flow"
+                flux_stations["unit"] = "m^3/s"
+                flux_stations["filename"] = str(self.flux_out)
             df = pd.concat(var_stations + [flux_stations])
             self.cache[catalog_key] = df
             return df
