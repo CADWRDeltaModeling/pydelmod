@@ -123,7 +123,7 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         dssfile = r[self.filename_column]
         pathname = f'//{r["NAME"]}/{r["VARIABLE"]}////'
         df, unit, ptype = next(
-            dss.get_matching_ts(dssfile, pathname)
+            lru_cache(maxsize=32)(dss.get_matching_ts)(dssfile, pathname)
         )  # get first matching time series
         df = df[slice(*time_range)]
         return df, unit, ptype
@@ -267,9 +267,9 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
     def _get_data_for_time_range(self, r, time_range):
         var = r["variable"]
         time_window = self._get_timewindow_for_time_range(time_range)
-        df = self.tidefile_map[r[self.filename_column]].get_data_for_catalog_entry(
-            r, time_window
-        )
+        df = lru_cache(maxsize=32)(
+            self.tidefile_map[r[self.filename_column]].get_data_for_catalog_entry
+        )(r, time_window)
         unit = r["unit"]
         ptype = "INST-VAL"
         df = df[slice(*time_range)]

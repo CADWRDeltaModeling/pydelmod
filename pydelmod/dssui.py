@@ -1,6 +1,7 @@
 # %%
 # organize imports by category
 from datetime import datetime, timedelta
+from functools import lru_cache
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -178,13 +179,13 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         dfcatp = dfcatp[dfcatp["pathname"] == self.build_pathname(r)]
         pathname = dssfh.get_pathnames(dfcatp)[0]
         if irreg:
-            df, unit, ptype = dssfh.read_its(
+            df, unit, ptype = lru_cache(maxsize=32)(dssfh.read_its)(
                 pathname,
                 time_range[0].strftime("%Y-%m-%d"),
                 time_range[1].strftime("%Y-%m-%d"),
             )
         else:
-            df, unit, ptype = dssfh.read_rts(
+            df, unit, ptype = lru_cache(maxsize=32)(dssfh.read_rts)(
                 pathname,
                 time_range[0].strftime("%Y-%m-%d"),
                 time_range[1].strftime("%Y-%m-%d"),
