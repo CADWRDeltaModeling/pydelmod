@@ -204,9 +204,16 @@ class SchismCalibPlotUIManager(DataUIManager):
                 df.columns = [study_name]
                 dfs.append(df)
         dparam = self.get_datastore_param_name(variable)
-        rd = self.dcat[self.dcat.eval(f'(id=="{id}") & (param=="{dparam}")')].iloc[0]
-        if not rd.empty:
+        try:
+            rd = self.dcat[self.dcat.eval(f'(id=="{id}") & (param=="{dparam}")')].iloc[
+                0
+            ]
+        except IndexError:
+            rd = None
+        if rd is not None:
             dfobs = self.convert_to_SI(self.datastore.get_data(rd), rd["unit"])
+        else:
+            dfobs = pd.DataFrame([], columns=["value"])
         return dfobs, dfs
 
     def plot_metrics(self, row):
@@ -229,7 +236,8 @@ class SchismCalibPlotUIManager(DataUIManager):
         dfsimlist = [df.loc[slice(*window_inst.split(":")), :] for df in dfsimlist]
         # Now do the plotting
         plotf = calibplot.tsplot([dfobsf] + dfsimlistf, self.labels, window_avg, True)
-        dfmetrics = calibplot.calculate_metrics([dfobsf] + dfsimlistf, self.labels)
+        # dfmetrics = calibplot.calculate_metrics([dfobsf] + dfsimlistf, self.labels)
+
         splot = calibplot.scatterplot([dfobsf] + dfsimlistf, self.labels)
         # layout template
         grid = pn.GridSpec(sizing_mode="stretch_both", min_height=600)
@@ -239,7 +247,7 @@ class SchismCalibPlotUIManager(DataUIManager):
         grid[4:7, 0:5] = pn.Row(
             plotf.opts(show_legend=False), splot.opts(shared_axes=False)
         )
-        grid[7:9, :] = pn.pane.DataFrame(dfmetrics)
+        # grid[7:9, :] = pn.pane.DataFrame(dfmetrics)
         # save
         grid.save(f"{station_id}_{variable}_plot.html")
 

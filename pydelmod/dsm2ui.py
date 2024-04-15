@@ -141,6 +141,152 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         return "VARIABLE"
 
 
+from pydsm.hydroh5 import HydroH5
+from pydsm.qualh5 import QualH5
+
+
+class DSM2TidefileUIManager(TimeSeriesDataUIManager):
+
+    def __init__(self, tidefiles, **kwargs):
+        """
+        tidefiles: A list of tide files
+        """
+        self.time_range = kwargs.pop("time_range", None)
+        self.tidefiles = tidefiles
+        self.display_fileno = False
+        self.tidefile_map = {
+            f: DSM2TidefileUIManager.read_tidefile(f) for _, f in enumerate(tidefiles)
+        }
+        self.dfcat = pd.concat(
+            [f.create_catalog() for k, f in self.tidefile_map.items()]
+        )
+        self.dfcat.reset_index(drop=True, inplace=True)
+        time_ranges = [f.get_start_end_dates() for k, f in self.tidefile_map.items()]
+        self.time_range = (
+            min([pd.to_datetime(t[0]) for t in time_ranges]),
+            max([pd.to_datetime(t[1]) for t in time_ranges]),
+        )
+        self.station_id_column = "id"
+        super().__init__(
+            filename_column="filename",
+            file_number_column_name="FILE_NUM",
+            time_range=self.time_range,
+            **kwargs,
+        )
+
+    def read_tidefile(tidefile, guess="hydro"):
+        try:
+            if guess == "hydro":
+                return HydroH5(tidefile)
+            else:
+                return QualH5(tidefile)
+        except:
+            if guess == "hydro":
+                return QualH5(tidefile)
+            else:
+                return HydroH5(tidefile)
+
+    def build_station_name(self, r):
+        if self.display_fileno:
+            return f'{r["FILE_NUM"]}:{r[self.station_id_column]}'
+        else:
+            return f"{r[self.station_id_column]}"
+
+    # data related methods
+    def get_data_catalog(self):
+        return self.dfcat
+
+    def get_time_range(self, dfcat):
+        return self.time_range
+
+    def _get_station_ids(self, df):
+        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
+
+    def _get_table_column_width_map(self):
+        """only columns to be displayed in the table should be included in the map"""
+        column_width_map = {
+            "id": "15%",
+            "variable": "10%",
+            "unit": "10%",
+        }
+        return column_width_map
+
+    def get_table_filters(self):
+        table_filters = {
+            "id": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "variable": {"type": "input", "func": "like", "placeholder": "Enter match"},
+            "unit": {"type": "input", "func": "like", "placeholder": "Enter match"},
+        }
+        return table_filters
+
+    def _append_value(self, new_value, value):
+        if new_value not in value:
+            value += f'{", " if value else ""}{new_value}'
+        return value
+
+    def _append_to_title_map(self, title_map, unit, r):
+        if unit in title_map:
+            value = title_map[unit]
+        else:
+            value = ["", ""]
+        value[0] = self._append_value(r["variable"], value[0])
+        value[1] = self._append_value(r["id"], value[1])
+        title_map[unit] = value
+
+    def _create_title(self, v):
+        title = f"{v[0]} @ {v[1]}"
+        return title
+
+    def _create_crv(self, df, r, unit, file_index=None):
+        file_index_label = f"{file_index}:" if file_index is not None else ""
+        crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
+        ylabel = f'{r["variable"]} ({unit})'
+        title = f'{r["variable"]} @ {r["id"]}'
+        irreg = df.index.freq is None  # irregular time series
+        if irreg:
+            crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        else:
+            crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        return crv.opts(
+            xlabel="Time",
+            ylabel=ylabel,
+            title=title,
+            responsive=True,
+            active_tools=["wheel_zoom"],
+            tools=["hover"],
+        )
+
+    def _get_timewindow_for_time_range(self, time_range):
+        # extend time range to include whole days
+        xtime_range = (
+            pd.to_datetime(time_range[0]).floor("D"),
+            pd.to_datetime(time_range[1]).ceil("D"),
+        )
+        return "-".join(map(lambda x: x.strftime("%d%b%Y"), xtime_range))
+
+    def _get_data_for_time_range(self, r, time_range):
+        var = r["variable"]
+        time_window = self._get_timewindow_for_time_range(time_range)
+        df = self.tidefile_map[r[self.filename_column]].get_data_for_catalog_entry(
+            r, time_window
+        )
+        unit = r["unit"]
+        ptype = "INST-VAL"
+        df = df[slice(*time_range)]
+        return df, unit, ptype
+
+    # methods below if geolocation data is available
+    def get_tooltips(self):
+        return [
+            ("id", "@id"),
+            ("variable", "@variable"),
+            ("unit", "@unit"),
+        ]
+
+    def get_map_color_category(self):
+        return "variable"
+
+
 class DSM2FlowlineMap:
 
     def __init__(self, shapefile, hydro_echo_file, hydro_echo_file_base=None):
@@ -431,4 +577,23 @@ def show_dsm2_output_ui(echo_files, channel_shapefile=None):
 
     plotter = build_output_plotter(*echo_files, channel_shapefile=channel_shapefile)
     ui = dataui.DataUI(plotter, crs=ccrs.UTM(10))
+    ui.create_view().show()
+
+
+@click.command()
+@click.argument("tidefiles", nargs=-1)
+def show_dsm2_tidefile_ui(tidefiles):
+    """
+    Show a user interface for viewing DSM2 tide files
+
+    Parameters
+    ----------
+
+    tidefiles : list of strings atlease one of which should be a tide file
+
+    """
+    import cartopy.crs as ccrs
+
+    tidefile_manager = DSM2TidefileUIManager(tidefiles)
+    ui = dataui.DataUI(tidefile_manager, crs=ccrs.UTM(10))
     ui.create_view().show()

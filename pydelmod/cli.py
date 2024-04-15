@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """Console script for pydelmod."""
+from pydsm import hydroh5, qualh5
 from pydelmod import dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2, checklist_dsm2
