@@ -21,3 +21,7 @@ pydelmod show-dsm2-output-ui d:\temp\postprocessingTestFolder\studies\1.1.88.2_d
 pydelmod show-metrics-geo-heatmap d:\temp\postprocessingTestFolder\studies\1.1.88.2_dsm2_83_calib\postprocessing\plots_cal\1_summary_statistics_unmasked_all_EC.csv d:\temp\postprocessingTestFolder\postprocessing\location_info\calibration_ec_stations.csv
 :: Show schism output UI for a SCHISM output file along with datastore data
 pydelmod show-schism-output-ui --schism_dir d:/temp/schism_output_sample --repo_dir y:/repo/continuous/screened --inventory_file y:/repo/continuous/inventory_datasets_screened_20240326.csv --flux_xsect_file preprocessed/flow_station_xsects.yaml
+:: Show tidefile UI for a tidefile. No map
+pydelmod show-dsm2-tidefile-ui d:/dev/pydsm/tests/data/historical_v82_ec.h5
+:: Show schism ui for calib plots
+pydelmod schism-calib-plot-ui d:\dev\schimpy\tests\example_full_mss\input_compare.yaml

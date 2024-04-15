@@ -1,3 +1,4 @@
+from functools import lru_cache
 import param
 import os
 import diskcache
@@ -36,7 +37,7 @@ class StationDatastore(param.Parameterized):
         self.cache_dir = kwargs.pop("cache_dir", ".cache-ds")
         super().__init__(**kwargs)
         self.cache = diskcache.Cache(self.cache_dir, size_limit=1e11)
-        self.caching_read_ts = self.cache.memoize()(read_ts)
+        self.caching_read_ts = lru_cache(maxsize=32)(self.cache.memoize()(read_ts))
         # read inventory file for each repo level
         print("Using inventory file: ", self.inventory_file)
         self.df_dataset_inventory = pd.read_csv(self.inventory_file, comment="#")

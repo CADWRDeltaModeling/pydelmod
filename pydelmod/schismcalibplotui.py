@@ -1,5 +1,6 @@
 import pathlib
 import yaml
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 import hvplot.pandas
@@ -213,7 +214,7 @@ class SchismCalibPlotUIManager(DataUIManager):
         if rd is not None:
             dfobs = self.convert_to_SI(self.datastore.get_data(rd), rd["unit"])
         else:
-            dfobs = pd.DataFrame([], columns=["value"])
+            dfobs = pd.DataFrame([np.nan], columns=["value"], index=pd.date_range('2000-01-01','2000-01-01'))
         return dfobs, dfs
 
     def plot_metrics(self, row):

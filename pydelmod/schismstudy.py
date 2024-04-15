@@ -1,3 +1,4 @@
+from functools import lru_cache
 import os
 import pathlib
 import schimpy
@@ -183,6 +184,7 @@ class SchismStudy(param.Parameterized):
             staout = self.get_staout(var)
             return staout[[id]]
 
+    @lru_cache(maxsize=32)
     def get_flux(self):
         if self.flux_out in self.cache:
             return self.cache[self.flux_out]
@@ -193,6 +195,7 @@ class SchismStudy(param.Parameterized):
             self.cache[self.flux_out] = flux
             return flux
 
+    @lru_cache(maxsize=32)
     def get_staout(self, variable, fpath=None):
         if fpath is None:
             fpath = str(self.base_dir / station.staout_name(variable))
