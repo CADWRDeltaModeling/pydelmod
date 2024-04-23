@@ -25,11 +25,13 @@ dependencies:
   - h5py
   - scipy
   # geo stuff
+  - pyogrio
   - geopandas
   # then plot stuff
   - plotly-orca
   - plotly
   - matplotlib
+  - jupyter_bokeh
   - holoviews
   - geoviews
   - hvplot

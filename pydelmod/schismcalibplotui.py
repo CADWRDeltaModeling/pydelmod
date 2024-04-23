@@ -214,44 +214,96 @@ class SchismCalibPlotUIManager(DataUIManager):
         if rd is not None:
             dfobs = self.convert_to_SI(self.datastore.get_data(rd), rd["unit"])
         else:
-            dfobs = pd.DataFrame([np.nan], columns=["value"], index=pd.date_range('2000-01-01','2000-01-01'))
+            dfobs = pd.DataFrame(
+                [np.nan],
+                columns=["value"],
+                index=pd.date_range("2000-01-01", "2000-01-01"),
+            )
         return dfobs, dfs
+
+    def upper_case_first(self, x):
+        return x[0].upper() + x[1:]
+
+    def shift_cycle(self, vals, shift=1):
+        return hv.Cycle(vals[shift:] + vals[:shift])
+
+    def schism_plot_template(
+        self,
+        dfobs,
+        dfsimlist,
+        inst_time_window,
+        avg_time_window,
+        labels,
+        y_axis_label,
+        title,
+    ):
+        avg_time_window = [pd.to_datetime(x) for x in avg_time_window]
+        avg_time_window = tuple(avg_time_window[0:2])
+        inst_time_window = [pd.to_datetime(x) for x in inst_time_window]
+        inst_time_window = tuple(inst_time_window[0:2])
+        df = pd.concat([dfobs] + dfsimlist, axis=1)
+        df.columns = labels
+        # use extended time window for filtering
+        ex_avg_time_window = slice(
+            pd.Timestamp(avg_time_window[0]) - pd.Timedelta("2D"),
+            pd.Timestamp(avg_time_window[1]) + pd.Timedelta("2D"),
+        )
+        df = df.loc[ex_avg_time_window]
+        df = df.resample(dfobs.index.freq).mean()
+        dff = cosine_lanczos(df.loc[ex_avg_time_window], "40H")
+        df = df.loc[slice(*inst_time_window), :]
+        dff = dff.loc[slice(*avg_time_window), :]
+        #
+        default_cycle = hv.Cycle(hv.Cycle.default_cycles["default_colors"])
+        plot_inst = df.hvplot(
+            color=default_cycle,
+            grid=True,
+            responsive=True,
+        ).opts(ylabel=y_axis_label)
+        plot_scatter = df.hvplot.scatter(
+            x="Observed",
+            color=self.shift_cycle(default_cycle.values),
+            grid=True,
+            responsive=True,
+        ).opts(
+            opts.Scatter(
+                aspect=1,
+            )
+        )
+        plot_avg = dff.hvplot(
+            ylabel=f"Tidal Averaged {y_axis_label}",
+            color=default_cycle,
+            grid=True,
+            responsive=True,
+        )
+        gs = pn.layout.GridSpec()
+        gs[0, 4:6] = pn.pane.Markdown(f"## {title}")
+        gs[1:6, 0:11] = plot_inst.opts(shared_axes=False)
+        gs[6:10, 0:6] = plot_avg.opts(shared_axes=False, show_legend=False)
+        gs[6:10, 6:11] = plot_scatter.opts(
+            shared_axes=False, show_legend=False, width=200
+        )
+        return gs
 
     def plot_metrics(self, row):
         station_id = row["id"]
         variable = row["variable"]
-
+        varname = self.upper_case_first(variable)
+        yaxis_label = f"{varname} ({variable_units[variable]})"
         dfobs, dfsimlist = self.get_data(station_id, variable)
         window_inst = to_timewindow_string(self.window_inst)
-        inst_plot = calibplot.tsplot(
-            [dfobs] + dfsimlist, self.labels, window_inst, True
-        )
-        # tidal averaging
-        dfobsf = cosine_lanczos(dfobs, "40H")
-        dfsimlistf = [cosine_lanczos(df, "40H") for df in dfsimlist]
         window_avg = to_timewindow_string(self.window_avg)
-        # Now do the time slicing
-        dfobsf = dfobsf.loc[slice(*window_avg.split(":")), :]
-        dfsimlistf = [df.loc[slice(*window_avg.split(":")), :] for df in dfsimlistf]
-        dfobs = dfobs.loc[slice(*window_inst.split(":")), :]
-        dfsimlist = [df.loc[slice(*window_inst.split(":")), :] for df in dfsimlist]
-        # Now do the plotting
-        plotf = calibplot.tsplot([dfobsf] + dfsimlistf, self.labels, window_avg, True)
-        # dfmetrics = calibplot.calculate_metrics([dfobsf] + dfsimlistf, self.labels)
-
-        splot = calibplot.scatterplot([dfobsf] + dfsimlistf, self.labels)
-        # layout template
-        grid = pn.GridSpec(sizing_mode="stretch_both", min_height=600)
-        title = f"{variable}@{row['name']}"
-        grid[0, 2:4] = pn.pane.HTML(f"<h2>{title}</h2>")
-        grid[1:4, :] = inst_plot.opts(shared_axes=False, legend_position="right")
-        grid[4:7, 0:5] = pn.Row(
-            plotf.opts(show_legend=False), splot.opts(shared_axes=False)
+        title = f"{varname} @ {row['name']}"
+        grid = self.schism_plot_template(
+            dfobs,
+            dfsimlist,
+            window_inst.split(":"),
+            window_avg.split(":"),
+            self.labels,
+            yaxis_label,
+            title,
         )
-        # grid[7:9, :] = pn.pane.DataFrame(dfmetrics)
-        # save
-        grid.save(f"{station_id}_{variable}_plot.html")
-
+        # grid.save(f"{station_id}_{variable}_plot.html")
         return grid
 
     def create_panel(self, df):
