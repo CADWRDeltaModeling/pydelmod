@@ -9,6 +9,7 @@ import geopandas as gpd
 from io import StringIO
 
 # viz and ui
+import hvplot.pandas  # noqa
 import holoviews as hv
 from holoviews import opts, dim, streams
 
@@ -75,23 +76,57 @@ class DataUI(param.Parameterized):
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
             tooltips = self.dataui_manager.get_tooltips()
-
             map_color_category = self.dataui_manager.get_map_color_category()
             hover = HoverTool(tooltips=tooltips)
-            self.map_stations = gv.Points(self.dfcat, crs=crs).opts(
+            self.map_features = self.dfcat.hvplot(geo=True, crs=crs)
+            self.map_features = self.map_features.opts(
                 color=dim(map_color_category),
                 cmap="Category10",
             )
-            self.map_stations = self.map_stations.opts(
-                opts.Points(
-                    tools=["tap", hover, "lasso_select", "box_select"],
-                    nonselection_alpha=0.3,  # nonselection_color='gray',
-                    size=10,
-                    responsive=True,
-                    height=550,
+            if isinstance(self.map_features, gv.Points):
+                self.map_features = gv.Points(
+                    self.dfcat, crs=crs
+                )  # FIXME: this is a hack
+                self.map_features = self.map_features.opts(
+                    color=dim(map_color_category),
+                    cmap="Category10",
                 )
-            ).opts(active_tools=["wheel_zoom"], responsive=True)
-            self.station_select = streams.Selection1D(source=self.map_stations)
+                self.map_features = self.map_features.opts(
+                    opts.Points(
+                        tools=["tap", hover, "lasso_select", "box_select"],
+                        nonselection_alpha=0.2,  # nonselection_color='gray',
+                        size=10,
+                        responsive=True,
+                        height=550,
+                    )
+                )
+            elif isinstance(self.map_features, gv.Path):
+                self.map_features = self.map_features.opts(
+                    opts.Path(
+                        tools=["tap", hover, "lasso_select", "box_select"],
+                        nonselection_alpha=0.2,  # nonselection_color='gray',
+                        line_width=2,
+                        responsive=True,
+                        height=550,
+                    )
+                )
+            elif isinstance(self.map_features, gv.Polygons):
+                self.map_features = self.map_features.opts(
+                    opts.Polygons(
+                        tools=["tap", hover, "lasso_select", "box_select"],
+                        nonselection_alpha=0.2,  # nonselection_color='gray',
+                        responsive=True,
+                        height=550,
+                    )
+                )
+            else:
+                raise ValueError(
+                    f"Unknown type for map_features: {type(self.map_features)}"
+                )
+            self.map_features = self.map_features.opts(
+                active_tools=["wheel_zoom"], responsive=True
+            )
+            self.station_select = streams.Selection1D(source=self.map_features)
         else:
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
@@ -203,14 +238,14 @@ class DataUI(param.Parameterized):
     def create_view(self):
         control_widgets = self.dataui_manager.get_widgets()
         sidebar_view = pn.Column(control_widgets)
-        if hasattr(self, "map_stations"):
+        if hasattr(self, "map_features"):
             map_tooltip = pn.widgets.TooltipIcon(
-                value="""Map of stations. Click on a station to see data available in the table. <br/>
+                value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
             sidebar_view.append(
                 pn.Column(
-                    self.tmap * self.map_stations,
+                    self.tmap * self.map_features,
                     map_tooltip,
                     sizing_mode="stretch_both",
                 )
