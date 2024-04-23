@@ -264,12 +264,15 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
         )
         return "-".join(map(lambda x: x.strftime("%d%b%Y"), xtime_range))
 
+    @lru_cache(maxsize=32)
+    def _get_data_for_catalog_entry(self, filename, variable, id, time_window):
+        entry = {self.filename_column: filename, 'variable': variable, 'id': id}
+        return self.tidefile_map[filename].get_data_for_catalog_entry(entry, time_window)
+
     def _get_data_for_time_range(self, r, time_range):
         var = r["variable"]
         time_window = self._get_timewindow_for_time_range(time_range)
-        df = lru_cache(maxsize=32)(
-            self.tidefile_map[r[self.filename_column]].get_data_for_catalog_entry
-        )(r, time_window)
+        df = self._get_data_for_catalog_entry(r[self.filename_column], r['variable'], r['id'], time_window)
         unit = r["unit"]
         ptype = "INST-VAL"
         df = df[slice(*time_range)]

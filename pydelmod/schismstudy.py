@@ -12,6 +12,12 @@ import geopandas as gpd
 import param
 import diskcache
 
+# use logging
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 def read_station_in(station_in_file):
     return station.read_station_in(station_in_file)
@@ -76,7 +82,7 @@ class SchismStudy(param.Parameterized):
         station_in_file="station.in",
         flux_out="flux.out",
         reftime="2020-01-01",
-        **kwargs
+        **kwargs,
     ):
         self.base_dir = pathlib.Path(base_dir)
         self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
@@ -95,11 +101,14 @@ class SchismStudy(param.Parameterized):
         stations = read_station_in(self.station_in_file)
         self.stations_in = stations
         stations = stations.reset_index()
-        stations["station_id"] = stations["id"] + "_" + stations["subloc"]
+        # only add subloc if subloc value is not == "default"
+        stations["station_id"] = stations["id"] + stations["subloc"].apply(
+            lambda x: ("_" + x) if x.lower() != "default" else ""
+        )
         self.stations_gdf = convert_station_to_gdf(stations)
         if self.flux_xsect_file.suffix in [".yaml", ".yml"]:
             flux_df = load_flux_dataframe(self.flux_xsect_file)
-            flux_df["station_id"] = flux_df["name"].str.lower() + "_default"
+            flux_df["station_id"] = flux_df["name"].str.lower()  # + "_default"
             self.flux_gdf = convert_flux_to_gdf(flux_df)
             self.flux_pts_gdf = convert_flux_to_points_gdf(flux_df)
             self.flux_names = flux_df["name"].tolist()
@@ -110,7 +119,7 @@ class SchismStudy(param.Parameterized):
             )
             names = station.station_names_from_file(str(self.flux_xsect_file))
             flux_df = pd.DataFrame(names, columns=["flux_name"])
-            flux_df["station_id"] = flux_df["flux_name"].str.lower() + "_default"
+            flux_df["station_id"] = flux_df["flux_name"].str.lower()  # + "_default"
             self.flux_pts_gdf = flux_df.merge(
                 self.stations_gdf, on="station_id", how="left"
             )
@@ -172,6 +181,17 @@ class SchismStudy(param.Parameterized):
             self.cache[catalog_key] = df
             return df
 
+    def cache_vars(self, vars):
+        # get data for these vars
+        for var in vars:
+            if var == "flow":
+                flux = self.get_flux()
+            else:
+                staout = self.get_staout(var)
+
+    def clear_cache(self):
+        self.cache.clear()
+
     def get_data(self, row):
         """get data for a row of the catalog"""
         var = row["variable"]
@@ -182,15 +202,19 @@ class SchismStudy(param.Parameterized):
             return flux[[id]]
         else:
             staout = self.get_staout(var)
+            if not ("_" in id):
+                id = id + "_default"
             return staout[[id]]
 
     @lru_cache(maxsize=32)
     def get_flux(self):
         if self.flux_out in self.cache:
+            logger.info(f"Using cached flux from disk: {self.base_dir}")
             return self.cache[self.flux_out]
         else:
+            logger.info(f"Reading flux: {self.base_dir}")
             flux = station.read_flux_out(self.flux_out, self.flux_names, self.reftime)
-            flux.columns = [col + "_default" for col in flux.columns]
+            # flux.columns = [col + "_default" for col in flux.columns]
             flux.index.name = "Time"
             self.cache[self.flux_out] = flux
             return flux
@@ -200,8 +224,10 @@ class SchismStudy(param.Parameterized):
         if fpath is None:
             fpath = str(self.base_dir / station.staout_name(variable))
         if fpath in self.cache:
+            logger.info(f"Using cached staout from disk: {fpath}")
             return self.cache[fpath]
         else:
+            logger.info(f"Reading staout: {fpath}")
             staout = station.read_staout(
                 fpath,
                 self.stations_in,
