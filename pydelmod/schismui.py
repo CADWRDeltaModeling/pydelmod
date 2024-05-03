@@ -7,9 +7,13 @@ from .dataui import DataUI
 from .tsdataui import TimeSeriesDataUIManager
 from pydelmod import schismstudy, datastore
 import pathlib
+import param
+import panel as pn
 
 
 class SchismOutputUIDataManager(TimeSeriesDataUIManager):
+
+    convert_units = param.Boolean(default=True, doc="Convert units to SI")
 
     def __init__(self, *studies, datastore=None, time_range=None, **kwargs):
         """
@@ -32,6 +36,11 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
                 pd.Timestamp(etime + pd.Timedelta(days=250)),
             )
         super().__init__(filename_column="filename", **kwargs)
+
+    def get_widgets(self):
+        control_widgets = super().get_widgets()
+        control_widgets.append(pn.Param(self.param.convert_units))
+        return control_widgets
 
     def _merge_catalogs(self, studies, datastore):
         """
@@ -134,6 +143,8 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
             df = study.get_data(r)
         elif r["source"] == "datastore":
             df = self.datastore.get_data(r)
+            if self.convert_units:
+                df, unit = schismstudy.convert_to_SI(df, r["unit"])
         else:
             df = pd.DataFrame(columns=["value"], dtype=float)  # empty dataframe
         ptype = "INST-VAL"

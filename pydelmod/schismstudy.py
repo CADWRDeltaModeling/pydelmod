@@ -5,6 +5,7 @@ import schimpy
 import pandas as pd
 import schimpy.station as station
 import schimpy.schism_yaml as schism_yaml
+import schimpy.batch_metrics as schism_metrics
 import cartopy.crs as ccrs
 import yaml
 from shapely.geometry import LineString
@@ -72,6 +73,32 @@ STATION_VARS = [
     "ssc",
 ]
 
+from vtools.functions.unit_conversions import (
+    cfs_to_cms,
+    ft_to_m,
+    ec_psu_25c,
+    fahrenheit_to_celsius,
+)
+
+
+def convert_to_SI(ts, unit):
+    """converts the time series to SI units"""
+    if ts is None:
+        raise ValueError("Cannot convert None")
+    if unit in ["ft", "feet"]:
+        ts = ft_to_m(ts)
+        unit = "meters"
+    elif unit in ["cfs", "ft^3/s"]:
+        ts = cfs_to_cms(ts)
+        unit = "m^3/s"
+    elif unit in ["ec", "microS/cm", "uS/cm"]:
+        ts = ec_psu_25c(ts)
+        unit = "PSU"
+    elif unit in ("deg F", "degF", "deg_f"):
+        ts = fahrenheit_to_celsius(ts)
+        unit = "deg_c"
+    return ts, unit
+
 
 class SchismStudy(param.Parameterized):
 
@@ -137,11 +164,11 @@ class SchismStudy(param.Parameterized):
 
     def get_unit_for_variable(self, var):
         if var in ["elev"]:
-            return "m"
+            return "meters"
         elif var in ["flow"]:
-            return "cms"
+            return "m^3/s"
         elif var in ["temp"]:
-            return "deg C"
+            return "deg_c"
         elif var in ["wind_x", "wind_y", "u", "v", "w"]:
             return "m/s"
         elif var in ["salt"]:

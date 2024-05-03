@@ -13,12 +13,6 @@ from holoviews import opts
 from schimpy import batch_metrics
 from .dataui import DataUI, DataUIManager
 from . import datastore, schismstudy
-from vtools.functions.unit_conversions import (
-    cfs_to_cms,
-    ft_to_m,
-    ec_psu_25c,
-    fahrenheit_to_celsius,
-)
 from vtools.functions.filter import cosine_lanczos
 from . import calibplot
 
@@ -181,20 +175,6 @@ class SchismCalibPlotUIManager(DataUIManager):
     def get_datastore_param_name(self, variable):
         return VAR_to_PARAM[variable]
 
-    def convert_to_SI(self, ts, unit):
-        """converts the time series to SI units"""
-        if ts is None:
-            raise ValueError("Cannot convert None")
-        if unit in ["ft", "feet"]:
-            ts = ft_to_m(ts)
-        elif unit in ["cfs", "ft^3/s"]:
-            ts = cfs_to_cms(ts)
-        elif unit in ["ec", "microS/cm", "uS/cm"]:
-            ts = ec_psu_25c(ts)
-        elif unit in ("deg F", "degF", "deg_f"):
-            ts = fahrenheit_to_celsius(ts)
-        return ts
-
     def get_data(self, id, variable):
         dfs = []
         for study_name, study in self.studies.items():
@@ -212,7 +192,9 @@ class SchismCalibPlotUIManager(DataUIManager):
         except IndexError:
             rd = None
         if rd is not None:
-            dfobs = self.convert_to_SI(self.datastore.get_data(rd), rd["unit"])
+            dfobs, converted_unit = schismstudy.convert_to_SI(
+                self.datastore.get_data(rd), rd["unit"]
+            )
         else:
             dfobs = pd.DataFrame(
                 [np.nan],
