@@ -134,7 +134,8 @@ class TimeSeriesDataUIManager(DataUIManager):
             [  # [0] is the data, other elemens are unit and period type
                 self._get_data_for_time_range(r, self.time_range)[0]
                 for _, r in df.iterrows()
-            ]
+            ],
+            axis=0,
         )
         return dfs
 
