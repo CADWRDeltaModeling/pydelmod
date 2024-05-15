@@ -35,8 +35,8 @@ def create_metrics_map(
         title=title,
         alpha=alpha,
         hover_cols=[
-            "DSM2 ID",
-            "Station Name",
+            "dsm2_id",
+            "station_name",
         ]
         + metrics,
     ).opts(opts.Points(size=scale * np.sqrt(np.abs(dim(metric)))))
@@ -49,7 +49,7 @@ import click
 @click.argument("summary_file", type=click.Path(exists=True, readable=True))
 @click.argument("station_location_file", type=click.Path(exists=True, readable=True))
 @click.option("--metric", default="NMSE", help="name of metric column")
-def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE"):
+def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE", include_monthly=False):
     """
     Create a map of the metrics for the stations in the summary file
     The summary file has the following columns:
@@ -58,7 +58,7 @@ def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE")
 
     The station location file has the following columns:
 
-    DSM2 ID, station_id, station_name, lat, lon, utm_easting, utm_northing
+    dsm2_id, station_id, station_name, lat, lon, utm_easting, utm_northing
 
     The Location column is split on the "bpart=" and the first part is taken as the station_id. These are then merged with the station location file on the DSM2_ID column.
 
@@ -74,6 +74,8 @@ def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE")
         Station location file with the lat, lon, utm_easting, utm_northing
     metric : str, optional
         name of metric column, by default "NMSE"
+    include_monthly : bool, optional
+        should be true only for EC.
 
     Returns
     -------
@@ -89,7 +91,7 @@ def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE")
     )
     station_id = station_id.str.replace("'", "")
     dfs["station_id"] = station_id
-    df = dfs.merge(dfl, right_on="DSM2 ID", left_on="station_id", how="inner")
+    df = dfs.merge(dfl, right_on="dsm2_id", left_on="station_id", how="inner")
     metrics_columns = [
         "R Squared",
         "Mean Error",
@@ -99,19 +101,24 @@ def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE")
         "RMSE",
         "NSE",
         "PBIAS",
-        "RSR",
+        "RSR"
+    ]
+    #these metrics are only for EC
+    monthly_metrics_list = [
         "Mnly Mean Err",
         "Mnly RMSE",
         "Mnly NMean Err",
-        "Mnly NRMSE",
+        "Mnly NRMSE"
     ]
+    if include_monthly:
+        metrics_columns.extend(monthly_metrics_list)
 
     dsm2_runs = list(df["DSM2 Run"].unique())
     maps = [
         create_metrics_map(
             df.loc[df["DSM2 Run"] == dsm2_run]
             .reset_index()
-            .drop_duplicates(subset=["DSM2 ID"], keep="first"),
+            .drop_duplicates(subset=["dsm2_id"], keep="first"),
             dsm2_run,
             metrics_columns,
             metric="NMSE",
@@ -123,16 +130,16 @@ def show_metrics_geo_heatmap(summary_file, station_location_file, metric="NMSE")
     dfrun0 = (
         df.loc[df["DSM2 Run"] == dsm2_runs[0]]
         .reset_index()
-        .drop_duplicates(subset=["DSM2 ID"], keep="first")
+        .drop_duplicates(subset=["dsm2_id"], keep="first")
     )
-    dfrun0 = dfrun0.set_index("DSM2 ID")
+    dfrun0 = dfrun0.set_index("dsm2_id")
     for run in range(1, len(dsm2_runs)):
         dfrun1 = (
             df.loc[df["DSM2 Run"] == dsm2_runs[run]]
             .reset_index()
-            .drop_duplicates(subset=["DSM2 ID"], keep="first")
+            .drop_duplicates(subset=["dsm2_id"], keep="first")
         )
-        dfrun1 = dfrun1.set_index("DSM2 ID")
+        dfrun1 = dfrun1.set_index("dsm2_id")
         dfdm = dfrun0.loc[:, metrics_columns] - dfrun1.loc[:, metrics_columns]
         dfdiff = dfrun0.copy()
         dfdiff[metrics_columns] = dfdm[metrics_columns]

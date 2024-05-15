@@ -143,6 +143,14 @@ def export_svg(plot, fname):
 def save_to_graphics_format(calib_plot_template, fname):
     #     hvobj=calib_plot_template[1][0]
     #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
+    # saved=False
+    # while not saved:
+    #     try:
+    #         calib_plot_template.save(fname)
+    #         saved=True
+    #     except RuntimeError as e:
+    #         print('runtime error trying to save plot '+fname)
+    #         print('will try again until it works.')
     calib_plot_template.save(fname)
 
 
@@ -534,7 +542,7 @@ def postpro_heatmaps(cluster, config_data, use_dask):
     )
 
 
-def postpro_validation_bar_chants(
+def postpro_validation_bar_charts(
     cluster, config_data, write_graphics=True, write_html=True
 ):
     """
@@ -794,6 +802,8 @@ def run_process(process_name, config_filename, use_dask):
         print("error: config file must be .json, .yml, or .yaml")
         exit(0)
 
+    print('config_data='+str(config_data))
+    print('config filename='+config_filename)
     # check data in json or yaml file
     check_config_data(config_data)
 
@@ -812,7 +822,7 @@ def run_process(process_name, config_filename, use_dask):
     elif process_name.lower() == "plots":
         postpro_plots(cluster, config_data, use_dask)
     elif process_name.lower() == "validation_bar_charts":
-        postpro_validation_bar_chants(cluster, config_data)
+        postpro_validation_bar_charts(cluster, config_data)
     elif process_name.lower() == "heatmaps":
         postpro_heatmaps(cluster, config_data, use_dask)
     elif process_name.lower() == "copy_plot_files":
