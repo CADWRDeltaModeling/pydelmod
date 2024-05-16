@@ -209,12 +209,16 @@ class DataUI(param.Parameterized):
             self.map_features = self.map_features.opts(
                 color=dim(color_by).categorize(self.dataui_manager.get_name_to_color())
             )
+        else:
+            self.map_features = self.map_features.opts(color="blue")
         if show_marker_by:
             self.map_features = self.map_features.opts(
                 marker=dim(marker_by).categorize(
                     self.dataui_manager.get_name_to_marker()
                 )
             )
+        else:
+            self.map_features = self.map_features.opts(marker="circle")
         return self.tmap * self.map_features
 
     def show_data_catalog(self, index=slice(None)):
@@ -333,24 +337,26 @@ class DataUI(param.Parameterized):
 
     def create_view(self):
         control_widgets = self.dataui_manager.get_widgets()
-        map_options = pn.WidgetBox(
-            "Map Options",
-            self.param.map_color_category,
-            self.param.show_map_colors,
-            self.param.map_marker_category,
-            self.param.show_map_markers,
-            self.param.query,
-        )
-        map_function = pn.bind(
-            self.update_map_features,
-            show_color_by=self.param.show_map_colors,
-            color_by=self.param.map_color_category,
-            show_marker_by=self.param.show_map_markers,
-            marker_by=self.param.map_marker_category,
-            query=self.param.query,
-        )
-        sidebar_view = pn.Column(control_widgets, map_options)
         if hasattr(self, "map_features"):
+            map_options = pn.WidgetBox(
+                "Map Options",
+                self.param.show_map_colors,
+                self.param.map_color_category,
+                self.param.show_map_markers,
+                self.param.map_marker_category,
+                self.param.query,
+            )
+            map_function = pn.bind(
+                self.update_map_features,
+                show_color_by=self.param.show_map_colors,
+                color_by=self.param.map_color_category,
+                show_marker_by=self.param.show_map_markers,
+                marker_by=self.param.map_marker_category,
+                query=self.param.query,
+            )
+            sidebar_view = pn.Column(
+                pn.Tabs(("Options", control_widgets), ("Map", map_options))
+            )
             map_tooltip = pn.widgets.TooltipIcon(
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
@@ -365,6 +371,8 @@ class DataUI(param.Parameterized):
                     )
                 )
             )
+        else:
+            sidebar_view = pn.Column(pn.Tabs(("Options", control_widgets)))
         if hasattr(self, "station_select"):
             show_data_catalog_bound = pn.bind(
                 self.show_data_catalog, index=self.station_select.param.index
