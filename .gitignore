@@ -1,5 +1,8 @@
-examples/nbcalibplots/*.html
+**/.cache*
+examples/**/*.html
+tests/**/*.html
 *.svg
+*.csv
 # Temporary files
 *~
 *.swp
