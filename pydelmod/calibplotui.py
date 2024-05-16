@@ -31,6 +31,9 @@ def load_location_file(location_file):
     return gdf
 
 
+import param
+
+
 class CalibPlotUIManager(DataUIManager):
 
     def __init__(self, config_file, base_dir=None, **kwargs):
@@ -125,10 +128,12 @@ class CalibPlotUIManager(DataUIManager):
             "Name": "20%",
             "BPart": "10%",
             "vartype": "5%",
-            "Description": "30%",
+            "Description": "25%",
             "subtract": "5%",
             "time_window_exclusion_list": "10%",
             "threshold_value": "5%",
+            "Latitude": "5%",
+            "Longitude": "5%",
         }
         return column_width_map
 
@@ -155,12 +160,15 @@ class CalibPlotUIManager(DataUIManager):
             calib_plot_template_dict, metrics_df = postpro_dsm2.build_plot(
                 self.config, studies, location, vartype
             )
-            plots.append(
-                (
-                    location.name + "@" + varname,
-                    pn.Row(calib_plot_template_dict["with"]),
+            if calib_plot_template_dict and ("with" in calib_plot_template_dict):
+                plots.append(
+                    (
+                        location.name + "@" + varname,
+                        pn.Row(calib_plot_template_dict["with"]),
+                    )
                 )
-            )
+            else:
+                raise ValueError("No plot found for location: " + location.name)
         return pn.Tabs(*plots, dynamic=True, closable=True)
 
     # methods below if geolocation data is available
@@ -172,8 +180,29 @@ class CalibPlotUIManager(DataUIManager):
             ("vartype", "@vartype"),
         ]
 
-    def get_map_color_category(self):
-        return "vartype"
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["vartype"]
+
+    def get_name_to_color(self):
+        return {
+            "STAGE": "green",
+            "FLOW": "blue",
+            "EC": "orange",
+            "TEMP": "black",
+        }
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["vartype"]
+
+    def get_name_to_marker(self):
+        return {
+            "STAGE": "square",
+            "FLOW": "circle",
+            "EC": "diamond",
+            "TEMP": "triangle",
+        }
 
 
 import click

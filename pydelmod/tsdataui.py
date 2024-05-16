@@ -1,4 +1,4 @@
-from .dataui import DataUIManager
+from .dataui import DataUIManager, full_stack
 from datetime import datetime, timedelta
 import warnings
 
@@ -26,22 +26,6 @@ def get_colors(stations, dfc):
     Create a dictionary with station names and colors
     """
     return hv.Cycle(list(dfc.loc[stations].values.flatten()))
-
-
-# from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
-def full_stack():
-    import traceback, sys
-
-    exc = sys.exc_info()[0]
-    stack = traceback.extract_stack()[:-1]  # last one would be full_stack()
-    if exc is not None:  # i.e. an exception is present
-        del stack[-1]  # remove call of full_stack, the printed exception
-        # will contain the caught exception caller instead
-    trc = "Traceback (most recent call last):\n"
-    stackstr = trc + "".join(traceback.format_list(stack))
-    if exc is not None:
-        stackstr += "  " + traceback.format_exc().lstrip(trc)
-    return stackstr
 
 
 def get_color_dataframe(stations, color_cycle=hv.Cycle()):
@@ -257,5 +241,20 @@ class TimeSeriesDataUIManager(DataUIManager):
     def get_tooltips(self):
         raise NotImplementedError("Method get_tooltips not implemented")
 
-    def get_map_color_category(self):
-        raise NotImplementedError("Method get_map_color_category not implemented")
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_color(self):
+        """return a dictionary mapping column names to color names"""
+        return hv.Cycle("Category10").values
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_marker(self):
+        """return a dictionary mapping column names to marker names"""
+        from bokeh.core.enums import MarkerType
+
+        return list(MarkerType)

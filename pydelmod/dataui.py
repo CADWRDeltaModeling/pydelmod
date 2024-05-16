@@ -1,4 +1,3 @@
-# %%
 # organize imports by category
 import warnings
 
@@ -30,6 +29,22 @@ from bokeh.models import HoverTool
 from bokeh.core.enums import MarkerType
 
 
+# from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
+def full_stack():
+    import traceback, sys
+
+    exc = sys.exc_info()[0]
+    stack = traceback.extract_stack()[:-1]  # last one would be full_stack()
+    if exc is not None:  # i.e. an exception is present
+        del stack[-1]  # remove call of full_stack, the printed exception
+        # will contain the caught exception caller instead
+    trc = "Traceback (most recent call last):\n"
+    stackstr = trc + "".join(traceback.format_list(stack))
+    if exc is not None:
+        stackstr += "  " + traceback.format_exc().lstrip(trc)
+    return stackstr
+
+
 class DataUIManager(param.Parameterized):
 
     def get_widgets(self):
@@ -37,6 +52,7 @@ class DataUIManager(param.Parameterized):
 
     # data related methods
     def get_data_catalog(self):
+        """return a dataframe or geodataframe with the data catalog"""
         pass
 
     # display related support for tables
@@ -58,7 +74,20 @@ class DataUIManager(param.Parameterized):
     def get_tooltips(self):
         pass
 
-    def get_map_color_category(self):
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_color(self):
+        """return a dictionary mapping column names to color names"""
+        pass
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_marker(self):
+        """return a dictionary mapping column names to marker names"""
         pass
 
 
@@ -68,69 +97,125 @@ class DataUI(param.Parameterized):
     Furthermore select the data rows and click on button to display plots for selected rows
     """
 
+    map_color_category = param.Selector(
+        objects=[],
+        doc="Options for the map color category selection",
+    )
+    show_map_colors = param.Boolean(
+        default=True, doc="Show map colors for selected category"
+    )
+    map_marker_category = param.Selector(
+        objects=[],
+        doc="Options for the map marker category selection",
+    )
+    show_map_markers = param.Boolean(
+        default=False, doc="Show map markers for selected category"
+    )
+    query = param.String(
+        default="",
+        doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
+    )
+
     def __init__(self, dataui_manager, **kwargs):
         crs = kwargs.pop("crs", ccrs.PlateCarree())
         super().__init__(**kwargs)
         self.dataui_manager = dataui_manager
         self.dfcat = self.dataui_manager.get_data_catalog()
+        self.param.map_color_category.objects = (
+            self.dataui_manager.get_map_color_columns()
+        )
+        self.map_color_category = self.param.map_color_category.objects[0]
+        self.param.map_marker_category.objects = (
+            self.dataui_manager.get_map_marker_columns()
+        )
+        self.map_marker_category = self.param.map_marker_category.objects[0]
+
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
-            tooltips = self.dataui_manager.get_tooltips()
-            map_color_category = self.dataui_manager.get_map_color_category()
-            hover = HoverTool(tooltips=tooltips)
-            self.map_features = self.dfcat.hvplot(geo=True, crs=crs)
-            self.map_features = self.map_features.opts(
-                color=dim(map_color_category),
-                cmap="Category10",
-            )
-            if isinstance(self.map_features, gv.Points):
-                self.map_features = gv.Points(
-                    self.dfcat, crs=crs
-                )  # FIXME: this is a hack
-                self.map_features = self.map_features.opts(
-                    color=dim(map_color_category),
-                    cmap="Category10",
-                )
-                self.map_features = self.map_features.opts(
-                    opts.Points(
-                        tools=["tap", hover, "lasso_select", "box_select"],
-                        nonselection_alpha=0.2,  # nonselection_color='gray',
-                        size=10,
-                        responsive=True,
-                        height=550,
-                    )
-                )
-            elif isinstance(self.map_features, gv.Path):
-                self.map_features = self.map_features.opts(
-                    opts.Path(
-                        tools=["tap", hover, "lasso_select", "box_select"],
-                        nonselection_alpha=0.2,  # nonselection_color='gray',
-                        line_width=2,
-                        responsive=True,
-                        height=550,
-                    )
-                )
-            elif isinstance(self.map_features, gv.Polygons):
-                self.map_features = self.map_features.opts(
-                    opts.Polygons(
-                        tools=["tap", hover, "lasso_select", "box_select"],
-                        nonselection_alpha=0.2,  # nonselection_color='gray',
-                        responsive=True,
-                        height=550,
-                    )
-                )
-            else:
-                raise ValueError(
-                    f"Unknown type for map_features: {type(self.map_features)}"
-                )
-            self.map_features = self.map_features.opts(
-                active_tools=["wheel_zoom"], responsive=True
-            )
-            self.station_select = streams.Selection1D(source=self.map_features)
+            self.build_map_of_features(crs=crs)
         else:
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
             )
+
+    def build_map_of_features(self, crs):
+        tooltips = self.dataui_manager.get_tooltips()
+        # update the map_color_category
+        map_color_category = self.map_color_category
+        hover = HoverTool(tooltips=tooltips)
+        self.map_features = self.dfcat.hvplot(geo=True, crs=crs)
+        self.map_features = self.map_features.opts(
+            color=dim(map_color_category),
+            cmap="Category10",
+        )
+        if isinstance(self.map_features, gv.Points):
+            self.map_features = gv.Points(self.dfcat, crs=crs)  # FIXME: this is a hack
+            self.map_features = self.map_features.opts(
+                color=dim(map_color_category),
+                cmap="Category10",
+            )
+            self.map_features = self.map_features.opts(
+                opts.Points(
+                    tools=["tap", hover, "lasso_select", "box_select"],
+                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    size=10,
+                    responsive=True,
+                    height=550,
+                )
+            )
+        elif isinstance(self.map_features, gv.Path):
+            self.map_features = self.map_features.opts(
+                opts.Path(
+                    tools=["tap", hover, "lasso_select", "box_select"],
+                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    line_width=2,
+                    responsive=True,
+                    height=550,
+                )
+            )
+        elif isinstance(self.map_features, gv.Polygons):
+            self.map_features = self.map_features.opts(
+                opts.Polygons(
+                    tools=["tap", hover, "lasso_select", "box_select"],
+                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    responsive=True,
+                    height=550,
+                )
+            )
+        else:
+            raise ValueError(
+                f"Unknown type for map_features: {type(self.map_features)}"
+            )
+        self.station_select = streams.Selection1D(source=self.map_features)
+        self.map_features = self.map_features.opts(
+            active_tools=["wheel_zoom"], responsive=True
+        )
+
+    def update_map_features(
+        self, show_color_by, color_by, show_marker_by, marker_by, query
+    ):
+        query = query.strip()
+        dfs = self.dfcat
+        try:
+            if len(query) > 0:
+                dfs = dfs.query(query)
+        except Exception as e:
+            full_stack()
+            pn.state.notifications.error(
+                f"Error while fetching data for {e}", duration=0
+            )
+        self.map_features.data = dfs
+        if show_color_by:
+            self.map_features = self.map_features.opts(
+                color=dim(color_by).categorize(self.dataui_manager.get_name_to_color())
+            )
+        if show_marker_by:
+            self.map_features = self.map_features.opts(
+                marker=dim(marker_by).categorize(
+                    self.dataui_manager.get_name_to_marker()
+                )
+            )
+        return self.tmap * self.map_features
 
     def show_data_catalog(self, index=slice(None)):
         if index == []:
@@ -180,11 +265,18 @@ class DataUI(param.Parameterized):
         return self.main_panel
 
     def update_plots(self, event):
-        self.plots_panel.loading = True
-        # FIXME: needs a PR to panel to fix this
-        dfselected = self.display_table._processed.iloc[self.display_table.selection]
-        self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
-        self.plots_panel.loading = False
+        try:
+            self.plots_panel.loading = True
+            # FIXME: needs a PR to panel to fix this
+            dfselected = self.display_table._processed.iloc[
+                self.display_table.selection
+            ]
+            self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
+        except Exception as e:
+            full_stack()
+            pn.state.notifications.error("Error updating plots: " + str(e), duration=0)
+        finally:
+            self.plots_panel.loading = False
 
     def download_data(self):
         self.download_button.loading = True
@@ -197,6 +289,10 @@ class DataUI(param.Parameterized):
             dfdata.to_csv(sio)
             sio.seek(0)
             return sio
+        except Exception as e:
+            pn.state.notifications.error(
+                "Error downloading data: " + str(e), duration=0
+            )
         finally:
             self.download_button.loading = False
 
@@ -237,7 +333,23 @@ class DataUI(param.Parameterized):
 
     def create_view(self):
         control_widgets = self.dataui_manager.get_widgets()
-        sidebar_view = pn.Column(control_widgets)
+        map_options = pn.WidgetBox(
+            "Map Options",
+            self.param.map_color_category,
+            self.param.show_map_colors,
+            self.param.map_marker_category,
+            self.param.show_map_markers,
+            self.param.query,
+        )
+        map_function = pn.bind(
+            self.update_map_features,
+            show_color_by=self.param.show_map_colors,
+            color_by=self.param.map_color_category,
+            show_marker_by=self.param.show_map_markers,
+            marker_by=self.param.map_marker_category,
+            query=self.param.query,
+        )
+        sidebar_view = pn.Column(control_widgets, map_options)
         if hasattr(self, "map_features"):
             map_tooltip = pn.widgets.TooltipIcon(
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
@@ -246,10 +358,10 @@ class DataUI(param.Parameterized):
             sidebar_view.append(
                 fullscreen.FullScreen(
                     pn.Column(
-                        self.tmap * self.map_features,
+                        map_function,
                         map_tooltip,
                         sizing_mode="stretch_both",
-                        width=400,
+                        min_width=450,
                     )
                 )
             )

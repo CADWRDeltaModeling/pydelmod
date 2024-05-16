@@ -21,8 +21,8 @@ pn.extension()
 import pyhecdss as dss
 from vtools.functions.filter import cosine_lanczos
 
-from .dataui import DataUI
-from .tsdataui import TimeSeriesDataUIManager, full_stack
+from .dataui import DataUI, full_stack
+from .tsdataui import TimeSeriesDataUIManager
 
 
 class DSSDataUIManager(TimeSeriesDataUIManager):
@@ -204,8 +204,13 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             ("F", "@F"),
         ]
 
-    def get_map_color_category(self):
-        return "C"
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["C", "A", "F"]
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["C", "A", "F"]
 
 
 import glob

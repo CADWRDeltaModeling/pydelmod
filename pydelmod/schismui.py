@@ -164,6 +164,14 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
     def get_map_color_category(self):
         return "variable"
 
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["variable", "source", "unit"]
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["variable", "source", "unit"]
+
 
 import click
 

@@ -20,7 +20,8 @@ pn.extension()
 import pyhecdss as dss
 from vtools.functions.filter import cosine_lanczos
 from .dsm2study import *
-from .tsdataui import TimeSeriesDataUIManager, full_stack
+from .dataui import full_stack
+from .tsdataui import TimeSeriesDataUIManager
 
 
 class DSM2DataUIManager(TimeSeriesDataUIManager):
@@ -139,6 +140,14 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
 
     def get_map_color_category(self):
         return "VARIABLE"
+
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["VARIABLE"]
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["VARIABLE"]
 
 
 from pydsm.hydroh5 import HydroH5
@@ -266,13 +275,17 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
 
     @lru_cache(maxsize=32)
     def _get_data_for_catalog_entry(self, filename, variable, id, time_window):
-        entry = {self.filename_column: filename, 'variable': variable, 'id': id}
-        return self.tidefile_map[filename].get_data_for_catalog_entry(entry, time_window)
+        entry = {self.filename_column: filename, "variable": variable, "id": id}
+        return self.tidefile_map[filename].get_data_for_catalog_entry(
+            entry, time_window
+        )
 
     def _get_data_for_time_range(self, r, time_range):
         var = r["variable"]
         time_window = self._get_timewindow_for_time_range(time_range)
-        df = self._get_data_for_catalog_entry(r[self.filename_column], r['variable'], r['id'], time_window)
+        df = self._get_data_for_catalog_entry(
+            r[self.filename_column], r["variable"], r["id"], time_window
+        )
         unit = r["unit"]
         ptype = "INST-VAL"
         df = df[slice(*time_range)]
