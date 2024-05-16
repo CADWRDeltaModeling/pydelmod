@@ -244,10 +244,13 @@ class DataUI(param.Parameterized):
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
             sidebar_view.append(
-                pn.Column(
-                    self.tmap * self.map_features,
-                    map_tooltip,
-                    sizing_mode="stretch_both",
+                fullscreen.FullScreen(
+                    pn.Column(
+                        self.tmap * self.map_features,
+                        map_tooltip,
+                        sizing_mode="stretch_both",
+                        width=400,
+                    )
                 )
             )
         if hasattr(self, "station_select"):
