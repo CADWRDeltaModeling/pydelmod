@@ -207,14 +207,16 @@ class DataUI(param.Parameterized):
         self.map_features.data = dfs
         if show_color_by:
             self.map_features = self.map_features.opts(
-                color=dim(color_by).categorize(self.dataui_manager.get_name_to_color())
+                color=dim(color_by).categorize(
+                    self.dataui_manager.get_name_to_color(), default="blue"
+                )
             )
         else:
             self.map_features = self.map_features.opts(color="blue")
         if show_marker_by:
             self.map_features = self.map_features.opts(
                 marker=dim(marker_by).categorize(
-                    self.dataui_manager.get_name_to_marker()
+                    self.dataui_manager.get_name_to_marker(), default="circle"
                 )
             )
         else:
@@ -391,4 +393,5 @@ class DataUI(param.Parameterized):
         # Adding about button
         template.modal.append(self.get_about_text())
         sidebar_view.append(self.create_about_button(template))
+        self.template = template
         return template

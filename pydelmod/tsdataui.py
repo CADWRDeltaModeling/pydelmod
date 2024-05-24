@@ -82,25 +82,24 @@ class TimeSeriesDataUIManager(DataUIManager):
         super().__init__(**params)
 
     def get_widgets(self):
-        control_widgets = pn.Row(
-            pn.Column(
-                pn.pane.HTML("Change time range of data to display:"),
-                pn.Param(
-                    self.param.time_range,
-                    widgets={
-                        "time_range": {
-                            "widget_type": pn.widgets.DatetimeRangeInput,
-                            "format": "%Y-%m-%d %H:%M",
-                        }
-                    },
-                ),
-                pn.WidgetBox(
-                    self.param.show_legend,
-                    self.param.legend_position,
-                ),
-                self.param.do_tidal_filter,
+        control_widgets = pn.Column(
+            pn.pane.HTML("Change time range of data to display:"),
+            pn.Param(
+                self.param.time_range,
+                widgets={
+                    "time_range": {
+                        "widget_type": pn.widgets.DatetimeRangeInput,
+                        "format": "%Y-%m-%d %H:%M",
+                    }
+                },
             ),
+            pn.WidgetBox(
+                self.param.show_legend,
+                self.param.legend_position,
+            ),
+            self.param.do_tidal_filter,
         )
+
         return control_widgets
 
     # data related methods
@@ -163,7 +162,9 @@ class TimeSeriesDataUIManager(DataUIManager):
         for _, r in df.iterrows():
             try:
                 data, unit, _ = self._get_data_for_time_range(r, time_range)
-                data = data[slice(*time_range)]
+                data = data[
+                    (data.index >= time_range[0]) & (data.index <= time_range[1])
+                ]
                 if self.do_tidal_filter:
                     data = cosine_lanczos(data, "40h")
             except Exception as e:
