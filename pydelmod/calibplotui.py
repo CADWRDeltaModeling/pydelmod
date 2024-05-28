@@ -36,7 +36,7 @@ import param
 
 class CalibPlotUIManager(DataUIManager):
 
-    def __init__(self, config_file, base_dir=None, **kwargs):
+    def __init__(self, config_file, base_dir=None, polygon_bounds=None, **kwargs):
         """
         config_file: str
             yaml file containing configuration
@@ -45,6 +45,7 @@ class CalibPlotUIManager(DataUIManager):
             base directory for config file, if None is assumed to be same as config file directory
         """
         base_dir = kwargs.pop("base_dir", None)
+        self.polygon_bounds = polygon_bounds
         super().__init__(**kwargs)
         self.config_file = config_file
         with open(self.config_file, "r") as file:
@@ -120,6 +121,8 @@ class CalibPlotUIManager(DataUIManager):
             errors="raise",
         )
         gdf = gdf.dropna(subset=["Latitude", "Longitude"])
+        if self.polygon_bounds:
+            gdf = gdf.loc[gdf.within(self.polygon_bounds)]
         return gdf
 
     def get_table_column_width_map(self):
@@ -219,5 +222,18 @@ def calib_plot_ui(config_file, base_dir=None, **kwargs):
     base_dir: str
         base directory for config file, if None is assumed to be same as config file directory
     """
-    manager = CalibPlotUIManager(config_file, base_dir=base_dir, **kwargs)
+    from shapely.geometry import Point, Polygon
+
+    california = Polygon(
+        [
+            (-124.848974, 42.009518),
+            (-114.131211, 42.009518),
+            (-114.131211, 32.534156),
+            (-124.848974, 32.534156),
+        ]
+    )
+    manager = CalibPlotUIManager(
+        config_file, base_dir=base_dir, polygon_bounds=california, **kwargs
+    )
+
     DataUI(manager).create_view().show()
