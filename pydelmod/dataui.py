@@ -91,6 +91,9 @@ class DataUIManager(param.Parameterized):
         pass
 
 
+notifications = pn.state.notifications
+
+
 class DataUI(param.Parameterized):
     """
     Show table of data froma catalog
@@ -201,9 +204,7 @@ class DataUI(param.Parameterized):
                 dfs = dfs.query(query)
         except Exception as e:
             full_stack()
-            pn.state.notifications.error(
-                f"Error while fetching data for {e}", duration=0
-            )
+            notifications.error(f"Error while fetching data for {e}", duration=0)
         self.map_features.data = dfs
         if show_color_by:
             self.map_features = self.map_features.opts(
@@ -284,7 +285,7 @@ class DataUI(param.Parameterized):
             self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
         except Exception as e:
             full_stack()
-            pn.state.notifications.error("Error updating plots: " + str(e), duration=0)
+            notifications.error("Error updating plots: " + str(e), duration=0)
         finally:
             self.plots_panel.loading = False
 
@@ -300,9 +301,7 @@ class DataUI(param.Parameterized):
             sio.seek(0)
             return sio
         except Exception as e:
-            pn.state.notifications.error(
-                "Error downloading data: " + str(e), duration=0
-            )
+            notifications.error("Error downloading data: " + str(e), duration=0)
         finally:
             self.download_button.loading = False
 
