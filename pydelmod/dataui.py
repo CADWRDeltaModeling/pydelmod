@@ -273,9 +273,13 @@ class DataUI(param.Parameterized):
     def update_plots(self, event):
         try:
             self.plots_panel.loading = True
-            # FIXME: needs a PR to panel to fix this
-            dfselected = self.display_table._processed.iloc[
-                self.display_table.selection
+            # FIXME: needs a PR to panel to fix this. Assured that panel 1.5.x will fix all these issues
+            # use self.display_table._index_mapping to map the selection (original indices) to the processed indices
+            dfselected = self.display_table._processed.loc[
+                [
+                    self.display_table._index_mapping.get(i, None)
+                    for i in self.display_table.selection
+                ]
             ]
             self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
         except Exception as e:
