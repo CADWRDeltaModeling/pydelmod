@@ -119,8 +119,11 @@ class DataUI(param.Parameterized):
         doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
     )
 
-    def __init__(self, dataui_manager, **kwargs):
+    def __init__(
+        self, dataui_manager, crs=ccrs.PlateCarree(), station_id_column=None, **kwargs
+    ):
         crs = kwargs.pop("crs", ccrs.PlateCarree())
+        self.station_id_column = station_id_column
         super().__init__(**kwargs)
         self.dataui_manager = dataui_manager
         self.dfcat = self.dataui_manager.get_data_catalog()
@@ -141,18 +144,29 @@ class DataUI(param.Parameterized):
                 "No geolocation data found in catalog. Not displaying map of stations."
             )
 
+    def _get_map_catalog(self):
+        if self.station_id_column and self.station_id_column in self.dfcat.columns:
+            return self.dfcat.groupby(self.station_id_column).first().reset_index()
+        else:
+            return self.dfcat
+
     def build_map_of_features(self, crs):
         tooltips = self.dataui_manager.get_tooltips()
+        # if station_id column is defined then consolidate the self.dfcat into a single row per station
+        # this is useful when we have multiple rows per station
+        self.dfmapcat = self._get_map_catalog()
         # update the map_color_category
         map_color_category = self.map_color_category
         hover = HoverTool(tooltips=tooltips)
-        self.map_features = self.dfcat.hvplot(geo=True, crs=crs)
+        self.map_features = self.dfmapcat.hvplot(geo=True, crs=crs)
         self.map_features = self.map_features.opts(
             color=dim(map_color_category),
             cmap="Category10",
         )
         if isinstance(self.map_features, gv.Points):
-            self.map_features = gv.Points(self.dfcat, crs=crs)  # FIXME: this is a hack
+            self.map_features = gv.Points(
+                self.dfmapcat, crs=crs
+            )  # FIXME: this is a hack
             self.map_features = self.map_features.opts(
                 color=dim(map_color_category),
                 cmap="Category10",
@@ -198,7 +212,7 @@ class DataUI(param.Parameterized):
         self, show_color_by, color_by, show_marker_by, marker_by, query
     ):
         query = query.strip()
-        dfs = self.dfcat
+        dfs = self._get_map_catalog()
         try:
             if len(query) > 0:
                 dfs = dfs.query(query)
@@ -225,9 +239,17 @@ class DataUI(param.Parameterized):
         return self.tmap * self.map_features
 
     def show_data_catalog(self, index=slice(None)):
+        # called when map selects stations
         if index == []:
             index = slice(None)
-        dfs = self.dfcat.iloc[index]
+        dfs = self.dfmapcat.iloc[index]
+        # select rows from self.dfcat where station_id is in dfs station_ids
+        if self.station_id_column and self.station_id_column in self.dfcat.columns:
+            dfs = self.dfcat[
+                self.dfcat[self.station_id_column].isin(dfs[self.station_id_column])
+            ]
+        else:
+            dfs = self.dfcat.iloc[index]
         dfs = dfs[self.dataui_manager.get_table_columns()]
         # return a UI with controls to plot and show data
         return self.update_data_table(dfs)
