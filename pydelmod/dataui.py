@@ -298,12 +298,16 @@ class DataUI(param.Parameterized):
             self.plots_panel.loading = True
             # FIXME: needs a PR to panel to fix this. Assured that panel 1.5.x will fix all these issues
             # use self.display_table._index_mapping to map the selection (original indices) to the processed indices
-            dfselected = self.display_table._processed.loc[
-                [
-                    self.display_table._index_mapping.get(i, None)
-                    for i in self.display_table.selection
+            # for tables with no filters this works
+            if True:
+                dfselected = self.display_table.value.iloc[self.display_table.selection]
+            else:
+                dfselected = self.display_table._processed.loc[
+                    [
+                        self.display_table._index_mapping.get(i, None)
+                        for i in self.display_table.selection
+                    ]
                 ]
-            ]
             self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
         except Exception as e:
             full_stack()
