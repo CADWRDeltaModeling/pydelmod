@@ -1018,7 +1018,12 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
         pp.append(p)
         # this was commented out before
         # for p in pp:ed
-        success = p.load_processed(timewindow=timewindow)
+
+        invert_series = False
+        if study.name=='Observed' and '-' in location.bpart:
+            invert_series = True
+
+        success = p.load_processed(timewindow=timewindow, invert_series = invert_series)
         if not success:
             errmsg = "unable to load data for study|location %s|%s" % (
                 str(study),
@@ -1037,7 +1042,9 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
             + str(timewindow)
             + "\n"
         )
+        print('===============================================================================')
         print(errmsg)
+        print('===============================================================================')
         logging.info(errmsg)
         return None, None
     return all_data_found, pp
@@ -1572,7 +1579,7 @@ def create_metrics_table_and_metrics_df(
 
             dfmetrics_monthly = calculate_metrics(
                 [
-                    g.resample("M").mean() if g is not None else None
+                    g.resample("ME").mean() if g is not None else None
                     for g in gtsp_plot_data
                 ],
                 [p.study.name for p in pp],
