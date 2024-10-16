@@ -5,6 +5,7 @@ channels:
   - nodefaults
 dependencies:
   - python<3.12
+  - numpy<2
   - pip
   # pip install these
   - ipykernel
@@ -36,6 +37,8 @@ dependencies:
   - geoviews
   - hvplot
   - networkx
+  # for ui
+  - panel
   # for different file formats
   - fastparquet
   - python-snappy
