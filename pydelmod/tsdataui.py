@@ -253,7 +253,7 @@ class TimeSeriesDataUIManager(DataUIManager):
                         ]
                     )
                     .cols(1)
-                    .opts(axiswise=True, sizing_mode="stretch_both")
+                    .opts(shared_axes=False, axiswise=True, sizing_mode="stretch_both")
                 )
         except Exception as e:
             stackmsg = full_stack()

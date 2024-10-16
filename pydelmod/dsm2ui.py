@@ -101,12 +101,15 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
+    def is_irregular(self, r):
+        return False
+
     def _create_crv(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["NAME"]}/{r["VARIABLE"]}'
         ylabel = f'{r["VARIABLE"]} ({unit})'
         title = f'{r["VARIABLE"]} @ {r["NAME"]} ({r["CHAN_NO"]}/{r["DISTANCE"]})'
-        irreg = df.index.freq is None  # irregular time series
+        irreg = self.is_irregular(r)
         if irreg:
             crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         else:
@@ -246,16 +249,16 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
         title = f"{v[0]} @ {v[1]}"
         return title
 
+    def is_irregular(self, r):
+        return False
+
     def _create_crv(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
         ylabel = f'{r["variable"]} ({unit})'
         title = f'{r["variable"]} @ {r["id"]}'
-        irreg = df.index.freq is None  # irregular time series
-        if irreg:
-            crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
-        else:
-            crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        irreg = self.is_irregular(r)
+        crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
@@ -301,6 +304,14 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
 
     def get_map_color_category(self):
         return "variable"
+
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["variable"]
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        return ["variable"]
 
 
 class DSM2FlowlineMap:
