@@ -162,9 +162,15 @@ class TimeSeriesDataUIManager(DataUIManager):
         for _, r in df.iterrows():
             try:
                 data, unit, _ = self._get_data_for_time_range(r, time_range)
-                data = data[
-                    (data.index >= time_range[0]) & (data.index <= time_range[1])
-                ]
+                if isinstance(data.index, pd.PeriodIndex):
+                    data = data[
+                        (data.index.start_time >= time_range[0])
+                        & (data.index.end_time <= time_range[1])
+                    ]
+                else:  # Assume DatetimeIndex
+                    data = data[
+                        (data.index >= time_range[0]) & (data.index <= time_range[1])
+                    ]
                 if self.do_tidal_filter:
                     data = cosine_lanczos(data, "40h")
             except Exception as e:

@@ -38,6 +38,8 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         self.station_id_column = kwargs.pop(
             "station_id_column", "B"
         )  # The column in the data catalog that contains the station id
+        if len(dssfiles) == 0:
+            raise ValueError("At least one DSS file is required")
         self.dssfiles = dssfiles
         dfcats = []
         dssfh = {}

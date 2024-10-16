@@ -135,6 +135,7 @@ class DataUI(param.Parameterized):
             self.dataui_manager.get_map_marker_columns()
         )
         self.map_marker_category = self.param.map_marker_category.objects[0]
+        self.dfmapcat = self._get_map_catalog()
 
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
@@ -154,7 +155,6 @@ class DataUI(param.Parameterized):
         tooltips = self.dataui_manager.get_tooltips()
         # if station_id column is defined then consolidate the self.dfcat into a single row per station
         # this is useful when we have multiple rows per station
-        self.dfmapcat = self._get_map_catalog()
         # update the map_color_category
         map_color_category = self.map_color_category
         hover = HoverTool(tooltips=tooltips)
