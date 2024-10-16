@@ -60,6 +60,16 @@ class TimeSeriesDataUIManager(DataUIManager):
         doc="Legend position",
     )
     do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
+    irreg_interpolation = param.Selector(
+        objects=["steps-post", "steps-pre", "steps-mid", "linear"],
+        default="steps-post",
+        doc="Interpolation method for irregular data",
+    )
+    period_type_interpolation = param.Selector(
+        objects=["linear", "steps-pre", "steps-post", "steps-mid"],
+        default="steps-pre",
+        doc="Interpolation method for period type data",
+    )
     file_number_column_name = param.String(default="FILE_NUM")
 
     def __init__(
@@ -98,6 +108,8 @@ class TimeSeriesDataUIManager(DataUIManager):
                 self.param.legend_position,
             ),
             self.param.do_tidal_filter,
+            self.param.irreg_interpolation,
+            self.param.period_type_interpolation,
         )
 
         return control_widgets
@@ -152,6 +164,9 @@ class TimeSeriesDataUIManager(DataUIManager):
     def get_table_filters(self):
         raise NotImplementedError("Method get_table_filters not implemented")
 
+    def is_irregular(self, r):
+        raise NotImplementedError("Method is_irregular not implemented")
+
     def create_layout(self, df, time_range):
         layout_map = {}
         title_map = {}
@@ -188,8 +203,10 @@ class TimeSeriesDataUIManager(DataUIManager):
                 unit,
                 file_index=file_index,
             )
-            # if file_index:
-            #    crv = crv.opts(line_dash=LINE_DASH_MAP[file_index % len(LINE_DASH_MAP)])
+            if isinstance(data.index, pd.PeriodIndex):
+                crv.opts(opts.Curve(interpolation=self.period_type_interpolation))
+            if self.is_irregular(r):
+                crv.opts(opts.Curve(interpolation=self.irreg_interpolation))
 
             if unit not in layout_map:
                 layout_map[unit] = []

@@ -154,16 +154,15 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
+    def is_irregular(self, r):
+        return r["E"].startswith("IR-")
+
     def _create_crv(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["B"]}/{r["C"]}'
         ylabel = f'{r["C"]} ({unit})'
         title = f'{r["C"]} @ {r["B"]} ({r["A"]}/{r["F"]})'
-        irreg = r["E"].startswith("IR-")
-        if irreg:
-            crv = hv.Scatter(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
-        else:
-            crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
@@ -174,7 +173,7 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         )
 
     def _get_data_for_time_range(self, r, time_range):
-        irreg = r["E"].startswith("IR-")
+        irreg = self.is_irregular(r)
         dssfile = r[self.filename_column]
         dssfh = self.dssfh[dssfile]
         dfcatp = self.dsscats[dssfile]
