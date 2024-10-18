@@ -55,6 +55,7 @@ dependencies:
   - pytest
   - pytest-runner
   - pdoc3
+  - tabulate
 # pip install pydelmod and pydsm from github. use the -e flag to install in editable mode as indicated below
 #  - pip:
 #     - -e git+https://github.com/CADWRDeltaModeling/pydelmod#egg=pydelmod
