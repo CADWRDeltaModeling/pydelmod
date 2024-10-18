@@ -186,7 +186,7 @@ class TimeSeriesDataUIManager(DataUIManager):
                     data = data[
                         (data.index >= time_range[0]) & (data.index <= time_range[1])
                     ]
-                if self.do_tidal_filter:
+                if self.do_tidal_filter and not self.is_irregular(r):
                     data = cosine_lanczos(data, "40h")
             except Exception as e:
                 print(full_stack())
@@ -253,7 +253,7 @@ class TimeSeriesDataUIManager(DataUIManager):
                         ]
                     )
                     .cols(1)
-                    .opts(axiswise=True, sizing_mode="stretch_both")
+                    .opts(shared_axes=False, axiswise=True, sizing_mode="stretch_both")
                 )
         except Exception as e:
             stackmsg = full_stack()
