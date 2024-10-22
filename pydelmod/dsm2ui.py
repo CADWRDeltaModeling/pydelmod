@@ -187,9 +187,6 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
                 right_on="geoid",
                 how="right",
             )
-            self.dfcat = self.dfcat.set_crs(
-                ccrs.Projection(self.channels.crs)
-            )  # looks like a bug in merge of geopandas and pandas
         time_ranges = [f.get_start_end_dates() for k, f in self.tidefile_map.items()]
         self.time_range = (
             min([pd.to_datetime(t[0]) for t in time_ranges]),
@@ -629,6 +626,7 @@ def show_dsm2_output_ui(echo_files, channel_shapefile=None):
 @click.option(
     "--channel-file",
     help="GeoJSON file for channel centerlines with DSM2 channel information",
+    required=False,
 )
 def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
     """
@@ -643,6 +641,7 @@ def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
     """
     import cartopy.crs as ccrs
 
+    channels = None
     if channel_file is not None:
         channels = gpd.read_file(channel_file)
 

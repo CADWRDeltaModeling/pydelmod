@@ -122,7 +122,7 @@ class DataUI(param.Parameterized):
     def __init__(
         self, dataui_manager, crs=ccrs.PlateCarree(), station_id_column=None, **kwargs
     ):
-        crs = kwargs.pop("crs", ccrs.PlateCarree())
+        self.crs = crs
         self.station_id_column = station_id_column
         super().__init__(**kwargs)
         self.dataui_manager = dataui_manager
@@ -139,7 +139,7 @@ class DataUI(param.Parameterized):
 
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
-            self.build_map_of_features(self.dfmapcat, crs=crs)
+            self.build_map_of_features(self.dfmapcat, crs=self.crs)
         else:
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
@@ -166,11 +166,11 @@ class DataUI(param.Parameterized):
         if isinstance(dfmap, gpd.GeoDataFrame):
             geom_type = dfmap.geometry.iloc[0].geom_type
             if geom_type == "Point":
-                self.map_features = gv.Points(dfmap)
-            elif geom_type == "LineString" or geom_type == "MultiLineString":
-                self.map_features = gv.Path(dfmap)
+                self.map_features = gv.Points(dfmap, crs=crs)
+            elif geom_type == "LineString":
+                self.map_features = gv.Path(dfmap, crs=crs)
             elif geom_type == "Polygon":
-                self.map_features = gv.Polygons(dfmap)
+                self.map_features = gv.Polygons(dfmap, crs=crs)
             else:  # pragma: no cover
                 raise "Unknown geometry type " + geom_type
         if self.show_map_colors:
@@ -228,7 +228,7 @@ class DataUI(param.Parameterized):
             notifications.error(f"Error while fetching data for {e}", duration=0)
         self.map_color_category = color_by
         self.show_map_colors = show_color_by
-        self.build_map_of_features(dfs, dfs.crs)
+        self.build_map_of_features(dfs, self.crs)
         self.map_features.data = dfs
         if isinstance(self.map_features, gv.Points):
             if show_marker_by:
@@ -245,9 +245,15 @@ class DataUI(param.Parameterized):
         # called when map selects stations
         if index == []:
             index = slice(None)
-        dfs = self.dfmapcat.iloc[index]
         # select rows from self.dfcat where station_id is in dfs station_ids
         if self.station_id_column and self.station_id_column in self.dfcat.columns:
+            dfs = (
+                self.map_features.dframe()
+                .iloc[index]
+                .groupby(self.station_id_column)
+                .first()
+                .reset_index()
+            )
             dfs = self.dfcat[
                 self.dfcat[self.station_id_column].isin(dfs[self.station_id_column])
             ]
