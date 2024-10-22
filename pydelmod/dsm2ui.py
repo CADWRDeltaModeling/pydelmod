@@ -3,6 +3,8 @@ import panel as pn
 import param
 import colorcet as cc
 
+import cartopy.crs as ccrs
+
 # viz imports
 import geoviews as gv
 import holoviews as hv
@@ -164,6 +166,7 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
         tidefiles: A list of tide files
         """
         self.time_range = kwargs.pop("time_range", None)
+        self.channels = kwargs.pop("channels", None)
         self.tidefiles = tidefiles
         self.display_fileno = False
         self.tidefile_map = {
@@ -173,6 +176,20 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
             [f.create_catalog() for k, f in self.tidefile_map.items()]
         )
         self.dfcat.reset_index(drop=True, inplace=True)
+        if self.channels is not None:
+            self.dfcat["geoid"] = self.dfcat.id.str.split("_", expand=True).iloc[:, 1]
+            self.channels.id = self.channels.id.astype("str")
+            self.channels.rename(columns={"id": "geoid"}, inplace=True)
+            self.dfcat = pd.merge(
+                self.channels,
+                self.dfcat,
+                left_on="geoid",
+                right_on="geoid",
+                how="right",
+            )
+            self.dfcat = self.dfcat.set_crs(
+                ccrs.Projection(self.channels.crs)
+            )  # looks like a bug in merge of geopandas and pandas
         time_ranges = [f.get_start_end_dates() for k, f in self.tidefile_map.items()]
         self.time_range = (
             min([pd.to_datetime(t[0]) for t in time_ranges]),
@@ -609,7 +626,11 @@ def show_dsm2_output_ui(echo_files, channel_shapefile=None):
 
 @click.command()
 @click.argument("tidefiles", nargs=-1)
-def show_dsm2_tidefile_ui(tidefiles):
+@click.option(
+    "--channel-file",
+    help="GeoJSON file for channel centerlines with DSM2 channel information",
+)
+def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
     """
     Show a user interface for viewing DSM2 tide files
 
@@ -617,10 +638,16 @@ def show_dsm2_tidefile_ui(tidefiles):
     ----------
 
     tidefiles : list of strings atlease one of which should be a tide file
+    --channel-file : GeoJSON file for channel centerlines with DSM2 channel information
 
     """
     import cartopy.crs as ccrs
 
-    tidefile_manager = DSM2TidefileUIManager(tidefiles)
-    ui = dataui.DataUI(tidefile_manager, crs=ccrs.UTM(10))
+    if channel_file is not None:
+        channels = gpd.read_file(channel_file)
+
+    tidefile_manager = DSM2TidefileUIManager(tidefiles, channels=channels)
+    ui = dataui.DataUI(
+        tidefile_manager, crs=ccrs.epsg("26910"), station_id_column="geoid"
+    )
     ui.create_view().show()

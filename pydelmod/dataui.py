@@ -139,7 +139,7 @@ class DataUI(param.Parameterized):
 
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight
-            self.build_map_of_features(crs=crs)
+            self.build_map_of_features(self.dfmapcat, crs=crs)
         else:
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
@@ -147,37 +147,46 @@ class DataUI(param.Parameterized):
 
     def _get_map_catalog(self):
         if self.station_id_column and self.station_id_column in self.dfcat.columns:
-            return self.dfcat.groupby(self.station_id_column).first().reset_index()
+            dfx = self.dfcat.groupby(self.station_id_column).first().reset_index()
+            if isinstance(dfx, gpd.GeoDataFrame):
+                dfx = dfx.dropna(subset=["geometry"])
+                dfx = dfx.set_crs(self.dfcat.crs)
+            else:
+                dfx = dfx.dropna(subset=["Latitude", "Longitude"])
+            return dfx
         else:
             return self.dfcat
 
-    def build_map_of_features(self, crs):
+    def build_map_of_features(self, dfmap, crs):
         tooltips = self.dataui_manager.get_tooltips()
         # if station_id column is defined then consolidate the self.dfcat into a single row per station
         # this is useful when we have multiple rows per station
-        # update the map_color_category
-        map_color_category = self.map_color_category
         hover = HoverTool(tooltips=tooltips)
-        self.map_features = self.dfmapcat.hvplot(geo=True, crs=crs)
-        self.map_features = self.map_features.opts(
-            color=dim(map_color_category),
-            cmap="Category10",
-        )
-        if isinstance(self.map_features, gv.Points):
-            self.map_features = gv.Points(
-                self.dfmapcat, crs=crs
-            )  # FIXME: this is a hack
+        # check if the dfmap is a geodataframe
+        if isinstance(dfmap, gpd.GeoDataFrame):
+            geom_type = dfmap.geometry.iloc[0].geom_type
+            if geom_type == "Point":
+                self.map_features = gv.Points(dfmap)
+            elif geom_type == "LineString" or geom_type == "MultiLineString":
+                self.map_features = gv.Path(dfmap)
+            elif geom_type == "Polygon":
+                self.map_features = gv.Polygons(dfmap)
+            else:  # pragma: no cover
+                raise "Unknown geometry type " + geom_type
+        if self.show_map_colors:
             self.map_features = self.map_features.opts(
-                color=dim(map_color_category),
-                cmap="Category10",
+                color=dim(self.map_color_category).categorize(
+                    self.dataui_manager.get_name_to_color(), default="blue"
+                )
             )
+        else:
+            self.map_features = self.map_features.opts(color="blue")
+        if isinstance(self.map_features, gv.Points):
             self.map_features = self.map_features.opts(
                 opts.Points(
                     tools=["tap", hover, "lasso_select", "box_select"],
                     nonselection_alpha=0.2,  # nonselection_color='gray',
                     size=10,
-                    responsive=True,
-                    height=550,
                 )
             )
         elif isinstance(self.map_features, gv.Path):
@@ -186,8 +195,6 @@ class DataUI(param.Parameterized):
                     tools=["tap", hover, "lasso_select", "box_select"],
                     nonselection_alpha=0.2,  # nonselection_color='gray',
                     line_width=2,
-                    responsive=True,
-                    height=550,
                 )
             )
         elif isinstance(self.map_features, gv.Polygons):
@@ -195,18 +202,18 @@ class DataUI(param.Parameterized):
                 opts.Polygons(
                     tools=["tap", hover, "lasso_select", "box_select"],
                     nonselection_alpha=0.2,  # nonselection_color='gray',
-                    responsive=True,
-                    height=550,
                 )
             )
         else:
-            raise ValueError(
-                f"Unknown type for map_features: {type(self.map_features)}"
-            )
-        self.station_select = streams.Selection1D(source=self.map_features)
+            raise "Unknown map feature type " + str(type(self.map_features))
         self.map_features = self.map_features.opts(
             active_tools=["wheel_zoom"], responsive=True
         )
+        if hasattr(self, "station_select"):
+            self.station_select.source = self.map_features
+        else:
+            self.station_select = streams.Selection1D(source=self.map_features)
+        return self.map_features
 
     def update_map_features(
         self, show_color_by, color_by, show_marker_by, marker_by, query
@@ -219,23 +226,19 @@ class DataUI(param.Parameterized):
         except Exception as e:
             full_stack()
             notifications.error(f"Error while fetching data for {e}", duration=0)
+        self.map_color_category = color_by
+        self.show_map_colors = show_color_by
+        self.build_map_of_features(dfs, dfs.crs)
         self.map_features.data = dfs
-        if show_color_by:
-            self.map_features = self.map_features.opts(
-                color=dim(color_by).categorize(
-                    self.dataui_manager.get_name_to_color(), default="blue"
+        if isinstance(self.map_features, gv.Points):
+            if show_marker_by:
+                self.map_features = self.map_features.opts(
+                    marker=dim(marker_by).categorize(
+                        self.dataui_manager.get_name_to_marker(), default="circle"
+                    )
                 )
-            )
-        else:
-            self.map_features = self.map_features.opts(color="blue")
-        if show_marker_by:
-            self.map_features = self.map_features.opts(
-                marker=dim(marker_by).categorize(
-                    self.dataui_manager.get_name_to_marker(), default="circle"
-                )
-            )
-        else:
-            self.map_features = self.map_features.opts(marker="circle")
+            else:
+                self.map_features = self.map_features.opts(marker="circle")
         return self.tmap * self.map_features
 
     def show_data_catalog(self, index=slice(None)):
@@ -385,21 +388,23 @@ class DataUI(param.Parameterized):
                 marker_by=self.param.map_marker_category,
                 query=self.param.query,
             )
-            sidebar_view = pn.Column(
-                pn.Tabs(("Options", control_widgets), ("Map", map_options))
-            )
             map_tooltip = pn.widgets.TooltipIcon(
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
-            sidebar_view.append(
-                fullscreen.FullScreen(
-                    pn.Column(
-                        map_function,
-                        map_tooltip,
-                        sizing_mode="stretch_both",
-                        min_width=450,
-                    )
+            map_view = fullscreen.FullScreen(
+                pn.Column(
+                    map_function,
+                    map_tooltip,
+                    min_width=450,
+                    min_height=550,
+                )
+            )
+            sidebar_view = pn.Column(
+                pn.Tabs(
+                    ("Map", map_view),
+                    ("Options", control_widgets),
+                    ("Map Options", map_options),
                 )
             )
         else:
