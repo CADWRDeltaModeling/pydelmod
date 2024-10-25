@@ -151,7 +151,10 @@ def save_to_graphics_format(calib_plot_template, fname):
     #     except RuntimeError as e:
     #         print('runtime error trying to save plot '+fname)
     #         print('will try again until it works.')
-    calib_plot_template.save(fname)
+    try:
+        calib_plot_template.save(fname)
+    except:
+        print('unable to create plot for ' + fname)
 
 
 def build_plot(
@@ -273,6 +276,12 @@ def build_and_save_plot(
     output_format="png",
     metrics_table_list=None,
 ):
+
+
+    print('build_and_save_plot: location='+str(location))
+
+
+
     # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data["study_files_dict"]
     options_dict = config_data["options_dict"]
@@ -516,6 +525,7 @@ def merge_statistics_files(vartype, config_data):
             )
             for f in files:
                 os.remove(f)
+                print('removed file '+f)
 
 
 def postpro_heatmaps(cluster, config_data, use_dask):

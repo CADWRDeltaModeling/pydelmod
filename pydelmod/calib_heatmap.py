@@ -47,7 +47,7 @@ def read_summary_stats(fname, station_order_df):
     # df=df[['Region']].reset_index().drop_duplicates()
 
     dfp = df.pivot('Location', columns='DSM2 Run')
-
+    
     #original
     # names = dfp.index.to_series().str.split('name=', expand=True).iloc[:, 1].str.split(
     #     ',', expand=True).iloc[:, 0].str.replace("'", "").values
