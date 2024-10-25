@@ -95,7 +95,10 @@ class CalibPlotUIManager(DataUIManager):
     # data related methods
     def get_data_catalog(self):
         gdfs = []
-        for key, value in self.config["location_files_dict"].items():
+        for tkey, tvalue in self.config["vartype_timewindow_dict"].items():
+            if tvalue is None:
+                continue
+            value = self.config["location_files_dict"][tkey]
             gdf = postpro.load_location_file(value)
             gdf.Latitude = pd.to_numeric(gdf.Latitude, errors="coerce")
             gdf.Longitude = pd.to_numeric(gdf.Longitude, errors="coerce")
@@ -105,7 +108,7 @@ class CalibPlotUIManager(DataUIManager):
                 geometry=gpd.points_from_xy(gdf.Longitude, gdf.Latitude),
                 crs="EPSG:4326",
             )
-            gdf["vartype"] = str(key)
+            gdf["vartype"] = str(tkey)
             gdfs.append(gdf)
         gdf = pd.concat(gdfs, axis=0)
         gdf = gdf.reset_index(drop=True)
