@@ -317,7 +317,17 @@ class DataUI(param.Parameterized):
                         for i in self.display_table.selection
                     ]
                 ]
-            self.plots_panel.objects = [self.dataui_manager.create_panel(dfselected)]
+            plot_panel = self.dataui_manager.create_panel(dfselected)
+            if isinstance(self.plots_panel.objects[0], pn.Tabs):
+                tabs = self.plots_panel.objects[0]
+                self.tab_count += 1
+                tabs.append((str(self.tab_count), plot_panel))
+                tabs.active = len(tabs) - 1
+            else:
+                self.tab_count = 0
+                self.plots_panel.objects = [
+                    pn.Tabs((str(self.tab_count), plot_panel), closable=True)
+                ]
         except Exception as e:
             full_stack()
             notifications.error("Error updating plots: " + str(e), duration=0)
