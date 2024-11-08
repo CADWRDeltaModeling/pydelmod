@@ -276,12 +276,7 @@ def build_and_save_plot(
     output_format="png",
     metrics_table_list=None,
 ):
-
-
     print('build_and_save_plot: location='+str(location))
-
-
-
     # def build_and_save_plot(config_data, studies, location, vartype, write_html=False, write_graphics=True, output_format='png'):
     study_files_dict = config_data["study_files_dict"]
     options_dict = config_data["options_dict"]
@@ -375,10 +370,15 @@ def build_and_save_plot(
 
         os.makedirs(output_plot_dir, exist_ok=True)
         # save plot to html and/or png file
+
+        # if (
+        #     calib_plot_template_with_toolbar is not None
+        #     and calib_plot_template_without_toolbar is not None
+        #     and metrics_df is not None
+        # ):
         if (
             calib_plot_template_with_toolbar is not None
             and calib_plot_template_without_toolbar is not None
-            and metrics_df is not None
         ):
             if write_html:
                 print(
