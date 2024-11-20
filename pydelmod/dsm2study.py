@@ -147,8 +147,8 @@ def get_runtime(tables):
     scalars = tables["SCALAR"]
     rs = scalars[scalars["NAME"].str.contains("run")]
     tmap = dict(zip(rs["NAME"], rs["VALUE"]))
-    stime = tmap["run_start_date"] + " " + tmap["run_start_time"]
-    etime = tmap["run_end_date"] + " " + tmap["run_end_time"]
+    stime = tmap["run_start_date"] + " " + tmap.get("run_start_time", "0000")
+    etime = tmap["run_end_date"] + " " + tmap.get("run_end_time", "0000")
     return parse_military_date(stime), parse_military_date(etime)
     # return pd.to_datetime(stime), pd.to_datetime(etime)
 
