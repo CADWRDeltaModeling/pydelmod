@@ -95,14 +95,7 @@ def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
         )
         for df, name in zip(dflist, names)
     ]
-    plt = [
-        (
-            c.redim(**{c.vdims[0].name: c.label, c.kdims[0].name: "Time"})
-            if c.name != ""
-            else c
-        )
-        for c in plt
-    ]
+    plt = [(c.redim(**{c.vdims[0].name: c.label}) if c.name != "" else c) for c in plt]
     return hv.Overlay(plt)
 
 
@@ -1020,10 +1013,16 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
         # for p in pp:ed
 
         invert_series = False
-        if study.name=='Observed' and '-' in location.bpart:
+        if study.name == "Observed" and "-" in location.bpart:
             invert_series = True
 
-        success = p.load_processed(timewindow=timewindow, invert_series = invert_series)
+        success = p.load_processed(timewindow=timewindow, invert_series=invert_series)
+        if not success:  # try processing it now
+            p.process()
+            success = p.store_processed()
+            success = p.load_processed(
+                timewindow=timewindow, invert_series=invert_series
+            )
         if not success:
             errmsg = "unable to load data for study|location %s|%s" % (
                 str(study),
@@ -1042,9 +1041,13 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
             + str(timewindow)
             + "\n"
         )
-        print('===============================================================================')
+        print(
+            "==============================================================================="
+        )
         print(errmsg)
-        print('===============================================================================')
+        print(
+            "==============================================================================="
+        )
         logging.info(errmsg)
         return None, None
     return all_data_found, pp
