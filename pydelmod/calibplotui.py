@@ -163,18 +163,22 @@ class CalibPlotUIManager(DataUIManager):
             vartype = postpro.VarType(varname, self.config["vartype_dict"][varname])
             studies = self.get_studies(varname)
             location = self.build_location(row)
-            calib_plot_template_dict, metrics_df = postpro_dsm2.build_plot(
-                self.config, studies, location, vartype
-            )
-            if calib_plot_template_dict and ("with" in calib_plot_template_dict):
-                plots.append(
-                    (
-                        location.name + "@" + varname,
-                        pn.Row(calib_plot_template_dict["with"]),
-                    )
+            try:
+                calib_plot_template_dict, metrics_df = postpro_dsm2.build_plot(
+                    self.config, studies, location, vartype
                 )
-            else:
-                raise ValueError("No plot found for location: " + location.name)
+                if calib_plot_template_dict and ("with" in calib_plot_template_dict):
+                    plots.append(
+                        (
+                            location.name + "@" + varname,
+                            calib_plot_template_dict["with"],
+                        )
+                    )
+                else:
+                    raise ValueError("No plot found for location: " + location.name)
+            except Exception as e:
+                print(e)
+                print("No plot found for location: " + location.name)
         return pn.Tabs(*plots, dynamic=True, closable=True)
 
     # methods below if geolocation data is available

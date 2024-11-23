@@ -888,7 +888,32 @@ def create_layout(
         if include_inst_plot:
             if not add_toolbars:
                 column.append(
-                    tsp.opts(
+                    pn.Row(
+                        tsp.opts(
+                            width=900,
+                            toolbar=None,
+                            title=index_to_title_dict[col_row_index],
+                            legend_position="right",
+                            clone=True,
+                        )
+                    )
+                )
+            else:
+                column.append(
+                    pn.Row(
+                        tsp.opts(
+                            width=900,
+                            title=index_to_title_dict[col_row_index],
+                            legend_position="right",
+                            clone=True,
+                        )
+                    )
+                )
+            col_row_index += 1
+        if not add_toolbars:
+            column.append(
+                pn.Row(
+                    gtsp.opts(
                         width=900,
                         toolbar=None,
                         title=index_to_title_dict[col_row_index],
@@ -896,33 +921,16 @@ def create_layout(
                         clone=True,
                     )
                 )
-            else:
-                column.append(
-                    tsp.opts(
+            )
+        else:
+            column.append(
+                pn.Row(
+                    gtsp.opts(
                         width=900,
                         title=index_to_title_dict[col_row_index],
                         legend_position="right",
                         clone=True,
                     )
-                )
-            col_row_index += 1
-        if not add_toolbars:
-            column.append(
-                gtsp.opts(
-                    width=900,
-                    toolbar=None,
-                    title=index_to_title_dict[col_row_index],
-                    legend_position="right",
-                    clone=True,
-                )
-            )
-        else:
-            column.append(
-                gtsp.opts(
-                    width=900,
-                    title=index_to_title_dict[col_row_index],
-                    legend_position="right",
-                    clone=True,
                 )
             )
         col_row_index += 1
@@ -936,7 +944,8 @@ def create_layout(
                             toolbar=None,
                             title=index_to_title_dict[col_row_index],
                             clone=True,
-                        )
+                        ),
+                        sizing_mode="fixed",
                     )
                 else:
                     scatter_and_metrics_row = pn.Row(
@@ -944,7 +953,8 @@ def create_layout(
                             shared_axes=False,
                             title=index_to_title_dict[col_row_index],
                             clone=True,
-                        )
+                        ),
+                        sizing_mode="fixed",
                     )
                 col_row_index += 1
                 if metrics_table is not None:
@@ -960,24 +970,19 @@ def create_layout(
                 column.append(scatter_and_metrics_row)
 
                 if include_kde_plots:
-                    kdeplot_list[0].opts(title=index_to_title_dict[col_row_index])
+                    kdeplot_list[0].opts(title=index_to_title_dict[col_row_index]).opts(
+                        opts.Distribution(height=200, width=300)
+                    )
                     col_row_index += 1
-                    kdeplot_list[1].opts(title=index_to_title_dict[col_row_index])
+                    kdeplot_list[1].opts(title=index_to_title_dict[col_row_index]).opts(
+                        opts.Distribution(height=200, width=300)
+                    )
                     col_row_index += 1
-                    kdeplot_row = kdeplot_list[0] + kdeplot_list[1]
-                    if add_toolbars:
-                        kdeplot_row = (
-                            kdeplot_row.cols(2)
-                            .opts(shared_axes=False)
-                            .opts(opts.Distribution(height=200, width=300))
-                        )
-                    else:
-                        kdeplot_row = (
-                            kdeplot_row.cols(2)
-                            .opts(shared_axes=False, toolbar=None)
-                            .opts(opts.Distribution(height=200, width=300))
-                        )
-                    column.append(pn.Row(kdeplot_row))
+                    if not add_toolbars:
+                        kdeplot_list = [
+                            kdeplot.opts(toolbar=None) for kdeplot in kdeplot_list
+                        ]
+                    column.append(pn.Row(*kdeplot_list, sizing_mode="fixed"))
         else:
             if obs_data_included and not manuscript_layout:
                 scatter_and_metrics_row = pn.Row(
