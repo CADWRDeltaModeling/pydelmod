@@ -738,18 +738,21 @@ def postpro_plots(cluster, config_data, use_dask):
                 else:
                     print("not using dask")
                     for location in locations:
-                        build_and_save_plot(
-                            config_data,
-                            studies,
-                            location,
-                            vartype,
-                            write_html=write_html,
-                            write_graphics=write_graphics,
-                            gate_studies=gate_studies,
-                            gate_locations=gate_locations,
-                            gate_vartype=gate_vartype,
-                            metrics_table_list=metrics_table_list,
-                        )
+                        try:
+                            build_and_save_plot(
+                                config_data,
+                                studies,
+                                location,
+                                vartype,
+                                write_html=write_html,
+                                write_graphics=write_graphics,
+                                gate_studies=gate_studies,
+                                gate_locations=gate_locations,
+                                gate_vartype=gate_vartype,
+                                metrics_table_list=metrics_table_list,
+                            )
+                        except Exception as e:
+                            print('unable to create plots/metrics layout for '+str(location.name))
 
                 merge_statistics_files(vartype, config_data)
     finally:
