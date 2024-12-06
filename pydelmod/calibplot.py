@@ -115,26 +115,28 @@ def scatterplot(dflist, names, index_x=0):
     dfa = dfa.resample("D").mean()
     return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols="all")
 
-
 def remove_data_for_time_windows_thresholds(
-    df: pd.DataFrame,
-    time_window_exclusion_list_str,
-    invert_selection=False,
-    upper_threshold=None,
+        df1,
+        df2,
+        time_window_exclusion_list_str,
+        invert_selection=False,
+        upper_threshold=None
 ):
-    """removes data from dataframe that is within time windows in the time_window_exclusion_list
+    """ Remove data from all godin filtered dataframes using time window exclusion and threshold values. Time windows to remove for threshold values
+        should be determined using observed data only, to ensure consistency.
     Args:
-        df (DataFrame): The DataFrame from which to remove data
+        df1 (DataFrame): Assumed to be observed data. Thresholds are applied only to observed data. 
+        df2 (DataFrame): Assumed to be the data we want to process. This DataFrame will be returned. To process observed data,
+            df1 and df2 should both be the observed time series.
         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window
         using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
-        invert_selection (bool): If True, keep data in the time windows rather than removing it.
+        invert_selection (bool): If True, keep data in the time windows rather than removing it. This is for the right hand side plot, showing excluded data.
         threshold_value (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR
             datetime is outside all specified timewindows.
     Returns:
         DataFrame: DataFrame with data removed
     """
-    # df = df.copy()
-    cols = df.columns
+    cols = df1.columns
     if upper_threshold is None:
         upper_threshold = 999999
     else:
@@ -143,65 +145,38 @@ def remove_data_for_time_windows_thresholds(
         else:
             upper_threshold = 999999
 
+    # parse time window exclusion list
     time_window_exclusion_list = None
-    if (
-        time_window_exclusion_list_str is not None
-        and len(time_window_exclusion_list_str.strip()) > 0
-    ):
+    if (time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip()) > 0):
         time_window_exclusion_list = time_window_exclusion_list_str.split(",")
-    if (
-        time_window_exclusion_list is not None
-        and len(time_window_exclusion_list) > 0
-        and df is not None
-    ):
+
+    # set above_threshold in df1 
+    df1["above_threshold"] = False
+    df1.loc[(df1[cols[0]] >= upper_threshold), "above_threshold"] = True
+    # instead set df2["above_threshold"] to value matching datetime from df1
+    df2["above_threshold"] = df1["above_threshold"]
+
+    # if time windows have been specified for data exclusion (upper threshold is also handled here)
+    if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df2 is not None):
         tw_index = 0
         last_tw = None
 
+        cols = df2.columns
         if invert_selection:
             # set all values NOT in any timewindow to nan.
-            cols = df.columns
-            df["outside_all_tw"] = True
-            df["above_threshold"] = False
-            df["keep_inverted"] = False
+            df2["outside_all_tw"] = True
+            # df2["above_threshold"] = False
+            df2["keep_inverted"] = False
+            # set outside_all_tw to False for all rows where datetime is inside one of the timewindows
             for tw in time_window_exclusion_list:
                 start_dt_str, end_dt_str = tw.split("_")
-                df.loc[
-                    ((df.index >= start_dt_str) & (df.index < end_dt_str)),
-                    "outside_all_tw",
-                ] = False
-            df.loc[(df[cols[0]] >= upper_threshold), "above_threshold"] = True
-            df.loc[
-                ((df["outside_all_tw"] == False) | (df["above_threshold"] == True)),
-                "keep_inverted",
-            ] = True
-            df.loc[df["keep_inverted"] == False, cols[0]] = np.nan
-            df.drop(
-                columns=["outside_all_tw", "above_threshold", "keep_inverted"],
-                inplace=True,
-            )
-            # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
-            # conditions = [ (df.index >= pd.Timestamp(s)) & (df.index <= pd.Timestamp(e)) for s,e in array_of_tuples] # [(3,5), (19, 38)]
-            # functools.reduce
-            # c=conditions[0]
-            # for c2 in conditions[1:]:
-            #  c = c | c2
-            # df[c] = np.nan
-            # date_range_list = []
-            # start_dt_list = []
-            # end_dt_list = []
-            # for tw in time_window_exclusion_list:
-            #     start_dt_str, end_dt_str = tw.split('_')
-            #     # date_range_list.append(pd.date_range(start=pd.Timestamp(start_dt_str), end=pd.Timestamp(end_dt_str, freq='15T')))
-            #     start_dt_list.append(start_dt_str)
-            #     end_dt_list.append(end_dt_str)
-            # print('*****************************************************************************************')
-            # print('lengths of start, end date lists='+str(len(start_dt_list))+','+str(len(end_dt_list)))
-            # print('*****************************************************************************************')
-            # # if the timestamp is outside every time window, AND is above the threshold
-            # df[(all((df.index < start_dt) | (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)) & df>=threshold_value] = np.nan
-            # # df[all(df.index not in date_range for date_range in date_range_list) & (df[cols[0]] < threshold_value)] = np.nan
-            # # df[test_function(df, start_dt_list, end_dt_list) & df>=threshold_value] = np.nan
+                df2.loc[((df2.index >= start_dt_str) & (df2.index < end_dt_str)),"outside_all_tw",] = False
 
+            # set keep_inverted to True for all rows that are either outside one of the exclusion time windows or >= threshold value
+            df2.loc[((df2["outside_all_tw"] == False) | (df2["above_threshold"] == True)),"keep_inverted",] = True
+            # if keep_inverted is false, set value to nan
+            df2.loc[df2["keep_inverted"] == False, cols[0]] = np.nan
+            # df2.drop(columns=["outside_all_tw", "above_threshold", "keep_inverted"], inplace=True,)
         for tw in time_window_exclusion_list:
             if len(tw) > 0:
                 start_dt_str, end_dt_str = tw.split("_")
@@ -210,119 +185,22 @@ def remove_data_for_time_windows_thresholds(
                     # This is the old way: not good for plotting, because it becomes an ITS
                     # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
                     # df[start_dt_str:end_dt_str] = np.nan
-                    df[
-                        (
-                            (df.index > pd.Timestamp(start_dt_str))
-                            & (df.index <= pd.Timestamp(end_dt_str))
-                        )
-                        | (df[cols[0]] >= upper_threshold)
-                    ] = np.nan
-                # else:
-                #     # keep data in the timewindows, and remove all other data, except those that are above the threshold
-                #     if tw_index == 0:
-                #         df[(df.index<=pd.Timestamp(start_dt_str)) & (df[cols[0]]<threshold_value)] = np.nan
-                #     else:
-                #         # if in any time window
-                #         last_start_dt_str, last_end_dt_str = last_tw.split('_')
-                #         # df[last_end_dt_str:start_dt_str | df < threshold_value] = np.nan
-                #         #     # if the timestamp is outside every time window, AND is above the threshold
-                #         # df[(all((df.index < start_dt) | (df.index >= end_dt)) for start_dt, end_dt in zip(start_dt_list, end_dt_list)) & df>=threshold_value] = np.nan
-
-                #         # df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df.index<pd.Timestamp(start_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
-                # last_tw = tw
+                    # for the do not invert (left hand side plot) option, remove values that are in the exclusion timewindows or above threshold
+                    df2[((df2.index > pd.Timestamp(start_dt_str)) & (df2.index <= pd.Timestamp(end_dt_str))) | (df2[cols[0]] >= upper_threshold)] = np.nan
             tw_index += 1
-        # now remove the data after the end of the last timewindow
-        # if invert_selection and last_tw is not None and len(last_tw)>0:
-        #     last_start_dt_str, last_end_dt_str = last_tw.split('_')
-        #     df[(df.index>=pd.Timestamp(last_end_dt_str)) & (df[cols[0]] < threshold_value)] = np.nan
-    elif upper_threshold is not None:
+    else:
         if not invert_selection:
-            df[df >= upper_threshold] = np.nan
+            df2.loc[df2["above_threshold"] == True] = np.nan
+            # df[df >= upper_threshold] = np.nan
         else:
-            df[df < upper_threshold] = np.nan
-    return df
+            df2.loc[df2["above_threshold"] == False] = np.nan
+            # df[df < upper_threshold] = np.nan
 
-
-# def remove_data_for_time_windows_thresholds(df: pd.DataFrame, time_window_exclusion_list_str, invert_selection=False, upper_threshold=None, \
-#     lower_threshold=None):
-#     """removes data from dataframe that is within time windows in the time_window_exclusion_list
-#         if data masking does not remove any data (which could happen if invert_selection=True and the data masking timewindow is outside the
-#         time window of the data set), then this will return a dataframe with only nans. Code that calls this method must be prepared to
-#         deal with this situation.
-#     Args:
-#         df (DataFrame): The DataFrame from which to remove data
-#         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window
-#         using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
-#         invert_selection (bool): If True, keep data in the time windows rather than removing it.
-#         upper_threshold (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR
-#             datetime is outside all specified timewindows.
-#         lower_threshold (float): If specified, and if invert_selection==True, then data will be retained if value is below threshold OR
-#             datetime is outside all specified timewindows.
-#     Returns:
-#         DataFrame: DataFrame with data removed
-#     """
-#     # df = df.copy()
-#     cols = df.columns
-#     if upper_threshold is None:
-#         upper_threshold = 999999
-#     else:
-#         if(len(str(upper_threshold))>0):
-#             upper_threshold = float(upper_threshold)
-#         else:
-#             upper_threshold = 999999
-
-#     if lower_threshold is None:
-#         lower_threshold = -999999
-#     else:
-#         if(len(str(lower_threshold))>0):
-#             lower_threshold = float(lower_threshold)
-#         else:
-#             lower_threshold = -999999
-
-#     time_window_exclusion_list = None
-#     if time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip())>0:
-#         time_window_exclusion_list = time_window_exclusion_list_str.split(',')
-#     if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df is not None):
-#         tw_index = 0
-#         last_tw = None
-
-#         if invert_selection:
-#             # set all values NOT in any timewindow to nan.
-#             cols = df.columns
-#             df['outside_all_tw'] = True
-#             df['above_upper_threshold'] = False
-#             df['below_lower_threshold'] = False
-#             df['keep_inverted'] = False
-#             for tw in time_window_exclusion_list:
-#                 start_dt_str, end_dt_str = tw.split('_')
-#                 df.loc[((df.index>=start_dt_str) & (df.index<end_dt_str)), 'outside_all_tw'] = False
-#             df.loc[(df[cols[0]]>=upper_threshold), 'above_lower_threshold'] = True
-#             df.loc[(df[cols[0]]<=lower_threshold), 'below_lower_threshold'] = True
-#             df.loc[((df['outside_all_tw']==False) | (df['above_upper_threshold']==True) | (df['below_lower_threshold']==True)), 'keep_inverted'] = True
-#             df.loc[df['keep_inverted']==False, cols[0]] = np.nan
-#             df.drop(columns=['outside_all_tw', 'above_upper_threshold', 'below_lower_threshold', 'keep_inverted'], inplace=True)
-
-#         for tw in time_window_exclusion_list:
-#             if len(tw)>0:
-#                 start_dt_str, end_dt_str = tw.split('_')
-#                 if not invert_selection:
-#                     # remove data in the time windows
-#                     # This is the old way: not good for plotting, because it becomes an ITS
-#                     # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
-#                     # df[start_dt_str:end_dt_str] = np.nan
-#                     df[((df.index>pd.Timestamp(start_dt_str)) & (df.index<=pd.Timestamp(end_dt_str))) | \
-#                         (df[cols[0]]>=upper_threshold) | (df[cols[0]]<=lower_threshold)] = np.nan
-#             tw_index += 1
-#     else:
-#         if not invert_selection:
-#             df[df>=upper_threshold] = np.nan
-#             df[df<=lower_threshold] = np.nan
-#         else:
-#             df[df<upper_threshold] = np.nan
-#             df[df>lower_threshold] = np.nan
-#     return df
-
-
+    if "outside_all_tw" in df2.columns: df2.drop(columns=["outside_all_tw"], inplace=True) 
+    if "above_threshold" in df2.columns: df2.drop(columns=["above_threshold"], inplace=True) 
+    if "keep_inverted" in df2.columns: df2.drop(columns=["keep_inverted"], inplace=True) 
+    return df2
+        
 def calculate_metrics(dflist, names, index_x=0, location=None):
     """Calculate metrics between the index_x column and other columns
 
@@ -1194,10 +1072,12 @@ def build_godin_plot(
     #     if p is not None else None for p in gtsp_plot_data]
     cfs_to_cms = 0.028316847
     gtsp_plot_data = []
+    obs_data_gdf = pp[0].gdf
     for p in pp:
         if p.gdf is not None:
             if mask_data:
                 new_p = remove_data_for_time_windows_thresholds(
+                    obs_data_gdf,
                     p.gdf,
                     time_window_exclusion_list_str=time_window_exclusion_list,
                     invert_selection=invert_timewindow_exclusion,
@@ -1304,10 +1184,12 @@ def build_scatter_plots(
     # and there are no data that have been masked. For example, this could happen if only one masking time window is specified,
     # and it's outside the time window of the data.
     any_data_left = True
+    obs_data_gdf = pp[0].gdf
 
     for p in pp:
         if mask_data:
             gpd = remove_data_for_time_windows_thresholds(
+                obs_data_gdf,
                 p.gdf,
                 time_window_exclusion_list,
                 invert_selection=invert_timewindow_exclusion,
@@ -1787,9 +1669,12 @@ def build_metrics_table(
     # gtsp_plot_data = [p.gdf for p in pp]
     gtsp_plot_data = []
     gpd = None
+
+    obs_data_gdf = pp[0].gdf
     for p in pp:
         if mask_data:
             gpd = remove_data_for_time_windows_thresholds(
+                obs_data_gdf,
                 p.gdf,
                 time_window_exclusion_list,
                 invert_selection=invert_timewindow_exclusion,
