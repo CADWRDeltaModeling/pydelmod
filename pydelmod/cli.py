@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Console script for pydelmod."""
 from pydsm import hydroh5, qualh5
-from pydelmod import dsm2ui
+from pydelmod import channel_orient, dsm2ui
 from pydelmod.dsm2ui import DSM2FlowlineMap, build_output_plotter
 from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
@@ -303,6 +303,7 @@ main.add_command(stations_output_file)
 main.add_command(dsm2gis.geolocate_output_locations)
 main.add_command(deltacdui.dcd_geomap)
 main.add_command(calibplotui.calib_plot_ui)
+main.add_command(channel_orient.generate_channel_orientation)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

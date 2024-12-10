@@ -112,7 +112,7 @@ def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables):
 
 def load_dsm2_flowline_shapefile(shapefile):
     dsm2_chans = gpd.read_file(shapefile).to_crs(epsg=3857)
-    # dsm2_chans.geometry=dsm2_chans.geometry.simplify(tolerance=50)
+    dsm2_chans.geometry = dsm2_chans.geometry.simplify(tolerance=50)
     dsm2_chans.geometry = dsm2_chans.geometry.buffer(250, cap_style=1, join_style=1)
     return dsm2_chans
 

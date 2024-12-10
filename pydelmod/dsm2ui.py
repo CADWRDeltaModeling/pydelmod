@@ -529,6 +529,22 @@ class DSM2GraphNetworkMap(param.Parameterized):
 
 
 #### functions for cli
+def merge_dsm2_channel_info_with_shapefile(*echo_files, channel_shapefile=None):
+    channels_table = None
+    for file in echo_files:
+        if not os.path.isfile(file):
+            raise FileNotFoundError(f"File {file} not found")
+        tables = load_echo_file(file)
+        if "CHANNEL" in tables:
+            channels_table = tables["CHANNEL"]
+    if channels_table is None:
+        raise ValueError("No CHANNEL table found in any of the echo files")
+    if channel_shapefile is not None:
+        dsm2_chan_lines = load_dsm2_channelline_shapefile(channel_shapefile)
+        dsm2_chan_lines = join_channels_info_with_dsm2_channel_line(
+            dsm2_chan_lines, {"CHANNEL": channels_table}
+        )
+    return dsm2_chan_lines
 
 
 def build_output_plotter(*echo_files, channel_shapefile=None):
