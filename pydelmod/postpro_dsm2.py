@@ -141,16 +141,6 @@ def export_svg(plot, fname):
 
 
 def save_to_graphics_format(calib_plot_template, fname):
-    #     hvobj=calib_plot_template[1][0]
-    #     hvobj.object=hvobj.object.opts(toolbar=None) # remove the toolbar from the second row plot
-    # saved=False
-    # while not saved:
-    #     try:
-    #         calib_plot_template.save(fname)
-    #         saved=True
-    #     except RuntimeError as e:
-    #         print('runtime error trying to save plot '+fname)
-    #         print('will try again until it works.')
     try:
         calib_plot_template.save(fname)
     except:
@@ -200,6 +190,7 @@ def build_plot(
         if "mask_plot_metric_data" in options_dict
         else True
     )
+
     # Flow and stage are tidal (also certain water quality constituents)
     tidal_data = vartype.name != "EC"
     if location == "RSAC128-RSAC123":
@@ -232,9 +223,6 @@ def build_plot(
         inst_plot_timewindow=inst_plot_timewindow,
         include_kde_plots=include_kde_plots,
         zoom_inst_plot=zoom_inst_plot,
-        gate_studies=gate_studies,
-        gate_locations=gate_locations,
-        gate_vartype=gate_vartype,
         invert_timewindow_exclusion=invert_timewindow_exclusion,
         remove_data_above_threshold=remove_data_above_threshold,
         mask_data=mask_plot_metric_data,
@@ -248,9 +236,9 @@ def build_plot(
     #         tidal_template=flow_or_stage, flow_in_thousands=flow_in_thousands, units=units,inst_plot_timewindow=inst_plot_timewindow, include_kde_plots=include_kde_plots,
     #         zoom_inst_plot=zoom_inst_plot)
     if calib_plot_template_dict is None:
-        print("failed to create plots")
+        print("postpro_dsm2.build_plot: failed to create plots")
     if metrics_df is None:
-        print("failed to create metrics")
+        print("postpro_dsm2.build_plot: failed to create metrics")
     else:
         location_list = []
         for r in range(metrics_df.shape[0]):
@@ -315,20 +303,10 @@ def build_and_save_plot(
         time_window_exclusion_list = location.time_window_exclusion_list
         threshold_value = location.threshold_value
         # calib_plot_template_masked_time_period = None
-        create_second_panel = (
-            True
-            if (
-                mask_data
-                and (
-                    (
-                        time_window_exclusion_list is not None
-                        and len(time_window_exclusion_list) > 0
-                    )
-                    or (threshold_value is not None and len(str(threshold_value)) > 0)
-                )
-            )
-            else False
-        )
+        
+        create_second_panel = (True if (mask_data and ((time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0) or 
+                                                       (threshold_value is not None and len(str(threshold_value)) > 0))) else False)
+
         if create_second_panel:
             (
                 calib_plot_template_masked_time_period_dict,
@@ -347,9 +325,9 @@ def build_and_save_plot(
             )
             # calib_plot_template, metrics_df = build_plot(config_data, studies, location, vartype)
             if calib_plot_template_masked_time_period_dict is None:
-                print("failed to create plots for masked time period")
+                print("postpro_dsm2.build_and_save_plot: failed to create plots for masked time period")
             if metrics_df_masked_time_period is None:
-                print("failed to create metrics for masked time period")
+                print("postpro_dsm2.build_and_save_plot: failed to create metrics for masked time period")
             calib_plot_template_masked_time_period_with_toolbar = (
                 calib_plot_template_masked_time_period_dict["with"]
             )
@@ -371,11 +349,6 @@ def build_and_save_plot(
         os.makedirs(output_plot_dir, exist_ok=True)
         # save plot to html and/or png file
 
-        # if (
-        #     calib_plot_template_with_toolbar is not None
-        #     and calib_plot_template_without_toolbar is not None
-        #     and metrics_df is not None
-        # ):
         if (
             calib_plot_template_with_toolbar is not None
             and calib_plot_template_without_toolbar is not None
@@ -774,20 +747,6 @@ def check_config_data(config_data):
         )
         exit(0)
 
-    # required_dicts_list = ['options_dict', 'location_files_dict', 'observed_files_dict', 'study_files_dict', 'postpro_model_dict', \
-    #     'timewindow_dict', 'vartype_dict', 'vartype_timewindow_dict', 'dask_options_dict']
-    # not_found_list = []
-    # for d in required_dicts_list:
-    #     if d not in config_data:
-    #         not_found_list.append(d)
-    # if len(not_found_list) > 0:
-    #     print('**********************************************************************************************************')
-    #     print("Config file error: the following dictionaries are missing from your file: ")
-    #     for d in not_found_list:
-    #         print(d)
-    #     print('Exiting. Fix your config file before re-running processes.')
-    #     print('**********************************************************************************************************')
-
 
 def run_process(process_name, config_filename, use_dask):
     """
@@ -842,7 +801,3 @@ def run_process(process_name, config_filename, use_dask):
         postpro_copy_plot_files(cluster, config_data)
     else:
         print("Error in pydelmod.postpro: process_name unrecognized: " + process_name)
-
-
-# if __name__ == "__main__":
-#     main()

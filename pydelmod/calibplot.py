@@ -77,8 +77,6 @@ def tsplot(dflist, names, timewindow=None, zoom_inst_plot=False):
             errmsg = "error in calibplot.tsplot"
             print(errmsg)
             logging.error(errmsg)
-    # This doesn't work. Need to find a way to get this working.
-    # plt = [df[start_dt:end_dt].hvplot(label=name, x_range=(timewindow)) if df is not None else hv.Curve(None, label=name)
 
     from bokeh.models import DatetimeTickFormatter
 
@@ -115,28 +113,96 @@ def scatterplot(dflist, names, index_x=0):
     dfa = dfa.resample("D").mean()
     return dfa.hvplot.scatter(x=dfa.columns[index_x], hover_cols="all")
 
-def remove_data_for_time_windows_thresholds(
-        df1,
-        df2,
-        time_window_exclusion_list_str,
-        invert_selection=False,
-        upper_threshold=None
-):
-    """ Remove data from all godin filtered dataframes using time window exclusion and threshold values. Time windows to remove for threshold values
-        should be determined using observed data only, to ensure consistency.
-    Args:
+def time_window_and_threshold_exclusion(df1, df2, time_window_exclusion_list_str, upper_threshold=None, invert_selection=False):
+    """ apply exclusions
+    Args: 
         df1 (DataFrame): Assumed to be observed data. Thresholds are applied only to observed data. 
         df2 (DataFrame): Assumed to be the data we want to process. This DataFrame will be returned. To process observed data,
             df1 and df2 should both be the observed time series.
         time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window
+        threshold_value (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR
+            datetime is outside all specified timewindows.
+        invert_selection (bool): If True, keep data in the time windows rather than removing it. This is for the right hand side plot, showing excluded data.
+    Returns:
+        DataFrame: DataFrame with data removed
+
+    """
+    df2 = time_window_exclusion(df2, time_window_exclusion_list_str, invert_selection)
+    df2 = threshold_exclusion(df1, df2, upper_threshold, invert_selection)
+
+    if not invert_selection:
+        df2.loc[((df2["keep_tw"]==False) | (df2["keep_threshold"]==False))] = np.nan
+    else:
+        df2.loc[((df2["keep_tw"]==False) & (df2["keep_threshold"]==False))] = np.nan
+    df2.drop(columns=["keep_tw", "keep_threshold"], inplace=True)
+    return df2
+
+def time_window_exclusion(
+        df,
+        time_window_exclusion_list_str,
+        invert_selection=False,
+):
+    """ Flag data from all godin filtered dataframes using time window exclusion. Data are flagged, but not removed by this method, because
+        for the inverted case (right hand side plot), there may be data outside all time windows that need to be retained because
+        they are above the threshold.
+    Args:
+        df (DataFrame): The data we want to process. This DataFrame will be copied, the copy modified, and returned. 
+        time_window_exclusion_list_str (str): A string consisting of one or more time windows separated by commas, each time window
         using the format 'yyyy-mm-dd_yyyy-mm-dd' Data in each of the specified time windows will be excluded from the metrics calculations
+        invert_selection (bool): If True, keep data in the time windows rather than removing it. This is for the right hand side plot, showing excluded data.
+    Returns:
+        DataFrame: DataFrame with data flagged for removal/retention
+    """
+    cols = df.columns
+    return_df = df.copy(deep=True)
+    # parse time window exclusion list
+    time_window_exclusion_list = None
+    if (time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip()) > 0):
+        time_window_exclusion_list = time_window_exclusion_list_str.split(",")
+
+    # if time windows have been specified for data exclusion 
+    if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and return_df is not None):
+        if not invert_selection:
+            # left hand side plot: flag for removal data inside time windows, flag others for retention
+            return_df["keep_tw"] = True
+            for tw in time_window_exclusion_list:
+                start_dt_str, end_dt_str = tw.split("_")
+                return_df.loc[((return_df.index >= start_dt_str) & (return_df.index < end_dt_str)),"keep_tw",] = False
+        else:
+            # right hand side plot: flag for retention data inside time windows, flag others for removal
+            return_df["keep_tw"] = False
+            for tw in time_window_exclusion_list:
+                start_dt_str, end_dt_str = tw.split("_")
+                return_df.loc[((return_df.index >= start_dt_str) & (return_df.index < end_dt_str)),"keep_tw",] = True
+    else:
+        if not invert_selection:
+            return_df["keep_tw"] = True
+        else:
+            return_df["keep_tw"] = False
+    return return_df
+
+def threshold_exclusion(
+        df1,
+        df2,
+        upper_threshold=None,
+        invert_selection=False
+):
+    """ Flag data from all godin filtered dataframes using threshold values. Time windows to remove for threshold values
+        should be determined using observed data only, to ensure consistency. Data are flagged, but not removed by this method,
+        because for the inverted case (right hand side plot, showing only excluded data), there may be values below the threshold
+        that need to be retained because they are inside a time window used for time window exclusion. 
+    Args:
+        df1 (DataFrame): Assumed to be observed data. Thresholds are applied only to observed data. 
+        df2 (DataFrame): Assumed to be the data we want to process. This DataFrame will be returned. To process observed data,
+            df1 and df2 should both be the observed time series.
         invert_selection (bool): If True, keep data in the time windows rather than removing it. This is for the right hand side plot, showing excluded data.
         threshold_value (float): If specified, and if invert_selection==True, then data will be retained if value is above threshold OR
             datetime is outside all specified timewindows.
     Returns:
-        DataFrame: DataFrame with data removed
+        DataFrame: DataFrame with data flagged for removal/retention
     """
-    cols = df1.columns
+    dfa = df1.copy(deep=True)
+    dfb = df2.copy(deep=True)
     if upper_threshold is None:
         upper_threshold = 999999
     else:
@@ -144,62 +210,27 @@ def remove_data_for_time_windows_thresholds(
             upper_threshold = float(upper_threshold)
         else:
             upper_threshold = 999999
-
-    # parse time window exclusion list
-    time_window_exclusion_list = None
-    if (time_window_exclusion_list_str is not None and len(time_window_exclusion_list_str.strip()) > 0):
-        time_window_exclusion_list = time_window_exclusion_list_str.split(",")
-
     # set above_threshold in df1 
-    df1["above_threshold"] = False
-    df1.loc[(df1[cols[0]] >= upper_threshold), "above_threshold"] = True
-    # instead set df2["above_threshold"] to value matching datetime from df1
-    df2["above_threshold"] = df1["above_threshold"]
-
-    # if time windows have been specified for data exclusion (upper threshold is also handled here)
-    if (time_window_exclusion_list is not None and len(time_window_exclusion_list) > 0 and df2 is not None):
-        tw_index = 0
-        last_tw = None
-
-        cols = df2.columns
-        if invert_selection:
-            # set all values NOT in any timewindow to nan.
-            df2["outside_all_tw"] = True
-            # df2["above_threshold"] = False
-            df2["keep_inverted"] = False
-            # set outside_all_tw to False for all rows where datetime is inside one of the timewindows
-            for tw in time_window_exclusion_list:
-                start_dt_str, end_dt_str = tw.split("_")
-                df2.loc[((df2.index >= start_dt_str) & (df2.index < end_dt_str)),"outside_all_tw",] = False
-
-            # set keep_inverted to True for all rows that are either outside one of the exclusion time windows or >= threshold value
-            df2.loc[((df2["outside_all_tw"] == False) | (df2["above_threshold"] == True)),"keep_inverted",] = True
-            # if keep_inverted is false, set value to nan
-            df2.loc[df2["keep_inverted"] == False, cols[0]] = np.nan
-            # df2.drop(columns=["outside_all_tw", "above_threshold", "keep_inverted"], inplace=True,)
-        for tw in time_window_exclusion_list:
-            if len(tw) > 0:
-                start_dt_str, end_dt_str = tw.split("_")
-                if not invert_selection:
-                    # remove data in the time windows
-                    # This is the old way: not good for plotting, because it becomes an ITS
-                    # df = df[(df.index < start_dt_str) | (df.index > end_dt_str)]
-                    # df[start_dt_str:end_dt_str] = np.nan
-                    # for the do not invert (left hand side plot) option, remove values that are in the exclusion timewindows or above threshold
-                    df2[((df2.index > pd.Timestamp(start_dt_str)) & (df2.index <= pd.Timestamp(end_dt_str))) | (df2[cols[0]] >= upper_threshold)] = np.nan
-            tw_index += 1
+    cols = dfa.columns
+    if not invert_selection:
+        # left hand side plot: flag data for retention if below threshold, flag for removal if above
+        dfa["keep_threshold"] = True
+        dfa.loc[(dfa[cols[0]] >= upper_threshold), "keep_threshold"] = False
     else:
-        if not invert_selection:
-            df2.loc[df2["above_threshold"] == True] = np.nan
-            # df[df >= upper_threshold] = np.nan
-        else:
-            df2.loc[df2["above_threshold"] == False] = np.nan
-            # df[df < upper_threshold] = np.nan
+        # right hand side plot: flag data for retention if above threshold, flag for removal if below
+        dfa["keep_threshold"] = False
+        dfa.loc[(dfa[cols[0]] >= upper_threshold), "keep_threshold"] = True
+    dfb["keep_threshold"] = dfa["keep_threshold"]
+    # There may be values in the model output that are greater than threshold, and there 
+    # are no observed data for the datetime. Flag these values.
+    # We don't want to flag here for right hand side plot, because that should already have been taken care of
+    colsb = dfb.columns
+    if not invert_selection:
+        dfb.loc[(dfb[colsb[0]] >= upper_threshold), "keep_threshold"] = False
+    else:
+        dfb.loc[(dfb[colsb[0]] >= upper_threshold), "keep_threshold"] = True
 
-    if "outside_all_tw" in df2.columns: df2.drop(columns=["outside_all_tw"], inplace=True) 
-    if "above_threshold" in df2.columns: df2.drop(columns=["above_threshold"], inplace=True) 
-    if "keep_inverted" in df2.columns: df2.drop(columns=["keep_inverted"], inplace=True) 
-    return df2
+    return dfb
         
 def calculate_metrics(dflist, names, index_x=0, location=None):
     """Calculate metrics between the index_x column and other columns
@@ -403,60 +434,6 @@ def kdeplot(dflist, names, xlabel):
 def sanitize_name(name):
     return name.replace(".", " ")
 
-
-# class DataMaskingTimeSeries:
-#     '''
-#     This class is not working yet. It is intended to be used to mask data based on DSS gate data.
-#     Maybe easier to just use the data exclusion time windows in the input files.
-#     '''
-#     def __init__(self, gate_studies, gate_location, gate_vartype, timewindow):
-#         #     ----------------------------------------------------------
-#         # gate_studies, gate_locations,gate_vartype=
-#         # ----------------------------------------------------------
-#         # [Study(name='Gate', dssfile='../../../timeseries2019/gates-v8-201912.dss')]
-#         # [Location(name='DLC', bpart='DLC', description='Delta Cross-Channel Gate')]
-#         # VarType(name='POS', units='')
-#         # ----------------------------------------------------------
-#         self.dssfile = gate_studies[0].dssfile
-#         self.location = gate_location
-#         self.bpart = self.location.bpart.upper()
-#         self.vartype = gate_vartype.name
-#         self.timewindow = timewindow
-#         self.gate_time_series_tuple = None
-#         self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
-#         # try:
-#         #     # self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow)))
-#         #     self.gate_time_series_tuple = next(pyhecdss.get_ts(self.dssfile, '//%s/%s////' % (self.bpart, self.vartype)))
-#         #     print('DataMaskingTimeSeries constructor: type of df='+str(type(self.gate_time_series_tuple)))
-
-#         # except StopIteration as e:
-#         #     print('no data found for ' + self.dssfile + ',//%s/%s/%s///' % (self.bpart, self.vartype, self.timewindow))
-#         #     logging.exception('pydsm.postpro.PostProCache.load: no data found')
-#         self.time_series_df = self.get_time_series_df()
-
-#     def get_time_series_df(self):
-#         '''
-#         for now, assume only one data set is being read
-#         self.gate_time_series_tuple has 3 elements:
-#         1. the dataframe
-#         2. string = 'UNSPECIF' (probably units)
-#         3. string = 'INST-VAL' (averaging)
-#         '''
-#         return_df = None
-#         for t in self.gate_time_series_tuple:
-#             if isinstance(t, pd.DataFrame):
-#                 return_df = t
-#         return return_df
-
-# def get_gate_value(self, location, datetime):
-#     '''
-#     returns the value of the gate time series at or before given date.
-#     reference: https://kanoki.org/2022/02/09/how-to-find-closest-date-in-dataframe-for-a-given-date/
-#     '''
-#     gate_value_index = self.gate_time_series_df.get_loc(datetime) - 1
-#     return self.gate_time_series_df[[gate_value_index]]['POS']
-
-
 def build_calib_plot_template(
     studies,
     location,
@@ -468,13 +445,9 @@ def build_calib_plot_template(
     flow_in_thousands=False,
     units=None,
     inst_plot_timewindow=None,
-    layout_nash_sutcliffe=False,
     obs_data_included=True,
     include_kde_plots=False,
     zoom_inst_plot=False,
-    gate_studies=None,
-    gate_locations=None,
-    gate_vartype=None,
     invert_timewindow_exclusion=False,
     remove_data_above_threshold=True,
     mask_data=True,
@@ -516,18 +489,6 @@ def build_calib_plot_template(
     if not all_data_found:
         return None, None
 
-    # data masking using gate data is not fully implemented yet.
-    # gate_pp = []
-    # data_masking_time_series_dict= {}
-    # data_masking_df_dict = {}
-    # if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-    #     for gate_location in gate_locations:
-    #         dmts = DataMaskingTimeSeries(gate_studies, gate_location, gate_vartype, timewindow)
-    #         data_masking_time_series_dict.update({gate_location.name: dmts})
-    #         data_masking_df_dict.update({gate_location.name: dmts.get_time_series_df()})
-    # else:
-    #     print('Not using gate information for plots/metrics data masking because insufficient information provided.')
-
     tsp = build_inst_plot(
         pp,
         location,
@@ -553,27 +514,12 @@ def build_calib_plot_template(
         mask_data=mask_data,
     )
 
-    # trying to add labels to beginning and end of x axis, but this isn't working.
-    # print('gtsp='+str(gtsp))
-
-    # # print('p='+str(p))
-    # gtsp.xaxis.axis_label = "X-axis"
-
-    # # create left and right labels
-    # left_label = Label(x=10, y=0, text="Left Label", render_mode="css", text_font_size="10pt")
-    # right_label = Label(x=p.plot_width-10, y=0, text="Right Label", render_mode="css", text_font_size="10pt")
-
-    # # add labels to the plot
-    # gtsp.add_layout(left_label, 'below')
-    # gtsp.add_layout(right_label, 'below')
-
     scatter_plot_with_toolbar = None
     scatter_plot_without_toolbar = None
     dfdisplayed_metrics = None
     metrics_table = None
     kdeplots_with_toolbar = None
     kdeplots_without_toolbar = None
-    # metrics_table_name = ''
 
     if obs_data_included:
         time_window_exclusion_list = location.time_window_exclusion_list
@@ -581,7 +527,7 @@ def build_calib_plot_template(
             pp,
             flow_in_thousands=flow_in_thousands,
             units=units,
-            time_window_exclusion_list=time_window_exclusion_list,
+            time_window_exclusion_list=location.time_window_exclusion_list,
             invert_timewindow_exclusion=invert_timewindow_exclusion,
             threshold_value=location.threshold_value,
             remove_data_above_threshold=remove_data_above_threshold,
@@ -592,7 +538,7 @@ def build_calib_plot_template(
             pp,
             flow_in_thousands=flow_in_thousands,
             units=units,
-            time_window_exclusion_list=time_window_exclusion_list,
+            time_window_exclusion_list=location.time_window_exclusion_list,
             invert_timewindow_exclusion=invert_timewindow_exclusion,
             threshold_value=location.threshold_value,
             remove_data_above_threshold=remove_data_above_threshold,
@@ -602,19 +548,6 @@ def build_calib_plot_template(
 
         df_displayed_metrics_dict = {}
         metrics_table_dict = {}
-        # if gate_studies is not None and gate_locations is not None and gate_vartype is not None:
-        #     dfdisplayed_metrics_open, metrics_table_open = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-        #         flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=True,
-        #         time_window_exclusion_list = time_window_exclusion_list)
-        #     dfdisplayed_metrics_closed, metrics_table_closed = build_metrics_table(studies, pp, location, vartype, tidal_template=tidal_template, \
-        #         flow_in_thousands=flow_in_thousands, units=units, layout_nash_sutcliffe=False, data_masking_df_dict=data_masking_df_dict, gate_open=False,
-        #         time_window_exclusion_list=time_window_exclusion_list)
-        #     df_displayed_metrics_dict.update({'open': dfdisplayed_metrics_open})
-        #     df_displayed_metrics_dict.update({'closed': dfdisplayed_metrics_closed})
-        #     metrics_table_dict.update({'open': metrics_table_open})
-        #     metrics_table_dict.update({'closed': metrics_table_closed})
-        # else:
-        # manuscript_metrics = manuscript_layout and flow_in_thousands
         manuscript_metrics = manuscript_layout
 
         dfdisplayed_metrics, metrics_table = build_metrics_table(
@@ -635,13 +568,9 @@ def build_calib_plot_template(
             manuscript_metrics=manuscript_metrics,
             metrics_table_list=metrics_table_list,
         )
-        # df_displayed_metrics_dict.update({'all': dfdisplayed_metrics})
-        # metrics_table_dict.update({'all': metrics_table})
-
         if include_kde_plots:
             kdeplots_with_toolbar = build_kde_plots(pp, include_toolbar=True)
             kdeplots_without_toolbar = build_kde_plots(pp, include_toolbar=False)
-            # kdeplots = build_kde_plots(pp)
 
     # # create plot/metrics template
     header_panel = pn.panel(
@@ -649,11 +578,6 @@ def build_calib_plot_template(
     )
     if manuscript_layout:
         header_panel = pn.panel("")
-    # # do this if you want to link the axes
-    # # tsplots2 = (tsp.opts(width=900)+gtsp.opts(show_legend=False, width=900)).cols(1)
-    # # start_dt = dflist[0].index.min()
-    # # end_dt = dflist[0].index.max()
-
     # temporary fix to add toolbar to all plots. eventually need to only inlucde toolbar if creating html file
     add_toolbars = True
     column_with_toolbar = create_layout(
@@ -692,26 +616,6 @@ def build_calib_plot_template(
         manuscript_layout=manuscript_layout,
     )
     column_dict = {"with": column_with_toolbar, "without": column_without_toolbar}
-
-    # now merge all metrics dataframes, adding a column identifying the gate status
-    # return_metrics_df = None
-    # df_index = 0
-    # for metrics_df_name in df_displayed_metrics_dict:
-    #     metrics_df_name_list = []
-    #     metrics_df = df_displayed_metrics_dict[metrics_df_name]
-    #     for r in range(metrics_df.shape[0]):
-    #         metrics_df_name_list.append(metrics_df_name)
-    #     metrics_df['Gate Pos'] = metrics_df_name_list
-    #     # move Gate Pos column to beginning
-    #     cols = list(metrics_df)
-    #     cols.insert(0, cols.pop(cols.index('Gate Pos')))
-    #     metrics_df = metrics_df.loc[:, cols]
-    #     # merge df into return_metrics_df
-    #     if df_index == 0:
-    #         return_metrics_df = metrics_df
-    #     else:
-    #         return_metrics_df.append(metrics_df)
-    #     df_index += 1
 
     return column_dict, dfdisplayed_metrics
 
@@ -992,7 +896,6 @@ def build_inst_plot(
             tsp_plot_data = [p.df / 1000.0 if p.df is not None else None for p in pp]
 
     # create plots: instantaneous, godin, and scatter
-
     i = 0
     for tpd in tsp_plot_data:
         datatype = None
@@ -1049,44 +952,21 @@ def build_godin_plot(
     godin_y_axis_label = "Godin " + y_axis_label
     if manuscript_layout:
         godin_y_axis_label = "Tidal Avg. Flow (CMS)"
-    # plot_data are scaled, if flow_in_thousands == True
-    # gtsp_plot_data = [p.gdf for p in pp]
-
-    # if p.gdf is not None:
-
-    # if flow_in_thousands:
-    #     gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-
-    # zoom in to desired timewindow: works, but doesn't zoom y axis, so need to fix later
-    # if inst_plot_timewindow is not None:
-    #     start_end_times = parse_time_window(inst_plot_timewindow)
-    #     s = start_end_times[0]
-    #     e = start_end_times[1]
-    #     tsp.opts(xlim=(datetime.datetime(s[0], s[1], s[1]), datetime.datetime(e[0],e[1],e[2])))
-
-    # remove data for specified time window for all time series
-    # gtsp_plot_data = [remove_data_for_time_windows(p, time_window_exclusion_list_str=time_window_exclusion_list,
-    #     invert_selection=invert_timewindow_exclusion) if p is not None else None for p in gtsp_plot_data]
-
-    # gtsp_plot_data = [remove_data_above_below_threshold(p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold) \
-    #     if p is not None else None for p in gtsp_plot_data]
     cfs_to_cms = 0.028316847
     gtsp_plot_data = []
     obs_data_gdf = pp[0].gdf
     for p in pp:
         if p.gdf is not None:
             if mask_data:
-                new_p = remove_data_for_time_windows_thresholds(
-                    obs_data_gdf,
-                    p.gdf,
-                    time_window_exclusion_list_str=time_window_exclusion_list,
-                    invert_selection=invert_timewindow_exclusion,
-                    upper_threshold=threshold_value,
-                )
+                new_p = time_window_and_threshold_exclusion(
+                    obs_data_gdf, 
+                    p.gdf, 
+                    time_window_exclusion_list_str=time_window_exclusion_list, 
+                    upper_threshold=threshold_value, 
+                    invert_selection=invert_timewindow_exclusion
+                    )
             else:
                 new_p = p.gdf
-            # new_p = remove_data_for_time_windows(p.gdf, time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
-            # new_p = remove_data_above_below_threshold(new_p, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
             if manuscript_layout:
                 new_p = new_p * cfs_to_cms
             elif flow_in_thousands:
@@ -1102,33 +982,14 @@ def build_godin_plot(
             datatype = "obs"
         elif i == 1:
             datatype = "model"
-
-        # gpd.to_csv('plot_df_files/'+location.name+'_godin_'+y_axis_label+'_'+datatype+'.csv')
         i += 1
-
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle
     )
     gtsp = gtsp.opts(opts.Curve(color=hv.Cycle("Category10")))
-
-    # trying to add labels to beginning and end of x axis, but this isn't working.
-    # print('gtsp='+str(gtsp))
-
-    # # print('p='+str(p))
-    # gtsp.xaxis.axis_label = "X-axis"
-
-    # # create left and right labels
-    # left_label = Label(x=10, y=0, text="Left Label", render_mode="css", text_font_size="10pt")
-    # right_label = Label(x=p.plot_width-10, y=0, text="Right Label", render_mode="css", text_font_size="10pt")
-
-    # # add labels to the plot
-    # gtsp.add_layout(left_label, 'below')
-    # gtsp.add_layout(right_label, 'below')
-
     return gtsp
 
 
-# def build_scatter_plots(pp, location, vartype, flow_in_thousands=False, units=None, gate_pp=None, time_window_exclusion_list=None):
 def build_scatter_plots(
     pp,
     flow_in_thousands=False,
@@ -1160,45 +1021,25 @@ def build_scatter_plots(
     gridstyle = {"grid_line_alpha": 1, "grid_line_color": "lightgrey"}
     unit_string = get_units(flow_in_thousands, units)
 
-    # y_axis_label = f'{vartype.name} @ {location.name} {unit_string}'
-    # godin_y_axis_label = 'Godin '+y_axis_label
-    # plot_data are scaled, if flow_in_thousands == True
-    # This is the old way:
-    # gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list) for p in pp]
-    # For some reason, this does not work, so the solution is below:
-    # gtsp_plot_data = [remove_data_for_time_windows(p.gdf, time_window_exclusion_list).dropna(inplace=True) for p in pp]
-
     gtsp_plot_data = []
     splot_plot_data = []
     splot_metrics_data = []
 
-    # splot_plot_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp ]
-    # splot_metrics_data = [p.gdf.resample('D').mean() if p.gdf is not None else None for p in pp]
-    # if flow_in_thousands:
-    #     gtsp_plot_data = [p.gdf/1000.0 if p.gdf is not None else None for p in pp]
-    #     splot_plot_data = [p.gdf.resample('D').mean()/1000.0 if p.gdf is not None else None for p in pp]
-
-    # if False, return None
-    # this will happen if there are no data in the specified time period, or
-    # we're trying to create the right hand side plot (to show plots and metrics for masked data),
-    # and there are no data that have been masked. For example, this could happen if only one masking time window is specified,
-    # and it's outside the time window of the data.
     any_data_left = True
     obs_data_gdf = pp[0].gdf
-
+    gpd = None
     for p in pp:
         if mask_data:
-            gpd = remove_data_for_time_windows_thresholds(
-                obs_data_gdf,
-                p.gdf,
-                time_window_exclusion_list,
-                invert_selection=invert_timewindow_exclusion,
-                upper_threshold=threshold_value,
-            )
+            gpd = time_window_and_threshold_exclusion(
+                obs_data_gdf, 
+                p.gdf, 
+                time_window_exclusion_list_str=time_window_exclusion_list, 
+                upper_threshold=threshold_value, 
+                invert_selection=invert_timewindow_exclusion
+                )
+
         else:
             gpd = p.gdf
-        # gpd = remove_data_for_time_windows(p.gdf, time_window_exclusion_list_str=time_window_exclusion_list, invert_selection=invert_timewindow_exclusion)
-        # gpd = remove_data_above_below_threshold(gpd, threshold_value, data_in_thousands=flow_in_thousands, remove_above=remove_data_above_threshold)
         gpd.dropna(inplace=True)
         if gpd.notnull().sum().iloc[0] <= 0:
             any_data_left = False
@@ -1668,18 +1509,18 @@ def build_metrics_table(
     # plot_data are scaled, if flow_in_thousands == True
     # gtsp_plot_data = [p.gdf for p in pp]
     gtsp_plot_data = []
+    splot_metrics_data = []
     gpd = None
-
     obs_data_gdf = pp[0].gdf
     for p in pp:
         if mask_data:
-            gpd = remove_data_for_time_windows_thresholds(
-                obs_data_gdf,
-                p.gdf,
-                time_window_exclusion_list,
-                invert_selection=invert_timewindow_exclusion,
-                upper_threshold=threshold_value,
-            )
+            gpd = time_window_and_threshold_exclusion(
+                obs_data_gdf, 
+                p.gdf, 
+                time_window_exclusion_list_str=time_window_exclusion_list, 
+                upper_threshold=threshold_value, 
+                invert_selection=invert_timewindow_exclusion
+                )
         else:
             gpd = p.gdf
         if flow_in_thousands:
@@ -1792,7 +1633,6 @@ def build_metrics_table(
         manuscript_metrics=manuscript_metrics,
         metrics_table_list=metrics_table_list,
     )
-
     return dfdisplayed_metrics, metrics_table
 
 
