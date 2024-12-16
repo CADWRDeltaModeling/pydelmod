@@ -201,8 +201,8 @@ def threshold_exclusion(
     Returns:
         DataFrame: DataFrame with data flagged for removal/retention
     """
-    dfa = df1.copy(deep=True)
-    dfb = df2.copy(deep=True)
+    df_obs = df1.copy(deep=True)
+    df_model_or_obs = df2.copy(deep=True)
     if upper_threshold is None:
         upper_threshold = 999999
     else:
@@ -211,26 +211,26 @@ def threshold_exclusion(
         else:
             upper_threshold = 999999
     # set above_threshold in df1 
-    cols = dfa.columns
+    cols = df_obs.columns
     if not invert_selection:
         # left hand side plot: flag data for retention if below threshold, flag for removal if above
-        dfa["keep_threshold"] = True
-        dfa.loc[(dfa[cols[0]] >= upper_threshold), "keep_threshold"] = False
+        df_obs["keep_threshold"] = True
+        df_obs.loc[(df_obs[cols[0]] >= upper_threshold), "keep_threshold"] = False
     else:
         # right hand side plot: flag data for retention if above threshold, flag for removal if below
-        dfa["keep_threshold"] = False
-        dfa.loc[(dfa[cols[0]] >= upper_threshold), "keep_threshold"] = True
-    dfb["keep_threshold"] = dfa["keep_threshold"]
+        df_obs["keep_threshold"] = False
+        df_obs.loc[(df_obs[cols[0]] >= upper_threshold), "keep_threshold"] = True
+    df_model_or_obs["keep_threshold"] = df_obs["keep_threshold"]
     # There may be values in the model output that are greater than threshold, and there 
     # are no observed data for the datetime. Flag these values.
     # We don't want to flag here for right hand side plot, because that should already have been taken care of
-    colsb = dfb.columns
+    colsb = df_model_or_obs.columns
     if not invert_selection:
-        dfb.loc[(dfb[colsb[0]] >= upper_threshold), "keep_threshold"] = False
+        df_model_or_obs.loc[(~df_model_or_obs.index.isin(df_obs)) & (df_model_or_obs[colsb[0]] >= upper_threshold), "keep_threshold"] = False
     else:
-        dfb.loc[(dfb[colsb[0]] >= upper_threshold), "keep_threshold"] = True
+        df_model_or_obs.loc[(~df_model_or_obs.index.isin(df_obs)) & (df_model_or_obs[colsb[0]] >= upper_threshold), "keep_threshold"] = True
 
-    return dfb
+    return df_model_or_obs
         
 def calculate_metrics(dflist, names, index_x=0, location=None):
     """Calculate metrics between the index_x column and other columns
