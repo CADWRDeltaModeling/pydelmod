@@ -807,9 +807,11 @@ def load_data_for_plotting(studies, location, vartype, timewindow):
         if not success:  # try processing it now
             p.process()
             success = p.store_processed()
+            print('about to load data for '+str(p))
             success = p.load_processed(
                 timewindow=timewindow, invert_series=invert_series
             )
+            print('success='+str(success))
         if not success:
             errmsg = "unable to load data for study|location %s|%s" % (
                 str(study),

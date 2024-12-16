@@ -711,6 +711,8 @@ def postpro_plots(cluster, config_data, use_dask):
                 else:
                     print("not using dask")
                     for location in locations:
+                        # this try/except is necessary to keep processes running if data
+                        # are not found for a station. However, this must be temporarily disabled for debugging
                         try:
                             build_and_save_plot(
                                 config_data,
