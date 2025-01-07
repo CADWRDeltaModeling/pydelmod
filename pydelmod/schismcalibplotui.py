@@ -53,16 +53,19 @@ def replace_with_paths_relative_to(base_dir, params):
     params["obs_search_path"] = [
         interpret_file_relative_to(base_dir, file) for file in params["obs_search_path"]
     ]
-    params["station_input"] = [
-        interpret_file_relative_to(base_dir, file) for file in params["station_input"]
-    ]
+    if "station_input" in params:
+        params["station_input"] = [
+            interpret_file_relative_to(base_dir, file)
+            for file in params["station_input"]
+        ]
     params["obs_links_csv"] = interpret_file_relative_to(
         base_dir, params["obs_links_csv"]
     )
-    params["flow_station_input"] = [
-        interpret_file_relative_to(base_dir, file)
-        for file in params["flow_station_input"]
-    ]
+    if "flow_station_input" in params:
+        params["flow_station_input"] = [
+            interpret_file_relative_to(base_dir, file)
+            for file in params["flow_station_input"]
+        ]
     return params
 
 
@@ -88,6 +91,10 @@ class SchismCalibPlotUIManager(DataUIManager):
         # substitue the base_dir in config paths
         if base_dir is None:
             base_dir = pathlib.Path(self.config_file).parent
+        if "station_input" not in config:
+            config["station_input"] = "station.in"
+        if "flow_station_input" not in config:
+            config["flow_station_input"] = "fluxflag.prop"
         config = replace_with_paths_relative_to(base_dir, config)
         self.config = config
         # load studies and datastore
@@ -186,10 +193,11 @@ class SchismCalibPlotUIManager(DataUIManager):
                 dfs.append(df)
         dparam = self.get_datastore_param_name(variable)
         try:
-            rd = self.dcat[self.dcat.eval(f'(id=="{id}") & (param=="{dparam}")')].iloc[
-                0
-            ]
+            rd = self.dcat[
+                self.dcat.eval(f'(station_id=="{id}") & (param=="{dparam}")')
+            ].iloc[0]
         except IndexError:
+            print("No data found for", id, variable)
             rd = None
         if rd is not None:
             dfobs, converted_unit = schismstudy.convert_to_SI(
@@ -321,6 +329,13 @@ class SchismCalibPlotUIManager(DataUIManager):
     def get_map_marker_columns(self):
         """return the columns that can be used to color the map"""
         return ["variable", "unit"]
+
+    def get_name_to_color(self):
+        return {
+            "elev": "green",
+            "flow": "blue",
+            "salt": "orange",
+        }
 
 
 import click
