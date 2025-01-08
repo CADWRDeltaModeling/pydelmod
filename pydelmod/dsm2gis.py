@@ -33,15 +33,33 @@ def get_distance_from_start(point: Point, closest_line: gpd.GeoDataFrame):
 
 
 def read_stations(file_path):
+    # Read the CSV file
     stations = pd.read_csv(file_path)
-    stations = gpd.GeoDataFrame(
-        stations, geometry=[Point(xy) for xy in zip(stations.lon, stations.lat)]
-    )
-    # Set the original CRS to WGS84 (latitude and longitude)
-    stations.crs = "EPSG:4326"
-    # Convert the geometries to EPSG:26910
-    stations = stations.to_crs(epsg=26910)
-    return stations
+    if "lat" in stations.columns and "lon" in stations.columns:
+        # Create GeoDataFrame with Point geometry and set the CRS to WGS84 (EPSG:4326)
+        stations = gpd.GeoDataFrame(
+            stations,
+            geometry=[Point(xy) for xy in zip(stations.lon, stations.lat)],
+            crs="EPSG:4326",  # Define CRS during GeoDataFrame creation
+        )
+        stations.set_crs(epsg=4326, inplace=True)
+        stations_utm = stations.to_crs(epsg=26910)
+        stations.set_crs(epsg=4326, inplace=True)  # Set CRS again to avoid warning
+    elif "x" in stations.columns and "y" in stations.columns:
+        # Create GeoDataFrame with Point geometry and set the CRS to UTM Zone 10N (EPSG:26910)
+        stations = gpd.GeoDataFrame(
+            stations,
+            geometry=[Point(xy) for xy in zip(stations.x, stations.y)],
+            crs="EPSG:26910",  # Define CRS during GeoDataFrame creation
+        )
+        stations.set_crs(epsg=26910, inplace=True)
+        stations.set_crs(epsg=26910, inplace=True)
+        stations_utm = stations
+    else:
+        raise ValueError(
+            "Input file must contain 'lat' and 'lon' columns or 'x' and 'y' columns"
+        )
+    return stations_utm
 
 
 def get_id_and_distance_from_start(point, gdf):

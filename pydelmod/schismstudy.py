@@ -123,7 +123,6 @@ class SchismStudy(param.Parameterized):
         self.flux_out = self.interpret_file_relative_to(
             self.base_dir, pathlib.Path(flux_out)
         )
-        self.reftime = pd.Timestamp(kwargs.pop("reftime", "2020-01-01"))
         super().__init__(**kwargs)
         stations = read_station_in(self.station_in_file)
         self.stations_in = stations
