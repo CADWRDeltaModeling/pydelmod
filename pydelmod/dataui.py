@@ -28,6 +28,12 @@ from . import fullscreen
 from bokeh.models import HoverTool
 from bokeh.core.enums import MarkerType
 
+import logging
+
+# setup logger
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 # from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
 def full_stack():
@@ -224,8 +230,11 @@ class DataUI(param.Parameterized):
             if len(query) > 0:
                 dfs = dfs.query(query)
         except Exception as e:
-            full_stack()
-            notifications.error(f"Error while fetching data for {e}", duration=0)
+            str_stack = full_stack()
+            logger.error(str_stack)
+            notifications.error(
+                f"Error while fetching data for {str_stack}", duration=0
+            )
         self.map_color_category = color_by
         self.show_map_colors = show_color_by
         self.build_map_of_features(dfs, self.crs)
@@ -329,8 +338,9 @@ class DataUI(param.Parameterized):
                     pn.Tabs((str(self.tab_count), plot_panel), closable=True)
                 ]
         except Exception as e:
-            full_stack()
-            notifications.error("Error updating plots: " + str(e), duration=0)
+            stack_str = full_stack()
+            logger.error(stack_str)
+            notifications.error("Error updating plots: " + str(stack_str), duration=0)
         finally:
             self.plots_panel.loading = False
 

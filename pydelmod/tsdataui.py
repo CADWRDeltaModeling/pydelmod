@@ -248,12 +248,17 @@ class TimeSeriesDataUIManager(DataUIManager):
                                     else (None, None)
                                 ),
                                 title=title_map[k],
+                                min_height=400,
                             )
                             for k in layout_map
                         ]
                     )
                     .cols(1)
-                    .opts(shared_axes=False, axiswise=True, sizing_mode="stretch_both")
+                    .opts(
+                        shared_axes=False,
+                        axiswise=True,
+                        sizing_mode="stretch_both",
+                    )
                 )
         except Exception as e:
             stackmsg = full_stack()
