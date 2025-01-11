@@ -92,9 +92,9 @@ class SchismCalibPlotUIManager(DataUIManager):
         if base_dir is None:
             base_dir = pathlib.Path(self.config_file).parent
         if "station_input" not in config:
-            config["station_input"] = "station.in"
+            config["station_input"] = ["station.in"]
         if "flow_station_input" not in config:
-            config["flow_station_input"] = "fluxflag.prop"
+            config["flow_station_input"] = ["fluxflag.prop"]
         config = replace_with_paths_relative_to(base_dir, config)
         self.config = config
         # load studies and datastore
@@ -128,7 +128,7 @@ class SchismCalibPlotUIManager(DataUIManager):
             inventory_file=self.config["obs_links_csv"],
         )
         self.dcat = self.datastore.get_catalog()
-        self.dcat["id"] = (
+        self.dcat["full_id"] = (
             self.dcat["station_id"].astype(str) + "_" + self.dcat["subloc"].astype(str)
         )
 
@@ -182,7 +182,22 @@ class SchismCalibPlotUIManager(DataUIManager):
     def get_datastore_param_name(self, variable):
         return VAR_to_PARAM[variable]
 
-    def get_data(self, id, variable):
+    def get_data(self, dfs):
+        avg_time_window = to_timewindow_string(self.window_avg).split(":")
+        ex_avg_time_window = slice(
+            pd.Timestamp(avg_time_window[0]) - pd.Timedelta("2D"),
+            pd.Timestamp(avg_time_window[1]) + pd.Timedelta("2D"),
+        )
+        for _, row in dfs.iterrows():
+            station_id = row["id"]
+            variable = row["variable"]
+            dfobs, dfsim = self.get_data_for_id_var(station_id, variable)
+            df = pd.concat([dfobs] + dfsim, axis=1)
+            df = df.loc[ex_avg_time_window]
+            df = df.resample(dfobs.index.freq).mean()
+            yield df
+
+    def get_data_for_id_var(self, id, variable):
         dfs = []
         for study_name, study in self.studies.items():
             scat = study.get_catalog()
@@ -194,7 +209,7 @@ class SchismCalibPlotUIManager(DataUIManager):
         dparam = self.get_datastore_param_name(variable)
         try:
             rd = self.dcat[
-                self.dcat.eval(f'(station_id=="{id}") & (param=="{dparam}")')
+                self.dcat.eval(f'(full_id=="{id}") & (param=="{dparam}")')
             ].iloc[0]
         except IndexError:
             print("No data found for", id, variable)
@@ -216,6 +231,32 @@ class SchismCalibPlotUIManager(DataUIManager):
 
     def shift_cycle(self, vals, shift=1):
         return hv.Cycle(vals[shift:] + vals[:shift])
+
+    def scatter_plot_with_slopes(self, df, y_axis_label, default_cycle=None):
+        scatters = []
+        slopes = []
+        for col in df.columns[1:]:
+            scatter = hv.Scatter(df, "Observed", col).opts(ylabel=y_axis_label)
+            slope = hv.Slope.from_scatter(scatter)
+            scatter = scatter.relabel(
+                f"Slope: {slope.slope:.2f}*obs + {slope.y_intercept:.2f}"
+            )
+            scatters.append(scatter)
+            slopes.append(slope)
+        overlay = (
+            hv.Overlay(scatters + slopes)
+            .opts(opts.Slope(color=default_cycle))
+            .opts(
+                opts.Scatter(
+                    show_legend=True,
+                    color=default_cycle,
+                    legend_position="top_left",
+                    legend_cols=1,
+                )
+            )
+        )
+
+        return overlay
 
     def schism_plot_template(
         self,
@@ -245,34 +286,38 @@ class SchismCalibPlotUIManager(DataUIManager):
         dff = dff.loc[slice(*avg_time_window), :]
         #
         default_cycle = hv.Cycle(hv.Cycle.default_cycles["default_colors"])
+
         plot_inst = df.hvplot(
             color=default_cycle,
             grid=True,
             responsive=True,
-        ).opts(ylabel=y_axis_label)
-        plot_scatter = df.hvplot.scatter(
-            x="Observed",
-            color=self.shift_cycle(default_cycle.values),
-            grid=True,
-            responsive=True,
-        ).opts(
-            opts.Scatter(
-                aspect=1,
+        ).opts(ylabel=y_axis_label, legend_position="top_left")
+        try:
+            plot_scatter = self.scatter_plot_with_slopes(
+                df, y_axis_label, self.shift_cycle(default_cycle.values)
             )
-        )
+        except Exception as e:
+            plot_scatter = None
         plot_avg = dff.hvplot(
             ylabel=f"Tidal Averaged {y_axis_label}",
             color=default_cycle,
             grid=True,
             responsive=True,
         )
-        gs = pn.layout.GridSpec()
+        gs = pn.layout.GridSpec()  # 12x12 grid
         gs[0, 4:6] = pn.pane.Markdown(f"## {title}")
-        gs[1:6, 0:11] = plot_inst.opts(shared_axes=False)
-        gs[6:10, 0:6] = plot_avg.opts(shared_axes=False, show_legend=False)
-        gs[6:10, 6:11] = plot_scatter.opts(
-            shared_axes=False, show_legend=False, width=200
-        )
+        gs[1:7, 0:11] = plot_inst.opts(shared_axes=False)
+        average_plot_row = pn.Row(plot_avg.opts(shared_axes=False, show_legend=False))
+        if plot_scatter is not None:
+            average_plot_row.append(
+                pn.Column(
+                    pn.pane.HoloViews(
+                        plot_scatter.opts(shared_axes=False, toolbar=None),
+                        sizing_mode="scale_height",
+                    ),
+                )
+            )
+        gs[7:11, 0:11] = average_plot_row
         return gs
 
     def plot_metrics(self, row):
@@ -280,7 +325,7 @@ class SchismCalibPlotUIManager(DataUIManager):
         variable = row["variable"]
         varname = self.upper_case_first(variable)
         yaxis_label = f"{varname} ({variable_units[variable]})"
-        dfobs, dfsimlist = self.get_data(station_id, variable)
+        dfobs, dfsimlist = self.get_data_for_id_var(station_id, variable)
         window_inst = to_timewindow_string(self.window_inst)
         window_avg = to_timewindow_string(self.window_avg)
         title = f"{varname} @ {row['name']}"
@@ -301,7 +346,10 @@ class SchismCalibPlotUIManager(DataUIManager):
         for _, row in df.iterrows():
             station_id = row["id"]
             varname = row["variable"]
-            plot = self.plot_metrics(row)
+            try:
+                plot = self.plot_metrics(row)
+            except Exception as e:
+                plot = pn.pane.Markdown(f"Error: {e}")
             plots.append(
                 (
                     varname + "@" + station_id,
