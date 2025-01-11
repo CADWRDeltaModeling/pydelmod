@@ -350,11 +350,11 @@ class DataUI(param.Parameterized):
             dfselected = self.display_table._processed.iloc[
                 self.display_table.selection
             ]
-            dfdata = self.dataui_manager.get_data(dfselected)
-            sio = StringIO()
-            dfdata.to_csv(sio)
-            sio.seek(0)
-            return sio
+            for dfdata in self.dataui_manager.get_data(dfselected):
+                sio = StringIO()
+                dfdata.to_csv(sio)
+                sio.seek(0)
+                return sio
         except Exception as e:
             notifications.error("Error downloading data: " + str(e), duration=0)
         finally:
