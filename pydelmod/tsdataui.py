@@ -125,14 +125,9 @@ class TimeSeriesDataUIManager(DataUIManager):
         raise NotImplementedError("Method get_time_range not implemented")
 
     def get_data(self, df):
-        dfs = pd.concat(
-            [  # [0] is the data, other elemens are unit and period type
-                self._get_data_for_time_range(r, self.time_range)[0]
-                for _, r in df.iterrows()
-            ],
-            axis=1,
-        )
-        return dfs
+        for _, r in df.iterrows():
+            data, _, _ = self._get_data_for_time_range(r, self.time_range)
+            yield data
 
     # display related support for tables
     def get_table_columns(self):

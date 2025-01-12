@@ -314,18 +314,7 @@ class DataUI(param.Parameterized):
     def update_plots(self, event):
         try:
             self.plots_panel.loading = True
-            # FIXME: needs a PR to panel to fix this. Assured that panel 1.5.x will fix all these issues
-            # use self.display_table._index_mapping to map the selection (original indices) to the processed indices
-            # for tables with no filters this works
-            if True:
-                dfselected = self.display_table.value.iloc[self.display_table.selection]
-            else:
-                dfselected = self.display_table._processed.loc[
-                    [
-                        self.display_table._index_mapping.get(i, None)
-                        for i in self.display_table.selection
-                    ]
-                ]
+            dfselected = self.display_table.value.iloc[self.display_table.selection]
             plot_panel = self.dataui_manager.create_panel(dfselected)
             if isinstance(self.plots_panel.objects[0], pn.Tabs):
                 tabs = self.plots_panel.objects[0]
@@ -347,14 +336,14 @@ class DataUI(param.Parameterized):
     def download_data(self):
         self.download_button.loading = True
         try:
-            dfselected = self.display_table._processed.iloc[
-                self.display_table.selection
-            ]
-            for dfdata in self.dataui_manager.get_data(dfselected):
-                sio = StringIO()
-                dfdata.to_csv(sio)
-                sio.seek(0)
-                return sio
+            dfselected = self.display_table.value.iloc[self.display_table.selection]
+            dfdata = pd.concat(
+                [df for df in self.dataui_manager.get_data(dfselected)], axis=1
+            )
+            sio = StringIO()
+            dfdata.to_csv(sio)
+            sio.seek(0)
+            return sio
         except Exception as e:
             notifications.error("Error downloading data: " + str(e), duration=0)
         finally:
