@@ -222,10 +222,28 @@ class DataUI(param.Parameterized):
         return self.map_features
 
     def update_map_features(
-        self, show_color_by, color_by, show_marker_by, marker_by, query
+        self,
+        show_color_by,
+        color_by,
+        show_marker_by,
+        marker_by,
+        query,
+        narrow_clicks,
+        reset_clicks,
     ):
         query = query.strip()
-        dfs = self._get_map_catalog()
+        if reset_clicks > self.reset_button_clicks:
+            dfs = self._get_map_catalog()
+            self.station_select.event(index=[])
+            self.reset_button_clicks = reset_clicks
+        else:
+            if narrow_clicks > self.narrow_button_clicks:
+                dfs = self._get_map_catalog().iloc[
+                    self.display_table.current_view.index
+                ]
+                self.narrow_button_clicks = narrow_clicks
+            else:
+                dfs = self._get_map_catalog()
         try:
             if len(query) > 0:
                 dfs = dfs.query(query)
@@ -274,47 +292,87 @@ class DataUI(param.Parameterized):
 
     def update_data_table(self, dfs):
         if not hasattr(self, "display_table"):
-            column_width_map = self.dataui_manager.get_table_column_width_map()
-            self.display_table = pn.widgets.Tabulator(
-                dfs,
-                disabled=True,
-                widths=column_width_map,
-                show_index=False,
-                sizing_mode="stretch_width",
-                header_filters=self.dataui_manager.get_table_filters(),
-            )
-
-            self.plot_button = pn.widgets.Button(
-                name="Plot", button_type="primary", icon="chart-line"
-            )
-            self.plot_button.on_click(self.update_plots)
-            self.download_button = self.create_save_button()
-            self.plot_panel = pn.panel(
-                hv.Div("<h3>Select rows from table and click on button</h3>"),
-                sizing_mode="stretch_both",
-            )
-            self.plots_panel = pn.Row(self.plot_panel)
-            gspec = pn.GridStack(
-                sizing_mode="stretch_both", allow_resize=True, allow_drag=False
-            )  # ,
-            gspec[0, 0:5] = pn.Row(
-                self.plot_button,
-                self.download_button,
-                pn.layout.HSpacer(),
-            )
-            gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-            gspec[6:15, 0:10] = fullscreen.FullScreen(self.plots_panel)
-            self.main_panel = pn.Row(gspec)
-
+            print("Warning: display_table not found")
         else:
             self.display_table.value = dfs
+        return self.display_table
 
-        return self.main_panel
+    def create_data_table(self, dfs):
+        column_width_map = self.dataui_manager.get_table_column_width_map()
+        self.display_table = pn.widgets.Tabulator(
+            dfs,
+            disabled=True,
+            widths=column_width_map,
+            show_index=False,
+            sizing_mode="stretch_width",
+            header_filters=self.dataui_manager.get_table_filters(),
+        )
+
+        self.plot_button = pn.widgets.Button(
+            name="Plot", button_type="primary", icon="chart-line"
+        )
+        self.plot_button.on_click(self.update_plots)
+        self.narrow_button = pn.widgets.Button(
+            name="Narrow Map",
+            button_type="primary",
+        )
+        self.reset_button = pn.widgets.Button(
+            name="Reset Map",
+            button_type="primary",
+        )
+        self.narrow_button_clicks = 0
+        self.reset_button_clicks = 0
+        self.download_button = self.create_save_button()
+        # create toggle checkbox for narrow map
+        self.plot_panel = pn.panel(
+            hv.Div("<h3>Select rows from table and click on button</h3>"),
+            sizing_mode="stretch_both",
+        )
+        self.plots_panel = pn.Row(self.plot_panel)
+        gspec = pn.GridStack(
+            sizing_mode="stretch_both", allow_resize=True, allow_drag=False
+        )  # ,
+        self.table_panel = pn.Row(
+            self.plot_button,
+            self.download_button,
+            self.narrow_button,
+            self.reset_button,
+            pn.layout.HSpacer(),
+        )
+        if hasattr(self, "station_select"):
+            show_data_catalog_bound = pn.bind(
+                self.show_data_catalog, index=self.station_select.param.index
+            )
+        else:
+            show_data_catalog_bound = pn.bind(self.show_data_catalog)
+        gspec[0, 0:5] = self.table_panel
+        gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(show_data_catalog_bound))
+        gspec[6:15, 0:10] = fullscreen.FullScreen(self.plots_panel)
+        return gspec
+
+    def update_map_zoom(self, event):
+        # update map extents based on current selection of table
+        try:
+            dfselected = self.display_table.value.iloc[self.display_table.selection]
+            dfselected = self.dfmapcat.iloc[dfselected.index]
+            # Get the total bounds of your subset
+            minx, miny, maxx, maxy = dfselected.total_bounds
+
+            # Add some padding (optional)
+            padding = 0.1  # adjust as needed
+            minx, miny = minx - padding, miny - padding
+            maxx, maxy = maxx + padding, maxy + padding
+
+            # Update the maps range
+            self.map_features.redim.range(Longitude=(minx, maxx), Latitude=(miny, maxy))
+        except:
+            return
 
     def update_plots(self, event):
         try:
             self.plots_panel.loading = True
             dfselected = self.display_table.value.iloc[self.display_table.selection]
+            # self.update_map_zoom(event)
             plot_panel = self.dataui_manager.create_panel(dfselected)
             if isinstance(self.plots_panel.objects[0], pn.Tabs):
                 tabs = self.plots_panel.objects[0]
@@ -385,6 +443,7 @@ class DataUI(param.Parameterized):
         return about_btn
 
     def create_view(self):
+        main_panel = self.create_data_table(self.dfmapcat)
         control_widgets = self.dataui_manager.get_widgets()
         if hasattr(self, "map_features"):
             map_options = pn.WidgetBox(
@@ -395,13 +454,17 @@ class DataUI(param.Parameterized):
                 self.param.map_marker_category,
                 self.param.query,
             )
-            map_function = pn.bind(
-                self.update_map_features,
-                show_color_by=self.param.show_map_colors,
-                color_by=self.param.map_color_category,
-                show_marker_by=self.param.show_map_markers,
-                marker_by=self.param.map_marker_category,
-                query=self.param.query,
+            self.map_function = pn.panel(
+                pn.bind(
+                    self.update_map_features,
+                    show_color_by=self.param.show_map_colors,
+                    color_by=self.param.map_color_category,
+                    show_marker_by=self.param.show_map_markers,
+                    marker_by=self.param.map_marker_category,
+                    query=self.param.query,
+                    narrow_clicks=self.narrow_button.param.clicks,
+                    reset_clicks=self.reset_button.param.clicks,
+                )
             )
             map_tooltip = pn.widgets.TooltipIcon(
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
@@ -409,7 +472,7 @@ class DataUI(param.Parameterized):
             )
             map_view = fullscreen.FullScreen(
                 pn.Column(
-                    map_function,
+                    self.map_function,
                     map_tooltip,
                     min_width=450,
                     min_height=550,
@@ -424,13 +487,7 @@ class DataUI(param.Parameterized):
             )
         else:
             sidebar_view = pn.Column(pn.Tabs(("Options", control_widgets)))
-        if hasattr(self, "station_select"):
-            show_data_catalog_bound = pn.bind(
-                self.show_data_catalog, index=self.station_select.param.index
-            )
-        else:
-            show_data_catalog_bound = pn.bind(self.show_data_catalog)
-        main_view = pn.Column(show_data_catalog_bound)
+        main_view = pn.Column(pn.Row(main_panel, sizing_mode="stretch_both"))
 
         template = pn.template.VanillaTemplate(
             title="Data User Interface",
