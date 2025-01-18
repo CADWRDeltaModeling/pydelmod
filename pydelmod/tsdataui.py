@@ -59,16 +59,26 @@ class TimeSeriesDataUIManager(DataUIManager):
         default="top_right",
         doc="Legend position",
     )
+    fill_gap = param.Integer(
+        default=0, doc="Fill gaps in data upto this limit, only when a positive integer"
+    )
     do_tidal_filter = param.Boolean(default=False, doc="Apply tidal filter")
-    irreg_interpolation = param.Selector(
+    irregular_curve_connection = param.Selector(
         objects=["steps-post", "steps-pre", "steps-mid", "linear"],
         default="steps-post",
-        doc="Interpolation method for irregular data",
+        doc="Curve connection method for irregular data",
     )
-    period_type_interpolation = param.Selector(
+    regular_curve_connection = param.Selector(
         objects=["linear", "steps-pre", "steps-post", "steps-mid"],
         default="steps-pre",
-        doc="Interpolation method for period type data",
+        doc="Curve connection method for regular period type data",
+    )
+    sensible_range_yaxis = param.Boolean(
+        default=False,
+        doc="Sensible range (in percentile) or auto range for y axis",
+    )
+    sensible_percentile_range = param.Range(
+        default=(0.01, 0.99), bounds=(0, 1), step=0.01, doc="Percentile range"
     )
     file_number_column_name = param.String(default="FILE_NUM")
 
@@ -107,9 +117,13 @@ class TimeSeriesDataUIManager(DataUIManager):
                 self.param.show_legend,
                 self.param.legend_position,
             ),
+            self.param.fill_gap,
             self.param.do_tidal_filter,
-            self.param.irreg_interpolation,
-            self.param.period_type_interpolation,
+            pn.Row(
+                self.param.sensible_range_yaxis, self.param.sensible_percentile_range
+            ),
+            self.param.irregular_curve_connection,
+            self.param.regular_curve_connection,
         )
 
         return control_widgets
@@ -181,6 +195,8 @@ class TimeSeriesDataUIManager(DataUIManager):
                     data = data[
                         (data.index >= time_range[0]) & (data.index <= time_range[1])
                     ]
+                if self.fill_gap > 0:
+                    data = data.interpolate(limit=self.fill_gap)
                 if self.do_tidal_filter and not self.is_irregular(r):
                     data = cosine_lanczos(data, "40h")
             except Exception as e:
@@ -199,9 +215,9 @@ class TimeSeriesDataUIManager(DataUIManager):
                 file_index=file_index,
             )
             if isinstance(data.index, pd.PeriodIndex):
-                crv.opts(opts.Curve(interpolation=self.period_type_interpolation))
+                crv.opts(opts.Curve(interpolation=self.regular_curve_connection))
             if self.is_irregular(r):
-                crv.opts(opts.Curve(interpolation=self.irreg_interpolation))
+                crv.opts(opts.Curve(interpolation=self.irregular_curve_connection))
 
             if unit not in layout_map:
                 layout_map[unit] = []
@@ -211,7 +227,30 @@ class TimeSeriesDataUIManager(DataUIManager):
             station_map[unit].append(self.build_station_name(r))
             self._append_to_title_map(title_map, unit, r)
         title_map = {k: self._create_title(v) for k, v in title_map.items()}
+        if self.sensible_range_yaxis:
+            for unit in layout_map.keys():
+                for crv in layout_map[unit]:
+                    range_map[unit] = self._calculate_range(range_map[unit], crv.data)
         return layout_map, station_map, range_map, title_map
+
+    def _calculate_range(self, current_range, df, factor=0.0):
+        if df.empty:
+            return current_range
+        else:
+            new_range = (
+                df.iloc[:, 0].quantile(list(self.sensible_percentile_range)).values
+            )
+            scaleval = new_range[1] - new_range[0]
+            new_range = [
+                new_range[0] - scaleval * factor,
+                new_range[1] + scaleval * factor,
+            ]
+        if current_range is not None:
+            new_range = [
+                min(current_range[0], new_range[0]),
+                max(current_range[1], new_range[1]),
+            ]
+        return new_range
 
     def create_panel(self, df):
         time_range = self.time_range
