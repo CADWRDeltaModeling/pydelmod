@@ -238,9 +238,21 @@ class DataUI(param.Parameterized):
             self.reset_button_clicks = reset_clicks
         else:
             if narrow_clicks > self.narrow_button_clicks:
-                dfs = self._get_map_catalog().iloc[
-                    self.display_table.current_view.index
-                ]
+                # find if station_id_column is present in the display_table
+                # use the unique station_id_columns in the current view and
+                # filter the map catalog to only show those stations
+                dfmapcat = self._get_map_catalog()
+                if (
+                    self.station_id_column
+                    and self.station_id_column
+                    in self.display_table.current_view.columns
+                ):
+                    station_ids = self.display_table.current_view[
+                        self.station_id_column
+                    ].unique()
+                    dfs = dfmapcat[dfmapcat[self.station_id_column].isin(station_ids)]
+                else:
+                    dfs = dfmapcat.iloc[self.display_table.current_view.index]
                 self.narrow_button_clicks = narrow_clicks
             else:
                 dfs = self._get_map_catalog()
