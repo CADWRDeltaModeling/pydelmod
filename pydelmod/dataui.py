@@ -144,7 +144,7 @@ class DataUI(param.Parameterized):
         self.dfmapcat = self._get_map_catalog()
 
         if isinstance(self.dfcat, gpd.GeoDataFrame):
-            self.tmap = gv.tile_sources.CartoLight
+            self.tmap = gv.tile_sources.CartoLight()
             self.build_map_of_features(self.dfmapcat, crs=self.crs)
         else:
             warnings.warn(
@@ -228,34 +228,23 @@ class DataUI(param.Parameterized):
         show_marker_by,
         marker_by,
         query,
-        narrow_clicks,
-        reset_clicks,
+        filters,
     ):
         query = query.strip()
-        if reset_clicks > self.reset_button_clicks:
-            dfs = self._get_map_catalog()
-            self.station_select.event(index=[])
-            self.reset_button_clicks = reset_clicks
+        dfs = self._get_map_catalog()
+        # select only those rows in dfs that have station_id_column in self.display_table.current_view
+        if (
+            self.station_id_column
+            and self.station_id_column in self.display_table.current_view.columns
+        ):
+            dfs = dfs[
+                dfs[self.station_id_column].isin(
+                    self.display_table.current_view[self.station_id_column]
+                )
+            ]
         else:
-            if narrow_clicks > self.narrow_button_clicks:
-                # find if station_id_column is present in the display_table
-                # use the unique station_id_columns in the current view and
-                # filter the map catalog to only show those stations
-                dfmapcat = self._get_map_catalog()
-                if (
-                    self.station_id_column
-                    and self.station_id_column
-                    in self.display_table.current_view.columns
-                ):
-                    station_ids = self.display_table.current_view[
-                        self.station_id_column
-                    ].unique()
-                    dfs = dfmapcat[dfmapcat[self.station_id_column].isin(station_ids)]
-                else:
-                    dfs = dfmapcat.iloc[self.display_table.current_view.index]
-                self.narrow_button_clicks = narrow_clicks
-            else:
-                dfs = self._get_map_catalog()
+            dfs = dfs.iloc[self.display_table.current_view.index]
+
         try:
             if len(query) > 0:
                 dfs = dfs.query(query)
@@ -278,7 +267,7 @@ class DataUI(param.Parameterized):
                 )
             else:
                 self.map_features = self.map_features.opts(marker="circle")
-        return self.tmap * self.map_features
+        return self.tmap * self.map_features.opts(default_span=15000)
 
     def show_data_catalog(self, index=slice(None)):
         # called when map selects stations
@@ -318,24 +307,14 @@ class DataUI(param.Parameterized):
             show_index=False,
             sizing_mode="stretch_width",
             header_filters=self.dataui_manager.get_table_filters(),
+            page_size=200,
         )
 
         self.plot_button = pn.widgets.Button(
             name="Plot", button_type="primary", icon="chart-line"
         )
         self.plot_button.on_click(self.update_plots)
-        self.narrow_button = pn.widgets.Button(
-            name="Narrow Map",
-            button_type="primary",
-        )
-        self.reset_button = pn.widgets.Button(
-            name="Reset Map",
-            button_type="primary",
-        )
-        self.narrow_button_clicks = 0
-        self.reset_button_clicks = 0
         self.download_button = self.create_save_button()
-        # create toggle checkbox for narrow map
         self.plot_panel = pn.panel(
             hv.Div("<h3>Select rows from table and click on button</h3>"),
             sizing_mode="stretch_both",
@@ -347,8 +326,6 @@ class DataUI(param.Parameterized):
         self.table_panel = pn.Row(
             self.plot_button,
             self.download_button,
-            self.narrow_button,
-            self.reset_button,
             pn.layout.HSpacer(),
         )
         if hasattr(self, "station_select"):
@@ -474,8 +451,7 @@ class DataUI(param.Parameterized):
                     show_marker_by=self.param.show_map_markers,
                     marker_by=self.param.map_marker_category,
                     query=self.param.query,
-                    narrow_clicks=self.narrow_button.param.clicks,
-                    reset_clicks=self.reset_button.param.clicks,
+                    filters=self.display_table.param.filters,
                 )
             )
             map_tooltip = pn.widgets.TooltipIcon(
