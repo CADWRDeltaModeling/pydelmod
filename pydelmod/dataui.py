@@ -339,24 +339,6 @@ class DataUI(param.Parameterized):
         gspec[6:15, 0:10] = fullscreen.FullScreen(self.plots_panel)
         return gspec
 
-    def update_map_zoom(self, event):
-        # update map extents based on current selection of table
-        try:
-            dfselected = self.display_table.value.iloc[self.display_table.selection]
-            dfselected = self.dfmapcat.iloc[dfselected.index]
-            # Get the total bounds of your subset
-            minx, miny, maxx, maxy = dfselected.total_bounds
-
-            # Add some padding (optional)
-            padding = 0.1  # adjust as needed
-            minx, miny = minx - padding, miny - padding
-            maxx, maxy = maxx + padding, maxy + padding
-
-            # Update the maps range
-            self.map_features.redim.range(Longitude=(minx, maxx), Latitude=(miny, maxy))
-        except:
-            return
-
     def update_plots(self, event):
         try:
             self.plots_panel.loading = True
