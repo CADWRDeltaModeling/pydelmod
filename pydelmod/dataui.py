@@ -389,18 +389,27 @@ class DataUI(param.Parameterized):
             embed=False,
         )
 
+    def get_version(self):
+        try:
+            return self.dataui_manager.get_version()
+        except Exception as e:
+            return "Unknown version"
+
     def get_about_text(self):
-        version = "0.1.0"
+        try:
+            return self.dataui_manager.get_about_text()
+        except Exception as e:
+            version = self.get_version()
 
-        # insert app version with date time of last commit and commit id
-        version_string = f"Data UI: {version}"
-        about_text = f"""
-        ## App version:
-        ### {version}
+            # insert app version with date time of last commit and commit id
+            version_string = f"Data UI: {version}"
+            about_text = f"""
+            ## App version:
+            ### {version}
 
-        ## An App to view data using Holoviews and Panel
-        """
-        return about_text
+            ## An App to view data using Holoviews and Panel
+            """
+            return about_text
 
     def create_about_button(self, template):
         about_btn = pn.widgets.Button(
