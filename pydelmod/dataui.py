@@ -246,7 +246,7 @@ class DataUI(param.Parameterized):
                 )
             ]
         else:
-            dfs = dfs.iloc[self.display_table.current_view.index]
+            dfs = dfs.loc[self.display_table.current_view.index]
             merged_view = self.display_table.selected_dataframe.merge(
                 self.display_table.current_view.reset_index(drop=True).reset_index(),
                 how="inner",
