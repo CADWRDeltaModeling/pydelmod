@@ -214,6 +214,20 @@ class CalibPlotUIManager(DataUIManager):
             "TEMP": "triangle",
         }
 
+    def get_version(self):
+        return "1.0.0-2/3/2025"
+
+    def get_about_text(self):
+        return """
+        # Calibration Plot UI for DSM2
+
+        This tool allows users to visualize and analyze calibration plots for the DSM2 model. 
+
+        Users can load configuration files, filter data, and generate plots for various locations and variables. 
+
+        The UI provides interactive controls and map-based visualizations to facilitate the calibration process.
+        """
+
 
 import click
 
