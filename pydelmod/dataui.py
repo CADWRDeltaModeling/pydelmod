@@ -120,6 +120,8 @@ class DataUI(param.Parameterized):
     show_map_markers = param.Boolean(
         default=False, doc="Show map markers for selected category"
     )
+    map_default_span = param.Number(default=15000, doc="Default span for map zoom")
+
     query = param.String(
         default="",
         doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
@@ -146,6 +148,10 @@ class DataUI(param.Parameterized):
         if isinstance(self.dfcat, gpd.GeoDataFrame):
             self.tmap = gv.tile_sources.CartoLight()
             self.build_map_of_features(self.dfmapcat, crs=self.crs)
+            if hasattr(self, "station_select"):
+                self.station_select.source = self.map_features
+            else:
+                self.station_select = streams.Selection1D(source=self.map_features)
         else:
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
@@ -215,10 +221,6 @@ class DataUI(param.Parameterized):
         self.map_features = self.map_features.opts(
             active_tools=["wheel_zoom"], responsive=True
         )
-        if hasattr(self, "station_select"):
-            self.station_select.source = self.map_features
-        else:
-            self.station_select = streams.Selection1D(source=self.map_features)
         return self.map_features
 
     def update_map_features(
@@ -229,6 +231,7 @@ class DataUI(param.Parameterized):
         marker_by,
         query,
         filters,
+        selection,
     ):
         query = query.strip()
         dfs = self._get_map_catalog()
@@ -244,6 +247,11 @@ class DataUI(param.Parameterized):
             ]
         else:
             dfs = dfs.iloc[self.display_table.current_view.index]
+            merged_view = self.display_table.selected_dataframe.merge(
+                self.display_table.current_view.reset_index(drop=True).reset_index(),
+                how="inner",
+            )
+            current_selection = merged_view["index"].to_list()
 
         try:
             if len(query) > 0:
@@ -257,7 +265,6 @@ class DataUI(param.Parameterized):
         self.map_color_category = color_by
         self.show_map_colors = show_color_by
         self.build_map_of_features(dfs, self.crs)
-        self.map_features.data = dfs
         if isinstance(self.map_features, gv.Points):
             if show_marker_by:
                 self.map_features = self.map_features.opts(
@@ -267,12 +274,13 @@ class DataUI(param.Parameterized):
                 )
             else:
                 self.map_features = self.map_features.opts(marker="circle")
-        return self.tmap * self.map_features.opts(default_span=15000)
+        self.map_features = self.map_features.opts(
+            default_span=self.map_default_span,  # for max zoom this is the default span in meters
+            selected=current_selection,
+        )
+        return self.map_features
 
-    def show_data_catalog(self, index=slice(None)):
-        # called when map selects stations
-        if index == []:
-            index = slice(None)
+    def select_data_catalog(self, index=[]):
         # select rows from self.dfcat where station_id is in dfs station_ids
         if self.station_id_column and self.station_id_column in self.dfcat.columns:
             dfs = (
@@ -282,24 +290,19 @@ class DataUI(param.Parameterized):
                 .first()
                 .reset_index()
             )
-            dfs = self.dfcat[
+            selected_indices = self.dfcat[
                 self.dfcat[self.station_id_column].isin(dfs[self.station_id_column])
-            ]
+            ].index.to_list()
         else:
-            dfs = self.dfcat.iloc[index]
-        dfs = dfs[self.dataui_manager.get_table_columns()]
-        # return a UI with controls to plot and show data
-        return self.update_data_table(dfs)
-
-    def update_data_table(self, dfs):
-        if not hasattr(self, "display_table"):
-            print("Warning: display_table not found")
-        else:
-            self.display_table.value = dfs
-        return self.display_table
+            dfs = self.map_features.dframe().iloc[index]
+            selected_indices = self.dfcat.reset_index().merge(dfs)["index"].to_list()
+        self.display_table.param.set_param(
+            selection=selected_indices
+        )  # set the selection in the table without triggering the callback
 
     def create_data_table(self, dfs):
         column_width_map = self.dataui_manager.get_table_column_width_map()
+        hidden_columns = set(dfs.columns) - set(column_width_map.keys())
         self.display_table = pn.widgets.Tabulator(
             dfs,
             disabled=True,
@@ -308,6 +311,7 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self.dataui_manager.get_table_filters(),
             page_size=200,
+            hidden_columns=list(hidden_columns),
         )
 
         self.plot_button = pn.widgets.Button(
@@ -328,14 +332,8 @@ class DataUI(param.Parameterized):
             self.download_button,
             pn.layout.HSpacer(),
         )
-        if hasattr(self, "station_select"):
-            show_data_catalog_bound = pn.bind(
-                self.show_data_catalog, index=self.station_select.param.index
-            )
-        else:
-            show_data_catalog_bound = pn.bind(self.show_data_catalog)
         gspec[0, 0:5] = self.table_panel
-        gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(show_data_catalog_bound))
+        gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
         gspec[6:15, 0:10] = fullscreen.FullScreen(self.plots_panel)
         return gspec
 
@@ -343,7 +341,6 @@ class DataUI(param.Parameterized):
         try:
             self.plots_panel.loading = True
             dfselected = self.display_table.value.iloc[self.display_table.selection]
-            # self.update_map_zoom(event)
             plot_panel = self.dataui_manager.create_panel(dfselected)
             if isinstance(self.plots_panel.objects[0], pn.Tabs):
                 tabs = self.plots_panel.objects[0]
@@ -434,7 +431,7 @@ class DataUI(param.Parameterized):
                 self.param.map_marker_category,
                 self.param.query,
             )
-            self.map_function = pn.panel(
+            self.map_function = hv.DynamicMap(
                 pn.bind(
                     self.update_map_features,
                     show_color_by=self.param.show_map_colors,
@@ -443,15 +440,18 @@ class DataUI(param.Parameterized):
                     marker_by=self.param.map_marker_category,
                     query=self.param.query,
                     filters=self.display_table.param.filters,
+                    selection=self.display_table.param.selection,
                 )
             )
+            self.station_select.source = self.map_function
+            self.station_select.param.watch_values(self.select_data_catalog, "index")
             map_tooltip = pn.widgets.TooltipIcon(
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
             map_view = fullscreen.FullScreen(
                 pn.Column(
-                    self.map_function,
+                    self.tmap * self.map_function,
                     map_tooltip,
                     min_width=450,
                     min_height=550,
