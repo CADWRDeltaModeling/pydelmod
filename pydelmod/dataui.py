@@ -158,7 +158,10 @@ class DataUI(param.Parameterized):
             )
 
     def _get_map_catalog(self):
-        if self.station_id_column and self.station_id_column in self.dfcat.columns:
+        if (
+            isinstance(self.station_id_column, str)
+            and self.station_id_column in self.dfcat.columns
+        ):
             dfx = self.dfcat.groupby(self.station_id_column).first().reset_index()
             if isinstance(dfx, gpd.GeoDataFrame):
                 dfx = dfx.dropna(subset=["geometry"])
@@ -240,22 +243,29 @@ class DataUI(param.Parameterized):
             self.station_id_column
             and self.station_id_column in self.display_table.current_view.columns
         ):
-            dfs = dfs[
+            current_selected = dfs[
+                dfs[self.station_id_column].isin(
+                    self.display_table.selected_dataframe[self.station_id_column]
+                )
+            ]
+            current_view = dfs[
                 dfs[self.station_id_column].isin(
                     self.display_table.current_view[self.station_id_column]
                 )
             ]
+            current_selection = list(
+                current_view.index.get_indexer(current_selected.index)
+            )
         else:
-            dfs = dfs.loc[self.display_table.current_view.index]
-        merged_view = self.display_table.selected_dataframe.merge(
-            self.display_table.current_view.reset_index(drop=True).reset_index(),
-            how="inner",
-        )
-        current_selection = merged_view["index"].to_list()
+            current_view = self.display_table.current_view
+            current_selected = self.display_table.selected_dataframe
+            current_selection = list(
+                current_view.index.get_indexer(current_selected.index)
+            )
 
         try:
             if len(query) > 0:
-                dfs = dfs.query(query)
+                current_view = current_view.query(query)
         except Exception as e:
             str_stack = full_stack()
             logger.error(str_stack)
@@ -264,7 +274,7 @@ class DataUI(param.Parameterized):
             )
         self.map_color_category = color_by
         self.show_map_colors = show_color_by
-        self.build_map_of_features(dfs, self.crs)
+        self.build_map_of_features(current_view, self.crs)
         if isinstance(self.map_features, gv.Points):
             if show_marker_by:
                 self.map_features = self.map_features.opts(
@@ -290,15 +300,21 @@ class DataUI(param.Parameterized):
                 .first()
                 .reset_index()
             )
-            selected_indices = self.dfcat[
-                self.dfcat[self.station_id_column].isin(dfs[self.station_id_column])
+            selected_indices = self.display_table.selected_dataframe[
+                self.display_table.selected_dataframe[self.station_id_column].isin(
+                    dfs[self.station_id_column]
+                )
             ].index.to_list()
+            current_view_selected_indices = self.display_table.current_view[
+                self.display_table.current_view[self.station_id_column].isin(
+                    dfs[self.station_id_column]
+                )
+            ].index.to_list()
+            selected_indices = current_view_selected_indices
         else:
             dfs = self.map_features.dframe().iloc[index]
             selected_indices = self.dfcat.reset_index().merge(dfs)["index"].to_list()
-        self.display_table.param.set_param(
-            selection=selected_indices
-        )  # set the selection in the table without triggering the callback
+        self.display_table.param.set_param(selection=selected_indices)
 
     def create_data_table(self, dfs):
         column_width_map = self.dataui_manager.get_table_column_width_map()
