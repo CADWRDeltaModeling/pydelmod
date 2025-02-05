@@ -311,6 +311,9 @@ class DataUI(param.Parameterized):
                 )
             ].index.to_list()
             selected_indices = current_view_selected_indices
+            # see if the display table already has these indices selected and don't propagate the selection
+            if set(selected_indices) & set(self.display_table.selection):
+                return
         else:
             dfs = self.map_features.dframe().iloc[index]
             selected_indices = self.dfcat.reset_index().merge(dfs)["index"].to_list()
@@ -318,7 +321,7 @@ class DataUI(param.Parameterized):
 
     def create_data_table(self, dfs):
         column_width_map = self.dataui_manager.get_table_column_width_map()
-        hidden_columns = set(dfs.columns) - set(column_width_map.keys())
+        dfs = dfs[self.dataui_manager.get_table_columns()]
         self.display_table = pn.widgets.Tabulator(
             dfs,
             disabled=True,
@@ -327,7 +330,6 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self.dataui_manager.get_table_filters(),
             page_size=200,
-            hidden_columns=list(hidden_columns),
         )
 
         self.plot_button = pn.widgets.Button(
@@ -436,7 +438,7 @@ class DataUI(param.Parameterized):
         return about_btn
 
     def create_view(self):
-        main_panel = self.create_data_table(self.dfmapcat)
+        main_panel = self.create_data_table(self.dfcat)
         control_widgets = self.dataui_manager.get_widgets()
         if hasattr(self, "map_features"):
             map_options = pn.WidgetBox(
