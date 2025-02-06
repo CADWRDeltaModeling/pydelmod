@@ -257,7 +257,7 @@ class DataUI(param.Parameterized):
                 current_view.index.get_indexer(current_selected.index)
             )
         else:
-            current_view = self.display_table.current_view
+            current_view = dfs.loc[self.display_table.current_view.index]
             current_selected = self.display_table.selected_dataframe
             current_selection = list(
                 current_view.index.get_indexer(current_selected.index)
@@ -274,7 +274,7 @@ class DataUI(param.Parameterized):
             )
         self.map_color_category = color_by
         self.show_map_colors = show_color_by
-        self.build_map_of_features(current_view, self.crs)
+        self.map_features = self.build_map_of_features(current_view, self.crs)
         if isinstance(self.map_features, gv.Points):
             if show_marker_by:
                 self.map_features = self.map_features.opts(
