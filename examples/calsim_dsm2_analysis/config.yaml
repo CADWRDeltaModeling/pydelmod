@@ -1,0 +1,29 @@
+output_locations: "info/DSM2_bnd_loc.csv"
+scenarios:
+  - name: "1ex_2020c"
+    fpath: "scenarios/1ex_2020c.dss"
+  - name: "9b_v2_2020"
+    fpath: "scenarios/9b_v2_2020.dss"
+variable: "FLOW"
+interval: "1MON"
+calsim_file: "scenarios/calsim.dss"
+period: 
+  - "1921-01-01"
+  - "2020-09-30"
+plots:
+  - type: "plot_step_w_variable_station_filters"
+    options:
+      yaxis_name: "Monthly Mean Flow (cfs)"
+      title: "Flow Monthly Mean Timelines"
+  - type: "plot_bar_monthly_w_controls"
+    options:
+      yaxis_name: "Monthly Mean Flow (cfs)"
+      title: "Flow Monthly Barcharts of Monthly Mean"
+  - type: "plot_exceedance_w_variable_station_filters"
+    options:
+      yaxis_name: "Monthly Mean Flow (cfs)"
+      title: "Flow Monthly Mean Exceedances"
+  - type: "plot_box_w_variable_station_filters"
+    options:
+      xaxis_name: "Monthly Mean Flow (cfs)"
+      title: "Flow Monthly Mean Box-Whiskers"

@@ -276,6 +276,23 @@ def stations_output_file(
     )
 
 
+@click.command()
+@click.argument(
+    "config_file",
+    type=click.Path(dir_okay=False, exists=True, readable=True),
+)
+def dsm2_analyze(config_file="config.yaml"):
+    """
+    Run DSM2 analysis based on the configuration file
+
+    Keyword Arguments:
+        config_file -- Configuration file for defining scenarios (default: {"config.yaml"})
+    """
+    from pydelmod.nbplot import calsim_dsm2_analysis
+
+    calsim_dsm2_analysis.main(config_file)
+
+
 from pydelmod import geoheatmap
 from pydelmod import dssui
 from pydelmod import dsm2gis
@@ -304,6 +321,7 @@ main.add_command(dsm2gis.geolocate_output_locations)
 main.add_command(deltacdui.dcd_geomap)
 main.add_command(calibplotui.calib_plot_ui)
 main.add_command(channel_orient.generate_channel_orientation)
+main.add_command(dsm2_analyze)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
