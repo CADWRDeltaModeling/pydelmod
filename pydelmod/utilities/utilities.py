@@ -6,7 +6,10 @@ import numpy as np
 import pandas as pd
 import netCDF4 as nc
 import pyhecdss
+import diskcache
+from diskcache import Cache
 
+cache = Cache()
 __all__ = [
     "read_hist_wateryear_types",
     "read_calsim_wateryear_types",
@@ -129,6 +132,7 @@ def read_calsim_wateryear_types(fpath):
     return df
 
 
+@cache.memoize()
 def read_calsim_sacvalley_table(fpath):
     """Read a table containing Sacramento Valley indices from CalSim II SacValleyIndex table file.
     The table file is found in "CONV/Lookup" directory of a CalSim II study.
@@ -155,6 +159,7 @@ def read_calsim_sacvalley_table(fpath):
     return df
 
 
+@cache.memoize()
 def read_calsim3_wateryear_types(fpath, bparts_to_read="WYT_SAC_"):
     """Read Calsim3 output file dv.dss
     'WYT_SAC_' as Sac Water Year Type
@@ -184,6 +189,7 @@ def read_calsim3_wateryear_types(fpath, bparts_to_read="WYT_SAC_"):
     return df
 
 
+@cache.memoize()
 def read_regulations(fpath, df_wyt):
     """Read regulations and create irregular time series DataFrame from them.
 
@@ -236,6 +242,7 @@ def read_regulations(fpath, df_wyt):
     return pd.concat(dfs)
 
 
+@cache.memoize()
 def read_D1641FWS_conditional(fpath1, fpath2, df, df_sri, df_wyt):
     """Update regulation time series DataFrame with D1641 FWS conditional logic.
 
@@ -346,10 +353,15 @@ def read_D1641FWS_conditional(fpath1, fpath2, df, df_sri, df_wyt):
     return df
 
 
-def generate_regulation_timeseries(df_reg, df, freq=None):
+def get_timerange_from_df(df):
     time = df["time"].unique()
-    t_begin = time.min()
-    t_end = time.max()
+    return time.min(), time.max()
+
+
+@cache.memoize()
+def generate_regulation_timeseries(df_reg, df, freq=None):
+    # FIXME: Remove df from the generate call
+    t_begin, t_end = get_timerange_from_df(df)
     if freq is None:
         raise NotImplementedError("Auto interval detection not implemented yet")
     dfs = []
@@ -364,7 +376,7 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
             row_i = df_reg_station[mask].iloc[i]
             row_next = df_reg_station[mask].iloc[i + 1]
             r = pd.date_range(
-                start=row_i.name, end=row_next.name, freq=freq, closed="left"
+                start=row_i.name, end=row_next.name, freq=freq, inclusive="left"
             ).to_list()
             v = np.full_like(r, row_i["value"])
             times.extend(r)
@@ -377,6 +389,7 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
     return pd.concat(dfs)
 
 
+@cache.memoize()
 def read_dss_to_df(
     fpath,
     bparts_to_read=None,
@@ -447,12 +460,15 @@ def read_dss_to_df(
             data["cunits"] = cunits
             data["ctype"] = ctype
         dfs.append(data)
-    if dfs is None:
-        raise ValueError("No timeseries is read")
+    if dfs is None or len(dfs) == 0:
+        raise ValueError(
+            f"No timeseries is read: fpath: {fpath}, bparts: {bparts_to_read}, cparts:{cparts_to_read}, eparts: {eparts_to_read}, fparts: {fparts_to_read}, {start_date_str}, {end_date_str}"
+        )
     df = pd.concat(dfs)
     return df
 
 
+@cache.memoize()
 def generate_regulation_timeseries_calsim(fpath, freq="1MON"):
     """Generate regulation timeseries (monthly)
     from Calsim output dv dss
@@ -513,6 +529,7 @@ def generate_regulation_timeseries_calsim(fpath, freq="1MON"):
     return df_stds
 
 
+@cache.memoize()
 def prep_df(scenarios, sta, var, intvl, df_wyt, period, src="ALL"):
     """Generate DataFrame of required station + variable + time interval + time period
     from sets of DSM2 input or output or postprocess dss
@@ -564,3 +581,62 @@ def prep_df(scenarios, sta, var, intvl, df_wyt, period, src="ALL"):
     df = df[df["time"] <= period[1]]
 
     return df
+
+
+def sum_only_more_than_14days(series):
+    """
+    Count days when the regulation is met.
+    According to D1641:
+    Maximum mean daily 150 mg/l Cl−for at least the number of days shown
+    during the Calendar Year.
+    Must be provided in intervals of not less than two weeks duration.
+
+    Arguments:
+        series -- series of values
+
+    Returns:
+        int -- the number of days when the regulation is met
+    """
+    total = 0
+    cumsum = 0
+    for x in series:
+        if x:
+            cumsum += 1
+        else:
+            if cumsum >= 14:
+                total += cumsum
+            cumsum = 0
+    if cumsum >= 14:
+        total += cumsum
+    return total
+
+
+def calculate_days_standard_met(df, max_value=150):
+    df_cl = df.copy
+    df_cl["cl_minus_reg"] = df_cl.apply(lambda x: x["value"] - max_value, axis=1)
+    df_cl["cl_meet"] = df_cl["cl_minus_reg"].map(lambda x: x <= 0)
+    df_clpl = (
+        df_cl.groupby(["scenario_name", "year"])["cl_meet"]
+        .agg(sum_only_more_than_14days)
+        .to_frame()
+    )
+    df_clpl["n_records"] = df_cl.groupby(["scenario_name", "year"])["year"].count()
+    df_clpl.reset_index(inplace=True)
+    import calendar
+
+    df_clpl["days_in_year"] = df_clpl["year"].map(
+        lambda x: 366 if calendar.isleap(x) else 365
+    )
+    df_clpl = df_clpl[df_clpl["n_records"] == df_clpl["days_in_year"]]
+    df_clpl["time"] = df_clpl["year"]
+    df_clpl.time = pd.to_datetime(df_clpl.time, format="%Y")
+    df_clpl["value"] = df_clpl["cl_meet"]
+    df_clpl["station"] = "ROLD024"
+    df_clpl["variable"] = "Chloride-MEAN"
+    df_clpl = df_clpl.merge(
+        df_cl[["time", "scenario_name", "sac_yrtype"]],
+        on=["time", "scenario_name"],
+        how="left",
+    )
+
+    return df_clpl
