@@ -112,7 +112,11 @@ class SchismStudy(param.Parameterized):
         **kwargs,
     ):
         self.base_dir = pathlib.Path(base_dir)
-        self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
+        try:
+            self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
+        except:
+            logger.warning("Could not create cache. Using temporary cache.")
+            self.cache = diskcache.Cache()
         self.reftime = pd.Timestamp(reftime)
         self.flux_xsect_file = self.interpret_file_relative_to(
             self.base_dir, pathlib.Path(flux_xsect_file)
