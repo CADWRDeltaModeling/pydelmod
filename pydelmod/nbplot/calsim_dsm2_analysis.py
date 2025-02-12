@@ -153,7 +153,12 @@ def main(config_file):
                 )
                 args = (df, df_stations, options)
             plot = plot_func(*args)
-            mainPanel.append((options["title"], plot))
+            mainPanel.append(
+                (
+                    options["title"],
+                    pn.Column(pn.pane.Markdown(f"## {options['title']}"), plot),
+                )
+            )
         except Exception as e:
             import traceback
 
