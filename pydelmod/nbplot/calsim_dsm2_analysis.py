@@ -32,6 +32,10 @@ def load_config(config_file):
         scenario["fpath"] = str(config_dir / scenario["fpath"])
     # change calsim_file to absolute path relative to config_dir
     config["calsim_file"] = str(config_dir / config["calsim_file"])
+    if "delta_standards" in config:
+        for standard in config["delta_standards"]:
+            standard["fpath"] = str(config_dir / standard["fpath"])
+
     return config
 
 
