@@ -9,7 +9,7 @@ import pyhecdss
 import diskcache
 from diskcache import Cache
 
-cache = Cache()
+cache = Cache(".nbplot_cache")
 __all__ = [
     "read_hist_wateryear_types",
     "read_calsim_wateryear_types",
@@ -132,7 +132,7 @@ def read_calsim_wateryear_types(fpath):
     return df
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def read_calsim_sacvalley_table(fpath):
     """Read a table containing Sacramento Valley indices from CalSim II SacValleyIndex table file.
     The table file is found in "CONV/Lookup" directory of a CalSim II study.
@@ -159,7 +159,7 @@ def read_calsim_sacvalley_table(fpath):
     return df
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def read_calsim3_wateryear_types(fpath, bparts_to_read="WYT_SAC_"):
     """Read Calsim3 output file dv.dss
     'WYT_SAC_' as Sac Water Year Type
@@ -189,7 +189,7 @@ def read_calsim3_wateryear_types(fpath, bparts_to_read="WYT_SAC_"):
     return df
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def read_regulations(fpath, df_wyt):
     """Read regulations and create irregular time series DataFrame from them.
 
@@ -242,7 +242,7 @@ def read_regulations(fpath, df_wyt):
     return pd.concat(dfs)
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def read_D1641FWS_conditional(fpath1, fpath2, df, df_sri, df_wyt):
     """Update regulation time series DataFrame with D1641 FWS conditional logic.
 
@@ -358,7 +358,7 @@ def get_timerange_from_df(df):
     return time.min(), time.max()
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def generate_regulation_timeseries(df_reg, df, freq=None):
     # FIXME: Remove df from the generate call
     t_begin, t_end = get_timerange_from_df(df)
@@ -389,7 +389,7 @@ def generate_regulation_timeseries(df_reg, df, freq=None):
     return pd.concat(dfs)
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def read_dss_to_df(
     fpath,
     bparts_to_read=None,
@@ -468,7 +468,7 @@ def read_dss_to_df(
     return df
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def generate_regulation_timeseries_calsim(fpath, freq="1MON"):
     """Generate regulation timeseries (monthly)
     from Calsim output dv dss
@@ -529,7 +529,7 @@ def generate_regulation_timeseries_calsim(fpath, freq="1MON"):
     return df_stds
 
 
-@cache.memoize()
+@cache.memoize(expire=120)
 def prep_df(scenarios, sta, var, intvl, df_wyt, period, src="ALL"):
     """Generate DataFrame of required station + variable + time interval + time period
     from sets of DSM2 input or output or postprocess dss
