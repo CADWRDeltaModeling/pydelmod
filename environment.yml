@@ -55,8 +55,8 @@ dependencies:
   - lxml
   - black
   - tabulate
-  - pip:
-    - -U kaleido # image export for plotly
+  #- pip:
+  #  - -U kaleido # image export for plotly
 # pip install pydelmod and pydsm from github. use the -e flag to install in editable mode as indicated below
 #  - pip:
 #     - -e git+https://github.com/CADWRDeltaModeling/pydelmod#egg=pydelmod
