@@ -243,9 +243,14 @@ class DataUI(param.Parameterized):
             self.station_id_column
             and self.station_id_column in self.display_table.current_view.columns
         ):
+            current_selection = self.display_table.current_view.index.intersection(
+                selection
+            )
             current_selected = dfs[
                 dfs[self.station_id_column].isin(
-                    self.display_table.selected_dataframe[self.station_id_column]
+                    self.display_table.current_view.loc[current_selection][
+                        self.station_id_column
+                    ]
                 )
             ]
             current_view = dfs[
@@ -284,40 +289,45 @@ class DataUI(param.Parameterized):
                 )
             else:
                 self.map_features = self.map_features.opts(marker="circle")
-        self.map_features = self.map_features.opts(
-            default_span=self.map_default_span,  # for max zoom this is the default span in meters
-            selected=current_selection,
-        )
+        with param.discard_events(self.station_select):
+            self.map_features = self.map_features.opts(
+                default_span=self.map_default_span,  # for max zoom this is the default span in meters
+                selected=current_selection,
+            )
         return self.map_features
 
     def select_data_catalog(self, index=[]):
         # select rows from self.dfcat where station_id is in dfs station_ids
-        if self.station_id_column and self.station_id_column in self.dfcat.columns:
-            dfs = (
-                self.map_features.dframe()
-                .iloc[index]
-                .groupby(self.station_id_column)
-                .first()
-                .reset_index()
+        idcol = self.station_id_column
+        table = self.display_table
+        if idcol and idcol in self.dfcat.columns:
+            # get station ids from the map_features being displayed
+            stations_map_selected = (
+                self.map_features.dframe().iloc[index][idcol].unique()
             )
-            selected_indices = self.display_table.selected_dataframe[
-                self.display_table.selected_dataframe[self.station_id_column].isin(
-                    dfs[self.station_id_column]
-                )
+            # get the stations selected in table already
+            stations_table_selected = table.selected_dataframe[idcol].unique()
+            # get stations in stations_map_selected that are not in stations_selected
+            stations_to_be_selected = list(
+                set(stations_map_selected) - set(stations_table_selected)
+            )
+            # get the indices of the stations that are not in the selected stations in the current view
+            current_view_selected_indices = table.current_view[
+                table.current_view[idcol].isin(stations_to_be_selected)
             ].index.to_list()
-            current_view_selected_indices = self.display_table.current_view[
-                self.display_table.current_view[self.station_id_column].isin(
-                    dfs[self.station_id_column]
-                )
-            ].index.to_list()
-            selected_indices = current_view_selected_indices
-            # see if the display table already has these indices selected and don't propagate the selection
-            if set(selected_indices) & set(self.display_table.selection):
-                return
+
+            keep_selected_from_map = table.selected_dataframe[
+                table.selected_dataframe[idcol].isin(stations_map_selected)
+            ].index
+
+            selected_indices = current_view_selected_indices + list(
+                keep_selected_from_map
+            )
         else:
             dfs = self.map_features.dframe().iloc[index]
             selected_indices = self.dfcat.reset_index().merge(dfs)["index"].to_list()
-        self.display_table.param.set_param(selection=selected_indices)
+        # with param.discard_events(table.param.selection):
+        table.param.update(selection=selected_indices)
 
     def create_data_table(self, dfs):
         column_width_map = self.dataui_manager.get_table_column_width_map()
@@ -330,6 +340,7 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self.dataui_manager.get_table_filters(),
             page_size=200,
+            configuration={"headerFilterLiveFilterDelay": 800},
         )
 
         self.plot_button = pn.widgets.Button(

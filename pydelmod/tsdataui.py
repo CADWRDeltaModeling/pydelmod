@@ -176,6 +176,9 @@ class TimeSeriesDataUIManager(DataUIManager):
     def is_irregular(self, r):
         raise NotImplementedError("Method is_irregular not implemented")
 
+    def _get_data_for_time_range(self, r, time_range):
+        raise NotImplementedError("Method _get_data_for_time_range not implemented")
+
     def create_layout(self, df, time_range):
         layout_map = {}
         title_map = {}
