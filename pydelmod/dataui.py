@@ -243,14 +243,9 @@ class DataUI(param.Parameterized):
             self.station_id_column
             and self.station_id_column in self.display_table.current_view.columns
         ):
-            current_selection = self.display_table.current_view.index.intersection(
-                selection
-            )
             current_selected = dfs[
                 dfs[self.station_id_column].isin(
-                    self.display_table.current_view.loc[current_selection][
-                        self.station_id_column
-                    ]
+                    self.dfcat.iloc[selection][self.station_id_column]
                 )
             ]
             current_view = dfs[
@@ -320,9 +315,10 @@ class DataUI(param.Parameterized):
                 table.selected_dataframe[idcol].isin(stations_map_selected)
             ].index
 
-            selected_indices = current_view_selected_indices + list(
-                keep_selected_from_map
+            i_selected_indices = list(
+                map(int, self.dfcat.index.get_indexer(current_view_selected_indices))
             )
+            selected_indices = i_selected_indices + list(keep_selected_from_map)
         else:
             dfs = self.map_features.dframe().iloc[index]
             selected_indices = self.dfcat.reset_index().merge(dfs)["index"].to_list()
