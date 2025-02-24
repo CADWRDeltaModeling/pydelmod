@@ -178,16 +178,20 @@ class DataUI(param.Parameterized):
         # this is useful when we have multiple rows per station
         hover = HoverTool(tooltips=tooltips)
         # check if the dfmap is a geodataframe
-        if isinstance(dfmap, gpd.GeoDataFrame):
-            geom_type = dfmap.geometry.iloc[0].geom_type
-            if geom_type == "Point":
-                self.map_features = gv.Points(dfmap, crs=crs)
-            elif geom_type == "LineString":
-                self.map_features = gv.Path(dfmap, crs=crs)
-            elif geom_type == "Polygon":
-                self.map_features = gv.Polygons(dfmap, crs=crs)
-            else:  # pragma: no cover
-                raise "Unknown geometry type " + geom_type
+        try:
+            if isinstance(dfmap, gpd.GeoDataFrame):
+                geom_type = dfmap.geometry.iloc[0].geom_type
+                if geom_type == "Point":
+                    self.map_features = gv.Points(dfmap, crs=crs)
+                elif geom_type == "LineString":
+                    self.map_features = gv.Path(dfmap, crs=crs)
+                elif geom_type == "Polygon":
+                    self.map_features = gv.Polygons(dfmap, crs=crs)
+                else:  # pragma: no cover
+                    raise "Unknown geometry type " + geom_type
+        except Exception as e:
+            logger.error(f"Error building map of features: {e}")
+            self.map_features = gv.Points(dfmap, crs=crs)
         if self.show_map_colors:
             self.map_features = self.map_features.opts(
                 color=dim(self.map_color_category).categorize(
@@ -253,16 +257,17 @@ class DataUI(param.Parameterized):
                     self.display_table.current_view[self.station_id_column]
                 )
             ]
-            current_selection = list(
-                current_view.index.get_indexer(current_selected.index)
-            )
+            current_selection = current_view.index.get_indexer(current_selected.index)
+
+            # Remove -1 values
+            current_selection = current_selection[current_selection != -1]
+            current_selection = list(map(int, current_selection))
         else:
             current_view = dfs.loc[self.display_table.current_view.index]
             current_selected = self.display_table.selected_dataframe
             current_selection = list(
                 current_view.index.get_indexer(current_selected.index)
             )
-
         try:
             if len(query) > 0:
                 current_view = current_view.query(query)
