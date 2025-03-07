@@ -138,11 +138,11 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
 
     def get_map_color_columns(self):
         """return the columns that can be used to color the map"""
-        return ["max_year"]
+        return ["variable"]
 
     def get_map_marker_columns(self):
         """return the columns that can be used to color the map"""
-        return ["max_year"]
+        return ["variable", "unit"]
 
     def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
