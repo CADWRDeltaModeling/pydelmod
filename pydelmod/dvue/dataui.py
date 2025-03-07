@@ -23,6 +23,7 @@ import panel as pn
 pn.extension("tabulator", notifications=True, design="native")
 #
 from . import fullscreen
+from .actions import PlotAction, DownloadAction, PermalinkAction
 
 from bokeh.models import HoverTool
 from bokeh.core.enums import MarkerType
@@ -30,27 +31,11 @@ from bokeh.core.enums import MarkerType
 import logging
 
 import urllib.parse
-import json
+from .utils import full_stack
 
 # setup logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-# from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
-def full_stack():
-    import traceback, sys
-
-    exc = sys.exc_info()[0]
-    stack = traceback.extract_stack()[:-1]  # last one would be full_stack()
-    if exc is not None:  # i.e. an exception is present
-        del stack[-1]  # remove call of full_stack, the printed exception
-        # will contain the caught exception caller instead
-    trc = "Traceback (most recent call last):\n"
-    stackstr = trc + "".join(traceback.format_list(stack))
-    if exc is not None:
-        stackstr += "  " + traceback.format_exc().lstrip(trc)
-    return stackstr
 
 
 class DataUIManager(param.Parameterized):
@@ -112,14 +97,44 @@ class DataUIManager(param.Parameterized):
         """return a dictionary mapping column names to marker names"""
         raise NotImplementedError("This method should be implemented by subclasses")
 
+    def get_data_actions(self):
+        """Return a list of default data actions."""
+        plot_action = PlotAction()
+        download_action = DownloadAction()
+        permalink_action = PermalinkAction()
+
+        plot_button = dict(
+            name="Plot",
+            button_type="primary",
+            icon="chart-line",
+            callback=plot_action.callback,
+        )
+        download_button = dict(
+            name="Download",
+            button_type="primary",
+            icon="download",
+            callback=download_action.callback,
+        )
+        permalink_button = dict(
+            name="Permalink",
+            button_type="primary",
+            icon="link",
+            callback=permalink_action.callback,
+        )
+
+        return [plot_button, download_button, permalink_button]
+
 
 notifications = pn.state.notifications
 
 
 class DataUI(param.Parameterized):
     """
-    Show table of data from a catalog
-    Furthermore select the data rows and click on button to display plots for selected rows
+    Show table (and map) of data from a catalog. IIf the catalog manager returns a catalog that is a GeoDataFrame it will display a map of the data.
+
+    Selection on table rows or map will select the corresponding rows in the other view (map or table). It supports 1-to-many mapping of stations to rows in the catalog.
+
+    Actions on the selections are supported via the buttons on the table. These are configurable by the catalog manager.
     """
 
     map_color_category = param.Selector(
@@ -136,7 +151,9 @@ class DataUI(param.Parameterized):
     show_map_markers = param.Boolean(
         default=False, doc="Show map markers for selected category"
     )
-    map_default_span = param.Number(default=15000, doc="Default span for map zoom")
+    map_default_span = param.Number(
+        default=15000, doc="Default span for map zoom in meters"
+    )
 
     query = param.String(
         default="",
@@ -258,6 +275,7 @@ class DataUI(param.Parameterized):
         filters,
         selection,
     ):
+        """Update the map features based on the selection in the table or filters or query. Also updates if the color or marker by columns are changed"""
         query = query.strip()
         dfs = self._get_map_catalog()
         # select only those rows in dfs that have station_id_column in self.display_table.current_view
@@ -312,6 +330,7 @@ class DataUI(param.Parameterized):
         return self._map_features
 
     def select_data_catalog(self, index=[]):
+        """Select the rows in the table that correspond to the selected features in the map"""
         # select rows from self._dfcat where station_id is in dfs station_ids
         idcol = self._station_id_column
         table = self.display_table
@@ -346,6 +365,22 @@ class DataUI(param.Parameterized):
         # with param.discard_events(table.param.selection):
         table.param.update(selection=selected_indices)
 
+    def create_data_actions(self, actions):
+        action_buttons = []
+        for action in actions:
+            button = pn.widgets.Button(
+                name=action["name"],
+                button_type=action["button_type"],
+                icon=action["icon"],
+            )
+
+            def on_click(event, callback=action["callback"]):
+                callback(event, self)
+
+            button.on_click(on_click)
+            action_buttons.append(button)
+        return action_buttons
+
     def create_data_table(self, dfs):
         column_width_map = self._dataui_manager.get_table_column_width_map()
         dfs = dfs[self._dataui_manager.get_table_columns()]
@@ -360,30 +395,26 @@ class DataUI(param.Parameterized):
             configuration={"headerFilterLiveFilterDelay": 00},
         )
 
-        self.display_table.param.watch(self._update_filters, "filters")
-        self.display_table.param.watch(self._update_selection, "selection")
+        self._display_panel = pn.Row()
+        self._action_panel = pn.Row()
+        actions = self._dataui_manager.get_data_actions()
 
-        self._plot_button = pn.widgets.Button(
-            name="Plot", button_type="primary", icon="chart-line"
+        if actions:
+            action_buttons = self.create_data_actions(actions)
+            self._action_panel.extend(action_buttons)
+        self._action_panel.append(pn.layout.HSpacer())
+        self._display_panel.append(
+            pn.pane.Markdown(
+                "### Select rows from table and click on button",
+                sizing_mode="stretch_both",
+            )
         )
-        self._plot_button.on_click(self.update_plots)
-        self._download_button = self.create_save_button()
-        self._plot_panel = pn.panel(
-            hv.Div("<h3>Select rows from table and click on button</h3>"),
-            sizing_mode="stretch_both",
-        )
-        self._plots_panel = pn.Row(self._plot_panel)
         gspec = pn.GridStack(
             sizing_mode="stretch_both", allow_resize=True, allow_drag=False
         )  # ,
-        self._table_panel = pn.Row(
-            self._plot_button,
-            self._download_button,
-            pn.layout.HSpacer(),
-        )
-        gspec[0, 0:5] = self._table_panel
+        gspec[0, 0:5] = self._action_panel
         gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-        gspec[6:15, 0:10] = fullscreen.FullScreen(self._plots_panel)
+        gspec[6:15, 0:10] = fullscreen.FullScreen(self._display_panel)
         return gspec
 
     def _update_url_from_state(self):
@@ -409,55 +440,6 @@ class DataUI(param.Parameterized):
 
     def _update_selection(self, event):
         self._update_url_from_state()
-
-    def update_plots(self, event):
-        try:
-            self._plots_panel.loading = True
-            dfselected = self.display_table.value.iloc[self.display_table.selection]
-            plot_panel = self._dataui_manager.create_panel(dfselected)
-            if isinstance(self._plots_panel.objects[0], pn.Tabs):
-                tabs = self._plots_panel.objects[0]
-                self._tab_count += 1
-                tabs.append((str(self._tab_count), plot_panel))
-                tabs.active = len(tabs) - 1
-            else:
-                self._tab_count = 0
-                self._plots_panel.objects = [
-                    pn.Tabs((str(self._tab_count), plot_panel), closable=True)
-                ]
-        except Exception as e:
-            stack_str = full_stack()
-            logger.error(stack_str)
-            notifications.error("Error updating plots: " + str(stack_str), duration=0)
-        finally:
-            self._plots_panel.loading = False
-
-    def download_data(self):
-        self._download_button.loading = True
-        try:
-            dfselected = self.display_table.value.iloc[self.display_table.selection]
-            dfdata = pd.concat(
-                [df for df in self._dataui_manager.get_data(dfselected)], axis=1
-            )
-            sio = StringIO()
-            dfdata.to_csv(sio)
-            sio.seek(0)
-            return sio
-        except Exception as e:
-            notifications.error("Error downloading data: " + str(e), duration=0)
-        finally:
-            self._download_button.loading = False
-
-    def create_save_button(self):
-        # add a button to trigger the save function
-        return pn.widgets.FileDownload(
-            label="Save Data",
-            callback=self.download_data,
-            filename="data.csv",
-            button_type="primary",
-            icon="file-download",
-            embed=False,
-        )
 
     def get_version(self):
         try:
