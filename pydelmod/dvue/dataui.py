@@ -19,6 +19,7 @@ import geoviews as gv
 gv.extension("bokeh")
 import param
 import panel as pn
+from panel.io import location
 
 pn.extension("tabulator", notifications=True, design="native")
 #
@@ -189,8 +190,6 @@ class DataUI(param.Parameterized):
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
             )
-        self._update_url_from_state()
-        pn.state.location.param.watch(self._update_state_from_url, "hash")
 
     def _get_map_catalog(self):
         if (
@@ -417,29 +416,9 @@ class DataUI(param.Parameterized):
         gspec[6:15, 0:10] = fullscreen.FullScreen(self._display_panel)
         return gspec
 
-    def _update_url_from_state(self):
-        state = {
-            "filters": self.display_table.param.filters,
-            "selection": self.display_table.param.selection,
-            "query": self.param.query,
-        }
-        encoded_state = urllib.parse.quote(json.dumps(state))
-        pn.state.location.hash = encoded_state
-
-    def _update_state_from_url(self, event):
-        try:
-            state = json.loads(urllib.parse.unquote(event.new))
-            self.display_table.param.update(filters=state.get("filters", {}))
-            self.display_table.param.update(selection=state.get("selection", []))
-            self.param.update(query=state.get("query", ""))
-        except Exception as e:
-            logger.error(f"Error parsing state from URL: {e}")
-
-    def _update_filters(self, event):
-        self._update_url_from_state()
-
-    def _update_selection(self, event):
-        self._update_url_from_state()
+    def setup_location_sync(self):
+        self.location = location.Location()
+        self.location.sync(self.display_table, ["filters", "selection"])
 
     def get_version(self):
         try:
@@ -476,6 +455,7 @@ class DataUI(param.Parameterized):
 
     def create_view(self):
         main_panel = self.create_data_table(self._dfcat)
+        self.setup_location_sync()
         control_widgets = self._dataui_manager.get_widgets()
         if hasattr(self, "_map_features"):
             map_options = pn.WidgetBox(
