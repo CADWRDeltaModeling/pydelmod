@@ -22,8 +22,8 @@ pn.extension()
 import pyhecdss as dss
 from vtools.functions.filter import cosine_lanczos
 from .dsm2study import *
-from .dataui import full_stack
-from .tsdataui import TimeSeriesDataUIManager
+from .dvue.dataui import full_stack
+from .dvue.tsdataui import TimeSeriesDataUIManager
 
 
 class DSM2DataUIManager(TimeSeriesDataUIManager):
@@ -58,9 +58,6 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
     def get_time_range(self, dfcat):
         return self.time_range
 
-    def _get_station_ids(self, df):
-        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
-
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
@@ -88,7 +85,7 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             value += f'{", " if value else ""}{new_value}'
         return value
 
-    def _append_to_title_map(self, title_map, unit, r):
+    def append_to_title_map(self, title_map, unit, r):
         if unit in title_map:
             value = title_map[unit]
         else:
@@ -99,14 +96,14 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         value[3] = self._append_value(str(r["DISTANCE"]), value[3])
         title_map[unit] = value
 
-    def _create_title(self, v):
+    def create_title(self, v):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
     def is_irregular(self, r):
         return False
 
-    def _create_crv(self, df, r, unit, file_index=None):
+    def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["NAME"]}/{r["VARIABLE"]}'
         ylabel = f'{r["VARIABLE"]} ({unit})'
@@ -125,7 +122,7 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
-    def _get_data_for_time_range(self, r, time_range):
+    def get_data_for_time_range(self, r, time_range):
         dssfile = r[self.filename_column]
         pathname = f'//{r["NAME"]}/{r["VARIABLE"]}////'
         df, unit, ptype = next(
@@ -225,9 +222,6 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
     def get_time_range(self, dfcat):
         return self.time_range
 
-    def _get_station_ids(self, df):
-        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
-
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
@@ -250,7 +244,7 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
             value += f'{", " if value else ""}{new_value}'
         return value
 
-    def _append_to_title_map(self, title_map, unit, r):
+    def append_to_title_map(self, title_map, unit, r):
         if unit in title_map:
             value = title_map[unit]
         else:
@@ -259,14 +253,14 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
         value[1] = self._append_value(r["id"], value[1])
         title_map[unit] = value
 
-    def _create_title(self, v):
+    def create_title(self, v):
         title = f"{v[0]} @ {v[1]}"
         return title
 
     def is_irregular(self, r):
         return False
 
-    def _create_crv(self, df, r, unit, file_index=None):
+    def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
         ylabel = f'{r["variable"]} ({unit})'
@@ -297,7 +291,7 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
             entry, time_window
         )
 
-    def _get_data_for_time_range(self, r, time_range):
+    def get_data_for_time_range(self, r, time_range):
         var = r["variable"]
         time_window = self._get_timewindow_for_time_range(time_range)
         df = self._get_data_for_catalog_entry(
@@ -604,7 +598,7 @@ def build_output_plotter(*echo_files, channel_shapefile=None):
     return plotter
 
 
-from . import dataui
+from .dvue import dataui
 import click
 
 

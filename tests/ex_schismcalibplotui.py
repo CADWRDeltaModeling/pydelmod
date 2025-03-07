@@ -1,5 +1,5 @@
 # %%
-from pydelmod import dataui
+from pydelmod.dvue import dataui
 from pydelmod import schismcalibplotui
 from cartopy import crs as ccrs
 

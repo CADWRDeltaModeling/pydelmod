@@ -13,7 +13,7 @@ import pyhecdss as dss
 from pydsm import postpro
 from pydelmod import postpro_dsm2
 
-from .dataui import DataUI, DataUIManager
+from .dvue.dataui import DataUI, DataUIManager
 
 
 # substitue the base_dir in location_files_dict, observed_files_dict, study_files_dict

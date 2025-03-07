@@ -3,8 +3,8 @@ import cartopy.crs as ccrs
 import holoviews as hv
 
 hv.extension("bokeh")
-from .dataui import DataUI
-from .tsdataui import TimeSeriesDataUIManager
+from .dvue.dataui import DataUI
+from .dvue.tsdataui import TimeSeriesDataUIManager
 from pydelmod import schismstudy, datastore
 import pathlib
 import param
@@ -76,10 +76,6 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         else:
             return f'{r["FILE_NUM"]}:{name}'
 
-    # data related methods
-    def _get_station_ids(self, df):
-        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
-
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
@@ -106,7 +102,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
             value += f'{", " if value else ""}{new_value}'
         return value
 
-    def _append_to_title_map(self, title_map, unit, r):
+    def append_to_title_map(self, title_map, unit, r):
         if unit in title_map:
             value = title_map[unit]
         else:
@@ -116,11 +112,11 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         value[1] = self._append_value(r["variable"], value[1])
         title_map[unit] = value
 
-    def _create_title(self, v):
+    def create_title(self, v):
         title = f"{v[1]} @ {v[2]} ({v[0]})"
         return title
 
-    def _create_crv(self, df, r, unit, file_index=None):
+    def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
         ylabel = f'{r["variable"]} ({unit})'
@@ -135,7 +131,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
-    def _get_data_for_time_range(self, r, time_range):
+    def get_data_for_time_range(self, r, time_range):
         unit = r["unit"]
         if r["source"] == "schism":
             base_dir = str(pathlib.Path(r["filename"]).parent)

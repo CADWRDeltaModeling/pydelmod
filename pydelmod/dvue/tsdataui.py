@@ -21,13 +21,6 @@ LINE_DASH_MAP = ["solid", "dashed", "dotted", "dotdash", "dashdot"]
 from vtools.functions.filter import cosine_lanczos
 
 
-def get_colors(stations, dfc):
-    """
-    Create a dictionary with station names and colors
-    """
-    return hv.Cycle(list(dfc.loc[stations].values.flatten()))
-
-
 def get_color_dataframe(stations, color_cycle=hv.Cycle()):
     """
     Create a dataframe with station names and colors
@@ -101,6 +94,47 @@ class TimeSeriesDataUIManager(DataUIManager):
         self.time_range = self.get_time_range(self.get_data_catalog())
         super().__init__(**params)
 
+    def get_data_catalog(self):
+        raise NotImplementedError("Method get_data_catalog not implemented")
+
+    def get_time_range(self, dfcat):
+        raise NotImplementedError("Method get_time_range not implemented")
+
+    def get_table_filters(self):
+        raise NotImplementedError("Method get_table_filters not implemented")
+
+    def is_irregular(self, r):
+        raise NotImplementedError("Method is_irregular not implemented")
+
+    def get_data_for_time_range(self, r, time_range):
+        raise NotImplementedError("Method get_data_for_time_range not implemented")
+
+    def get_tooltips(self):
+        raise NotImplementedError("Method get_tooltips not implemented")
+
+    def create_curve(self, data, r, unit, file_index=""):
+        raise NotImplementedError("Method create_curve not implemented")
+
+    # methods below if geolocation data is available
+
+    def get_map_color_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_color(self):
+        """return a dictionary mapping column names to color names"""
+        return hv.Cycle("Category10").values
+
+    def get_map_marker_columns(self):
+        """return the columns that can be used to color the map"""
+        pass
+
+    def get_name_to_marker(self):
+        """return a dictionary mapping column names to marker names"""
+        from bokeh.core.enums import MarkerType
+
+        return list(MarkerType)
+
     def get_widgets(self):
         control_widgets = pn.Column(
             pn.pane.HTML("Change time range of data to display:"),
@@ -128,19 +162,9 @@ class TimeSeriesDataUIManager(DataUIManager):
 
         return control_widgets
 
-    # data related methods
-    def get_data_catalog(self):
-        raise NotImplementedError("Method get_data_catalog not implemented")
-
-    def _get_station_ids(self, df):
-        raise NotImplementedError("Method get_station_ids not implemented")
-
-    def get_time_range(self, dfcat):
-        raise NotImplementedError("Method get_time_range not implemented")
-
     def get_data(self, df):
         for _, r in df.iterrows():
-            data, _, _ = self._get_data_for_time_range(r, self.time_range)
+            data, _, _ = self.get_data_for_time_range(r, self.time_range)
             yield data
 
     # display related support for tables
@@ -168,17 +192,6 @@ class TimeSeriesDataUIManager(DataUIManager):
         self.adjust_column_width(column_width_map)
         return column_width_map
 
-        raise NotImplementedError("Method get_table_column_width_map not implemented")
-
-    def get_table_filters(self):
-        raise NotImplementedError("Method get_table_filters not implemented")
-
-    def is_irregular(self, r):
-        raise NotImplementedError("Method is_irregular not implemented")
-
-    def _get_data_for_time_range(self, r, time_range):
-        raise NotImplementedError("Method _get_data_for_time_range not implemented")
-
     def create_layout(self, df, time_range):
         layout_map = {}
         title_map = {}
@@ -188,7 +201,7 @@ class TimeSeriesDataUIManager(DataUIManager):
             local_unique_files = df[self.filename_column].unique()
         for _, r in df.iterrows():
             try:
-                data, unit, _ = self._get_data_for_time_range(r, time_range)
+                data, unit, _ = self.get_data_for_time_range(r, time_range)
                 if isinstance(data.index, pd.PeriodIndex):
                     data = data[
                         (data.index.start_time >= time_range[0])
@@ -210,26 +223,35 @@ class TimeSeriesDataUIManager(DataUIManager):
                     )
                 data = pd.DataFrame(columns=["value"], dtype=float)
                 unit = "X"
-            file_index = r[self.file_number_column_name] if self.display_fileno else ""
-            crv = self._create_crv(
-                data,
-                r,
-                unit,
-                file_index=file_index,
-            )
-            if isinstance(data.index, pd.PeriodIndex):
-                crv.opts(opts.Curve(interpolation=self.regular_curve_connection))
-            if self.is_irregular(r):
-                crv.opts(opts.Curve(interpolation=self.irregular_curve_connection))
+            try:
+                file_index = (
+                    r[self.file_number_column_name] if self.display_fileno else ""
+                )
+                crv = self.create_curve(
+                    data,
+                    r,
+                    unit,
+                    file_index=file_index,
+                )
+                if isinstance(data.index, pd.PeriodIndex):
+                    crv.opts(opts.Curve(interpolation=self.regular_curve_connection))
+                if self.is_irregular(r):
+                    crv.opts(opts.Curve(interpolation=self.irregular_curve_connection))
 
-            if unit not in layout_map:
-                layout_map[unit] = []
-                range_map[unit] = None
-                station_map[unit] = []
-            layout_map[unit].append(crv)
-            station_map[unit].append(self.build_station_name(r))
-            self._append_to_title_map(title_map, unit, r)
-        title_map = {k: self._create_title(v) for k, v in title_map.items()}
+                if unit not in layout_map:
+                    layout_map[unit] = []
+                    range_map[unit] = None
+                    station_map[unit] = []
+                layout_map[unit].append(crv)
+                station_map[unit].append(self.build_station_name(r))
+                self.append_to_title_map(title_map, unit, r)
+            except Exception as e:
+                print(full_stack())
+                if pn.state.notifications:
+                    pn.state.notifications.error(
+                        f"Error while creating curve for row: {r}: {e}"
+                    )
+        title_map = {k: self.create_title(v) for k, v in title_map.items()}
         if self.sensible_range_yaxis:
             for unit in layout_map.keys():
                 for crv in layout_map[unit]:
@@ -258,7 +280,7 @@ class TimeSeriesDataUIManager(DataUIManager):
     def create_panel(self, df):
         time_range = self.time_range
         try:
-            stationids = self._get_station_ids(df)
+            stationids = self.get_station_ids(df)
             color_df = get_color_dataframe(stationids, self.color_cycle)
             layout_map, station_map, range_map, title_map = self.create_layout(
                 df, time_range
@@ -302,25 +324,3 @@ class TimeSeriesDataUIManager(DataUIManager):
             print(stackmsg)
             pn.state.notifications.error(f"Error while fetching data for {e}")
             return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
-
-    # methods below if geolocation data is available
-    def get_tooltips(self):
-        raise NotImplementedError("Method get_tooltips not implemented")
-
-    def get_map_color_columns(self):
-        """return the columns that can be used to color the map"""
-        pass
-
-    def get_name_to_color(self):
-        """return a dictionary mapping column names to color names"""
-        return hv.Cycle("Category10").values
-
-    def get_map_marker_columns(self):
-        """return the columns that can be used to color the map"""
-        pass
-
-    def get_name_to_marker(self):
-        """return a dictionary mapping column names to marker names"""
-        from bokeh.core.enums import MarkerType
-
-        return list(MarkerType)

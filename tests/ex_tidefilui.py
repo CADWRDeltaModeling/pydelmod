@@ -24,7 +24,7 @@ hydro_tidefile = "D:/dev/pydsm/tests/data/historical_v82.h5"
 qual_tidefile = "d:/dev/pydsm/tests/data/historical_v82_ec.h5"
 # %%
 from pydelmod import dsm2ui
-from pydelmod import dataui
+from pydelmod.dvue import dataui
 
 uim = dsm2ui.DSM2TidefileUIManager([hydro_tidefile, qual_tidefile], channels=channels)
 ui = dataui.DataUI(uim, crs=ccrs.epsg("26910"), station_id_column="geoid")

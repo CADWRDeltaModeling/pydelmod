@@ -21,8 +21,8 @@ pn.extension()
 import pyhecdss as dss
 from vtools.functions.filter import cosine_lanczos
 
-from .dataui import DataUI, full_stack
-from .tsdataui import TimeSeriesDataUIManager
+from .dvue.dataui import DataUI, full_stack
+from .dvue.tsdataui import TimeSeriesDataUIManager
 
 
 class DSSDataUIManager(TimeSeriesDataUIManager):
@@ -109,9 +109,6 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             self.time_range = (tmin, tmax)
         return self.time_range
 
-    def _get_station_ids(self, df):
-        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
-
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
@@ -139,7 +136,7 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             value += f'{", " if value else ""}{new_value}'
         return value
 
-    def _append_to_title_map(self, title_map, unit, r):
+    def append_to_title_map(self, title_map, unit, r):
         if unit in title_map:
             value = title_map[unit]
         else:
@@ -150,14 +147,14 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         value[3] = self._append_value(r["F"], value[3])
         title_map[unit] = value
 
-    def _create_title(self, v):
+    def create_title(self, v):
         title = f"{v[1]} @ {v[2]} ({v[3]}::{v[0]})"
         return title
 
     def is_irregular(self, r):
         return r["E"].startswith("IR-")
 
-    def _create_crv(self, df, r, unit, file_index=None):
+    def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
         crvlabel = f'{file_index_label}{r["B"]}/{r["C"]}'
         ylabel = f'{r["C"]} ({unit})'
@@ -172,7 +169,7 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
-    def _get_data_for_time_range(self, r, time_range):
+    def get_data_for_time_range(self, r, time_range):
         irreg = self.is_irregular(r)
         dssfile = r[self.filename_column]
         dssfh = self.dssfh[dssfile]

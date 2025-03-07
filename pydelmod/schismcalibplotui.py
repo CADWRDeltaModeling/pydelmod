@@ -11,7 +11,7 @@ import holoviews as hv
 from holoviews import opts
 
 from schimpy import batch_metrics
-from .dataui import DataUI, DataUIManager
+from .dvue.dataui import DataUI, DataUIManager
 from . import datastore, schismstudy
 from vtools.functions.filter import cosine_lanczos
 from . import calibplot

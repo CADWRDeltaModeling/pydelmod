@@ -29,6 +29,9 @@ from bokeh.core.enums import MarkerType
 
 import logging
 
+import urllib.parse
+import json
+
 # setup logger
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -74,6 +77,20 @@ class DataUIManager(param.Parameterized):
         raise NotImplementedError("This method should be implemented by subclasses")
 
     def create_panel(self, df):
+        raise NotImplementedError("This method should be implemented by subclasses")
+
+    def get_station_ids(self, df):
+        return list((df.apply(self.build_station_name, axis=1).astype(str).unique()))
+
+    def build_station_name(self, r):
+        raise NotImplementedError("This method should be implemented by subclasses")
+
+    # FIXME: this should not be here
+    def append_to_title_map(self, title_map, unit, r):
+        raise NotImplementedError("This method should be implemented by subclasses")
+
+    # FIXME: this should not be here
+    def create_title(self, title_map, unit, r):
         raise NotImplementedError("This method should be implemented by subclasses")
 
     def get_tooltips(self):
@@ -155,6 +172,8 @@ class DataUI(param.Parameterized):
             warnings.warn(
                 "No geolocation data found in catalog. Not displaying map of stations."
             )
+        self._update_url_from_state()
+        pn.state.location.param.watch(self._update_state_from_url, "hash")
 
     def _get_map_catalog(self):
         if (
@@ -341,6 +360,9 @@ class DataUI(param.Parameterized):
             configuration={"headerFilterLiveFilterDelay": 00},
         )
 
+        self.display_table.param.watch(self._update_filters, "filters")
+        self.display_table.param.watch(self._update_selection, "selection")
+
         self._plot_button = pn.widgets.Button(
             name="Plot", button_type="primary", icon="chart-line"
         )
@@ -363,6 +385,30 @@ class DataUI(param.Parameterized):
         gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
         gspec[6:15, 0:10] = fullscreen.FullScreen(self._plots_panel)
         return gspec
+
+    def _update_url_from_state(self):
+        state = {
+            "filters": self.display_table.param.filters,
+            "selection": self.display_table.param.selection,
+            "query": self.param.query,
+        }
+        encoded_state = urllib.parse.quote(json.dumps(state))
+        pn.state.location.hash = encoded_state
+
+    def _update_state_from_url(self, event):
+        try:
+            state = json.loads(urllib.parse.unquote(event.new))
+            self.display_table.param.update(filters=state.get("filters", {}))
+            self.display_table.param.update(selection=state.get("selection", []))
+            self.param.update(query=state.get("query", ""))
+        except Exception as e:
+            logger.error(f"Error parsing state from URL: {e}")
+
+    def _update_filters(self, event):
+        self._update_url_from_state()
+
+    def _update_selection(self, event):
+        self._update_url_from_state()
 
     def update_plots(self, event):
         try:

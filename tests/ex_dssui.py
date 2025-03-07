@@ -1,7 +1,7 @@
 # %%
 import pydelmod
 from pydelmod import dssui
-from pydelmod import dataui
+from pydelmod.dvue import dataui
 import pandas as pd
 import geopandas as gpd
 import cartopy.crs as ccrs

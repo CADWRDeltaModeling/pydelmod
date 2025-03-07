@@ -4,7 +4,7 @@ import hvplot.pandas
 import holoviews as hv
 from holoviews import opts, dim, streams
 from pydelmod.calibplotui import CalibPlotUIManager, substitute_base_dir
-from pydelmod.dataui import DataUI
+from pydelmod.dvue.dataui import DataUI
 import geoviews as gv
 
 # %%
