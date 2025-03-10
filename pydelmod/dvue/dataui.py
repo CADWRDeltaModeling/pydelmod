@@ -282,24 +282,42 @@ class DataUI(param.Parameterized):
             self._station_id_column
             and self._station_id_column in self.display_table.current_view.columns
         ):
-            current_selected = dfs[
-                dfs[self._station_id_column].isin(
-                    self._dfcat.iloc[selection][self._station_id_column]
-                )
-            ]
             current_view = dfs[
                 dfs[self._station_id_column].isin(
                     self.display_table.current_view[self._station_id_column]
                 )
             ]
-            current_selection = current_view.index.intersection(current_selected.index)
+            # if current_view is a geodataframe, keep only valid geometries
+            if isinstance(current_view, gpd.GeoDataFrame):
+                current_view = current_view.loc[current_view.is_valid]
+            current_selected = current_view[
+                current_view[self._station_id_column].isin(
+                    self.display_table.selected_dataframe[self._station_id_column]
+                )
+            ]
 
-            # Convert to list of integers
-            current_selection = list(map(int, current_selection))
+            # Get the intersection of indices
+            intersection_indices = current_view.index.intersection(
+                current_selected.index
+            )
+
+            # Convert to integer positions (iloc indices)
+            current_selection = [
+                current_view.index.get_indexer([idx])[0] for idx in intersection_indices
+            ]
         else:
             current_view = self.display_table.current_view
             current_selected = self.display_table.selected_dataframe
-            current_selection = selection
+
+            # Get the intersection of indices
+            intersection_indices = current_view.index.intersection(
+                current_selected.index
+            )
+
+            # Convert to integer positions (iloc indices)
+            current_selection = [
+                current_view.index.get_indexer([idx])[0] for idx in intersection_indices
+            ]
         try:
             if len(query) > 0:
                 current_view = current_view.query(query)
@@ -348,11 +366,15 @@ class DataUI(param.Parameterized):
             current_view_selected_indices = table.current_view[
                 table.current_view[idcol].isin(stations_to_be_selected)
             ].index.to_list()
-
-            keep_selected_from_map = table.selected_dataframe[
+            # First get the indices of matching rows
+            matching_indices = table.selected_dataframe[
                 table.selected_dataframe[idcol].isin(stations_map_selected)
             ].index
 
+            # Then convert to integer positions (iloc indices)
+            keep_selected_from_map = list(
+                map(int, self._dfcat.index.get_indexer(matching_indices))
+            )
             i_selected_indices = list(
                 map(int, self._dfcat.index.get_indexer(current_view_selected_indices))
             )
@@ -391,7 +413,7 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self._dataui_manager.get_table_filters(),
             page_size=200,
-            configuration={"headerFilterLiveFilterDelay": 00},
+            configuration={"headerFilterLiveFilterDelay": 600},
         )
 
         self._display_panel = pn.Row()
