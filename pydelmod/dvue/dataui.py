@@ -292,34 +292,19 @@ class DataUI(param.Parameterized):
             # if current_view is a geodataframe, keep only valid geometries
             if isinstance(current_view, gpd.GeoDataFrame):
                 current_view = current_view.loc[current_view.is_valid]
+            current_table_selected = self._dfcat.iloc[selection]
             current_selected = current_view[
                 current_view[self._station_id_column].isin(
-                    self.display_table.selected_dataframe[self._station_id_column]
+                    current_table_selected[self._station_id_column]
                 )
             ]
-
-            # Get the intersection of indices
-            intersection_indices = current_view.index.intersection(
-                current_selected.index
-            )
-
-            # Convert to integer positions (iloc indices)
-            current_selection = [
-                current_view.index.get_indexer([idx])[0] for idx in intersection_indices
-            ]
         else:
-            current_view = self.display_table.current_view
-            current_selected = self.display_table.selected_dataframe
-
-            # Get the intersection of indices
-            intersection_indices = current_view.index.intersection(
-                current_selected.index
-            )
-
-            # Convert to integer positions (iloc indices)
-            current_selection = [
-                current_view.index.get_indexer([idx])[0] for idx in intersection_indices
-            ]
+            current_view = dfs.loc[self.display_table.current_view.index]
+            current_table_selected = self._dfcat.iloc[selection]
+            current_selected = current_table_selected
+        current_selection = current_view.index.get_indexer(
+            current_selected.index
+        ).tolist()
         try:
             if len(query) > 0:
                 current_view = current_view.query(query)
@@ -350,7 +335,7 @@ class DataUI(param.Parameterized):
 
     def select_data_catalog(self, index=[]):
         """Select the rows in the table that correspond to the selected features in the map"""
-        # select rows from self._dfcat where station_id is in dfs station_ids
+
         idcol = self._station_id_column
         table = self.display_table
         if idcol and idcol in self._dfcat.columns:
@@ -382,9 +367,13 @@ class DataUI(param.Parameterized):
             )
             selected_indices = i_selected_indices + list(keep_selected_from_map)
         else:
-            dfs = self._dfcat.iloc[index]
-            current_view = self.display_table.current_view
-            selected_indices = current_view.reset_index().merge(dfs)["index"].to_list()
+            dfs = self._map_features.dframe().iloc[index]
+            merged_indices = (
+                self._dfcat.reset_index().merge(dfs)["index"].to_list()
+            )  # index matching
+            selected_indices = self._dfcat.index.get_indexer(
+                merged_indices
+            ).tolist()  # positional indices on table
         # with param.discard_events(table.param.selection):
         table.param.update(selection=selected_indices)
 
