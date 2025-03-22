@@ -155,6 +155,8 @@ class DataUI(param.Parameterized):
     map_default_span = param.Number(
         default=15000, doc="Default span for map zoom in meters"
     )
+    map_non_selection_alpha = param.Number(default=0.2, doc="Non selection alpha")
+    map_point_size = param.Number(default=10, doc="Point size for map")
 
     query = param.String(
         default="",
@@ -238,7 +240,7 @@ class DataUI(param.Parameterized):
             self._map_features = self._map_features.opts(
                 opts.Points(
                     tools=["tap", hover, "lasso_select", "box_select"],
-                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    nonselection_alpha=self.map_non_selection_alpha,  # nonselection_color='gray',
                     size=10,
                 )
             )
@@ -246,7 +248,7 @@ class DataUI(param.Parameterized):
             self._map_features = self._map_features.opts(
                 opts.Path(
                     tools=["tap", hover, "lasso_select", "box_select"],
-                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    nonselection_alpha=self.map_non_selection_alpha,  # nonselection_color='gray',
                     line_width=2,
                 )
             )
@@ -254,7 +256,7 @@ class DataUI(param.Parameterized):
             self._map_features = self._map_features.opts(
                 opts.Polygons(
                     tools=["tap", hover, "lasso_select", "box_select"],
-                    nonselection_alpha=0.2,  # nonselection_color='gray',
+                    nonselection_alpha=self.map_non_selection_alpha,  # nonselection_color='gray',
                 )
             )
         else:
@@ -486,6 +488,9 @@ class DataUI(param.Parameterized):
                 self.param.map_color_category,
                 self.param.show_map_markers,
                 self.param.map_marker_category,
+                self.param.map_default_span,
+                self.param.map_non_selection_alpha,
+                self.param.map_point_size,
                 self.param.query,
             )
             self._map_function = hv.DynamicMap(
