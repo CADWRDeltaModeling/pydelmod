@@ -203,10 +203,10 @@ class DataUI(param.Parameterized):
                 dfx = dfx.dropna(subset=["geometry"])
                 dfx = dfx.set_crs(self._dfcat.crs)
             else:
-                dfx = dfx.dropna(subset=["Latitude", "Longitude"])
-            return dfx
+                dfx = dfx.dropna(subset=["Latitude", "Longitude"])  # FIXME: ?
         else:
-            return self._dfcat
+            dfx = self._dfcat
+        return dfx
 
     def build_map_of_features(self, dfmap, crs):
         tooltips = self._dataui_manager.get_tooltips()
@@ -300,6 +300,8 @@ class DataUI(param.Parameterized):
             ]
         else:
             current_view = dfs.loc[self.display_table.current_view.index]
+            if isinstance(current_view, gpd.GeoDataFrame):
+                current_view = current_view.loc[current_view.is_valid]
             current_table_selected = self._dfcat.iloc[selection]
             current_selected = current_table_selected
         current_selection = current_view.index.get_indexer(
@@ -335,7 +337,8 @@ class DataUI(param.Parameterized):
 
     def select_data_catalog(self, index=[]):
         """Select the rows in the table that correspond to the selected features in the map"""
-
+        if index is None or (len(index) == 1 and index[0] == -1):
+            return
         idcol = self._station_id_column
         table = self.display_table
         if idcol and idcol in self._dfcat.columns:

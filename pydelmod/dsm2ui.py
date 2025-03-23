@@ -585,7 +585,7 @@ def build_output_plotter(*echo_files, channel_shapefile=None):
         pts = output_channels.apply(
             lambda row: get_location_on_channel_line(
                 row["CHAN_NO"], row["DISTANCE"], dsm2_chan_lines
-            ).values[0],
+            ),
             axis=1,
             result_type="reduce",
         )
@@ -593,6 +593,8 @@ def build_output_plotter(*echo_files, channel_shapefile=None):
             output_channels, geometry=pts, crs={"init": "epsg:26910"}
         )
     # output_channels = output_channels.dropna(subset=["geometry"])
+    # convert CHAN_NO to string
+    output_channels["CHAN_NO"] = output_channels["CHAN_NO"].astype(str)
     plotter = DSM2DataUIManager(output_channels, time_range=time_range)
 
     return plotter

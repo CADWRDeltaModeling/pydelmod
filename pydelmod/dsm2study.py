@@ -31,6 +31,11 @@ pn.extension()
 
 from .hecutils import parse_military_date
 
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
 
 def load_echo_file(fname):
     with open(fname, "r") as file:
@@ -106,8 +111,8 @@ def load_dsm2_channelline_shapefile(channel_shapefile):
     return gpd.read_file(channel_shapefile).to_crs(epsg=26910)
 
 
-def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables):
-    return dsm2_chan_lines.merge(tables["CHANNEL"], right_on="CHAN_NO", left_on="id")
+def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables, geo_id="id"):
+    return dsm2_chan_lines.merge(tables["CHANNEL"], right_on="CHAN_NO", left_on=geo_id)
 
 
 def load_dsm2_flowline_shapefile(shapefile):
@@ -117,8 +122,8 @@ def load_dsm2_flowline_shapefile(shapefile):
     return dsm2_chans
 
 
-def join_channels_info_with_shapefile(dsm2_chans, tables):
-    return dsm2_chans.merge(tables["CHANNEL"], right_on="CHAN_NO", left_on="id")
+def join_channels_info_with_shapefile(dsm2_chans, tables, geo_id="id"):
+    return dsm2_chans.merge(tables["CHANNEL"], right_on="CHAN_NO", left_on=geo_id)
 
 
 def load_dsm2_node_shapefile(node_shapefile):
@@ -133,14 +138,37 @@ def to_node_tuple_map(nodes):
 
 
 def get_location_on_channel_line(channel_id, distance, dsm2_chan_lines):
+    """
+    Returns a point on the channel line at the specified distance.
+
+    Parameters
+    ----------
+    channel_id : int
+        The channel ID to find
+    distance : float or str
+        Either a numeric distance or "LENGTH" for the full channel length
+    dsm2_chan_lines : GeoDataFrame
+        GeoDataFrame with channel geometries
+
+    Returns
+    -------
+    shapely.geometry.Point
+        Point on the channel line at specified distance, or Point(nan, nan) if not found
+    """
     chan = dsm2_chan_lines[dsm2_chan_lines.CHAN_NO == channel_id]
-    # chan_line = chan.boundary # chan is from a polygon
+    if chan.empty:
+        logger.warning(f"Channel {channel_id} not found in the channel line shapefile")
+        return pd.NA
+
     try:
-        pt = chan.interpolate(distance / chan.LENGTH, normalized=True)
-    except:  # if not a number always default to assuming its length
-        pt = chan.interpolate(1, normalized=True)
-    # chan.hvplot()*gpd.GeoDataFrame(geometry=pt).hvplot() # to check plot of point and line
-    return pt
+        if isinstance(distance, str) and distance.upper() == "LENGTH":
+            pt = chan.interpolate(1, normalized=True)
+        else:
+            pt = chan.interpolate(float(distance) / chan.LENGTH, normalized=True)
+        return pt.values[0]  # Return the actual point object
+    except Exception as e:
+        logger.warning(f"Error calculating point on channel {channel_id}: {str(e)}")
+        return pd.NA
 
 
 def get_runtime(tables):
