@@ -24,7 +24,12 @@ from panel.io import location
 pn.extension("tabulator", notifications=True, design="native")
 #
 from . import fullscreen
-from .actions import PlotAction, DownloadAction, PermalinkAction
+from .actions import (
+    PlotAction,
+    PermalinkAction,
+    DownloadDataAction,
+    DownloadDataCatalogAction,
+)
 
 from bokeh.models import HoverTool
 from bokeh.core.enums import MarkerType
@@ -101,29 +106,42 @@ class DataUIManager(param.Parameterized):
     def get_data_actions(self):
         """Return a list of default data actions."""
         plot_action = PlotAction()
-        download_action = DownloadAction()
+        download_action = DownloadDataAction()
         permalink_action = PermalinkAction()
+        download_catalog = DownloadDataCatalogAction()
 
         plot_button = dict(
             name="Plot",
             button_type="primary",
             icon="chart-line",
+            action_type="display",
             callback=plot_action.callback,
         )
         download_button = dict(
             name="Download",
             button_type="primary",
-            icon="download",
+            icon="file-download",
+            action_type="download",
+            filename="data.csv",
             callback=download_action.callback,
         )
         permalink_button = dict(
             name="Permalink",
             button_type="primary",
             icon="link",
+            action_type="link",
             callback=permalink_action.callback,
         )
+        download_catalog_button = dict(
+            name="Download Catalog",
+            button_type="primary",
+            icon="file-download",
+            action_type="download",
+            filename="catalog.csv",
+            callback=download_catalog.callback,
+        )
 
-        return [plot_button, download_button, permalink_button]
+        return [plot_button, download_button, permalink_button, download_catalog_button]
 
 
 notifications = pn.state.notifications
@@ -383,16 +401,34 @@ class DataUI(param.Parameterized):
     def create_data_actions(self, actions):
         action_buttons = []
         for action in actions:
-            button = pn.widgets.Button(
-                name=action["name"],
-                button_type=action["button_type"],
-                icon=action["icon"],
-            )
+            if action["action_type"] == "download":
 
-            def on_click(event, callback=action["callback"]):
-                callback(event, self)
+                def _download_callback():
+                    sio = action["callback"](None, self)
+                    if sio:
+                        return sio
+                    else:
+                        return None
 
-            button.on_click(on_click)
+                button = pn.widgets.FileDownload(
+                    label=action["name"],
+                    callback=_download_callback,
+                    filename=action["filename"],
+                    button_type=action["button_type"],
+                    icon=action["icon"],
+                    embed=False,
+                )
+            else:
+                button = pn.widgets.Button(
+                    name=action["name"],
+                    button_type=action["button_type"],
+                    icon=action["icon"],
+                )
+
+                def on_click(event, callback=action["callback"]):
+                    callback(event, self)
+
+                button.on_click(on_click)
             action_buttons.append(button)
         return action_buttons
 

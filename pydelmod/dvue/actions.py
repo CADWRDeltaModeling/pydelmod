@@ -38,7 +38,8 @@ class PlotAction:
             dataui._display_panel.loading = False
 
 
-class DownloadAction:
+class DownloadDataAction:
+
     def callback(self, event, dataui):
         dataui._display_panel.loading = True
         try:
@@ -54,6 +55,23 @@ class DownloadAction:
             pn.state.notifications.error(
                 "Error downloading data: " + str(e), duration=0
             )
+        finally:
+            dataui._display_panel.loading = False
+
+
+class DownloadDataCatalogAction:
+    def callback(self, event, dataui):
+        """Callback to download the currently displayed catalog as a CSV file."""
+        dataui._display_panel.loading = True
+        try:
+            df = dataui._dataui_manager.get_data_catalog()
+            sio = StringIO()
+            df.to_csv(sio, index=False)
+            sio.seek(0)
+            return sio
+        except Exception as e:
+            logger.error(f"Error downloading catalog: {e}")
+            pn.state.notifications.error("Failed to download catalog")
         finally:
             dataui._display_panel.loading = False
 
