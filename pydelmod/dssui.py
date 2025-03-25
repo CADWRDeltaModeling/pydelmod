@@ -189,6 +189,7 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
                 time_range[1].strftime("%Y-%m-%d"),
             )
         df = df[slice(df.first_valid_index(), df.last_valid_index())]
+        unit = unit.lower() if unit else unit
         return df, unit, ptype
 
     # methods below if geolocation data is available
