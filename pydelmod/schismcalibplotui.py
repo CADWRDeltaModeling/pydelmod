@@ -403,4 +403,6 @@ def schism_calib_plot_ui(config_file, base_dir=None, **kwargs):
     import cartopy.crs as ccrs
 
     manager = SchismCalibPlotUIManager(config_file, base_dir=base_dir, **kwargs)
-    DataUI(manager, crs=ccrs.UTM(10)).create_view().show()
+    DataUI(manager, crs=ccrs.UTM(10)).create_view(
+        title="Schism Calibration Plot UI"
+    ).show()

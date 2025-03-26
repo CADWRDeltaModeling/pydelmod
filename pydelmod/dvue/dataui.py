@@ -505,7 +505,7 @@ class DataUI(param.Parameterized):
         about_btn.on_click(about_callback)
         return about_btn
 
-    def create_view(self):
+    def create_view(self, title="Data User Interface"):
         main_panel = self.create_data_table(self._dfcat)
         self.setup_location_sync()
         control_widgets = self._dataui_manager.get_widgets()
@@ -559,7 +559,7 @@ class DataUI(param.Parameterized):
         main_view = pn.Column(pn.Row(main_panel, sizing_mode="stretch_both"))
 
         template = pn.template.VanillaTemplate(
-            title="Data User Interface",
+            title=title,
             sidebar=[sidebar_view],
             sidebar_width=450,
             header_color="lightgray",

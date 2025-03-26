@@ -630,7 +630,7 @@ def show_dsm2_output_ui(echo_files, channel_shapefile=None):
 
     plotter = build_output_plotter(*echo_files, channel_shapefile=channel_shapefile)
     ui = dataui.DataUI(plotter, crs=ccrs.UTM(10))
-    ui.create_view().show()
+    ui.create_view(title="DSM2 Output UI").show()
 
 
 @click.command()
@@ -661,4 +661,4 @@ def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
     ui = dataui.DataUI(
         tidefile_manager, crs=ccrs.epsg("26910"), station_id_column="geoid"
     )
-    ui.create_view().show()
+    ui.create_view(title="DSM2 Tidefile UI").show()

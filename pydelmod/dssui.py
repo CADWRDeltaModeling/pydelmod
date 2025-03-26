@@ -287,4 +287,4 @@ def show_dss_ui(
         filename_column="filename",
     )
     ui = DataUI(dssuimgr, crs=crs_cartopy)
-    ui.create_view().show()
+    ui.create_view(title="DSS Data UI").show()

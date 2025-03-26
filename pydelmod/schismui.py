@@ -218,4 +218,4 @@ def show_schism_output_ui(
         ),
         crs=ccrs.UTM(10),
     )
-    ui.create_view().show()
+    ui.create_view(title="Schism Output UI").show()
