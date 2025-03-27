@@ -188,6 +188,7 @@ class DataUI(param.Parameterized):
         self._station_id_column = station_id_column
         super().__init__(**kwargs)
         self._dataui_manager = dataui_manager
+        self._dataui_manager._dataui = self  # insert a reference to self in the dataui_manager for progress bar updates for example
         self._dfcat = self._dataui_manager.get_data_catalog()
         self.param.map_color_category.objects = (
             self._dataui_manager.get_map_color_columns()
@@ -405,6 +406,12 @@ class DataUI(param.Parameterized):
 
                 def _download_callback():
                     sio = action["callback"](None, self)
+                    # Hide progress when download is initiated
+                    import asyncio
+
+                    pn.state.curdoc.add_next_tick_callback(
+                        lambda: asyncio.create_task(self._hide_progress_after_delay())
+                    )
                     if sio:
                         return sio
                     else:
@@ -432,6 +439,13 @@ class DataUI(param.Parameterized):
             action_buttons.append(button)
         return action_buttons
 
+    async def _hide_progress_after_delay(self):
+        """Hide the progress bar after a short delay to show completion"""
+        import asyncio
+
+        await asyncio.sleep(0.5)
+        self.hide_progress()
+
     def create_data_table(self, dfs):
         column_width_map = self._dataui_manager.get_table_column_width_map()
         dfs = dfs[self._dataui_manager.get_table_columns()]
@@ -443,7 +457,10 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self._dataui_manager.get_table_filters(),
             page_size=200,
-            configuration={"headerFilterLiveFilterDelay": 600},
+            configuration={
+                "headerFilterLiveFilterDelay": 600,
+                "columnDefaults": {"tooltip": True},
+            },
         )
 
         self._display_panel = pn.Row()
@@ -509,6 +526,18 @@ class DataUI(param.Parameterized):
         main_panel = self.create_data_table(self._dfcat)
         self.setup_location_sync()
         control_widgets = self._dataui_manager.get_widgets()
+
+        # Create progress bar
+        self.progress_bar = pn.indicators.Progress(
+            name="Progress",
+            value=0,
+            min_width=400,
+            sizing_mode="stretch_width",
+            margin=(10, 5, 10, 5),
+            bar_color="primary",
+            visible=False,
+        )
+
         if hasattr(self, "_map_features"):
             map_options = pn.WidgetBox(
                 "Map Options",
@@ -552,10 +581,13 @@ class DataUI(param.Parameterized):
                     ("Map", map_view),
                     ("Options", control_widgets),
                     ("Map Options", map_options),
-                )
+                ),
+                self.progress_bar,
             )
         else:
-            sidebar_view = pn.Column(pn.Tabs(("Options", control_widgets)))
+            sidebar_view = pn.Column(
+                pn.Tabs(("Options", control_widgets)), self.progress_bar
+            )
         main_view = pn.Column(pn.Row(main_panel, sizing_mode="stretch_both"))
 
         template = pn.template.VanillaTemplate(
@@ -570,3 +602,28 @@ class DataUI(param.Parameterized):
         sidebar_view.append(self.create_about_button(template))
         self._template = template
         return template
+
+    def set_progress(self, value):
+        """
+        Set the progress bar value.
+
+        Parameters:
+        -----------
+        value : int
+            Value between 0-100 for progress percentage, or -1 for indeterminate progress
+        """
+        self.progress_bar.visible = True
+        if value == -1:
+            # Set to indeterminate mode
+            self.progress_bar.indeterminate = True
+        else:
+            self.progress_bar.indeterminate = False
+            self.progress_bar.value = max(
+                0, min(100, value)
+            )  # Ensure value is between 0-100
+
+    def hide_progress(self):
+        """Hide the progress bar."""
+        self.progress_bar.visible = False
+        self.progress_bar.value = 0
+        self.progress_bar.indeterminate = False

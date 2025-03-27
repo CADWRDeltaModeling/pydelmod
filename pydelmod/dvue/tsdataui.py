@@ -163,9 +163,33 @@ class TimeSeriesDataUIManager(DataUIManager):
         return control_widgets
 
     def get_data(self, df):
-        for _, r in df.iterrows():
+        # Start with 0 progress
+        # Get the DataUI instance from the caller
+        dataui = self._dataui if hasattr(self, "_dataui") else None
+        if dataui:
+            dataui.set_progress(0)
+
+        # Calculate progress increment per row
+        total_rows = len(df)
+        if total_rows == 0:  # Avoid division by zero
+            return
+
+        progress_per_row = 50 / total_rows  # We'll use 0-50% range for the iteration
+
+        # Process each row, updating progress as we go
+        for i, (_, r) in enumerate(df.iterrows()):
             data, _, _ = self.get_data_for_time_range(r, self.time_range)
+
+            # Update progress - scale from 0 to 50%
+            if dataui:
+                current_progress = int(progress_per_row * (i + 1))
+                dataui.set_progress(current_progress)
+
             yield data
+
+        # After completing all rows, ensure progress is at 50%
+        if dataui:
+            dataui.set_progress(50)
 
     # display related support for tables
     def get_table_columns(self):
@@ -199,7 +223,23 @@ class TimeSeriesDataUIManager(DataUIManager):
         station_map = {}  # list of stations for each unit
         if self.display_fileno:
             local_unique_files = df[self.filename_column].unique()
-        for _, r in df.iterrows():
+
+        # Get the DataUI instance if available
+        dataui = self._dataui if hasattr(self, "_dataui") else None
+
+        # Start at 50% progress (continuing from get_data method)
+        if dataui:
+            dataui.set_progress(50)
+
+        # Calculate progress increment per row
+        total_rows = len(df)
+        if total_rows > 0:  # Avoid division by zero
+            progress_per_row = (
+                40 / total_rows
+            )  # We'll use 50-90% range for the iteration
+
+        # Process each row
+        for i, (_, r) in enumerate(df.iterrows()):
             try:
                 data, unit, _ = self.get_data_for_time_range(r, time_range)
                 if isinstance(data.index, pd.PeriodIndex):
@@ -251,11 +291,22 @@ class TimeSeriesDataUIManager(DataUIManager):
                     pn.state.notifications.error(
                         f"Error while creating curve for row: {r}: {e}"
                     )
+
+            # Update progress after each row is processed - scale from 50 to 90%
+            if dataui and total_rows > 0:
+                current_progress = 50 + int(progress_per_row * (i + 1))
+                dataui.set_progress(current_progress)
+
         title_map = {k: self.create_title(v) for k, v in title_map.items()}
         if self.sensible_range_yaxis:
             for unit in layout_map.keys():
                 for crv in layout_map[unit]:
                     range_map[unit] = self._calculate_range(range_map[unit], crv.data)
+
+        # Ensure we reach 90% when layout creation is complete
+        if dataui:
+            dataui.set_progress(90)
+
         return layout_map, station_map, range_map, title_map
 
     def _calculate_range(self, current_range, df, factor=0.0):
