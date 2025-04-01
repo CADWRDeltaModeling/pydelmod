@@ -403,23 +403,29 @@ class DataUI(param.Parameterized):
         action_buttons = []
         for action in actions:
             if action["action_type"] == "download":
+                # Create a closure that captures the current action
+                def create_download_callback(current_action):
+                    def _download_callback():
+                        sio = current_action["callback"](None, self)
+                        # Hide progress when download is initiated
+                        import asyncio
 
-                def _download_callback():
-                    sio = action["callback"](None, self)
-                    # Hide progress when download is initiated
-                    import asyncio
+                        pn.state.curdoc.add_next_tick_callback(
+                            lambda: asyncio.create_task(
+                                self._hide_progress_after_delay()
+                            )
+                        )
+                        if sio:
+                            return sio
+                        else:
+                            return None
 
-                    pn.state.curdoc.add_next_tick_callback(
-                        lambda: asyncio.create_task(self._hide_progress_after_delay())
-                    )
-                    if sio:
-                        return sio
-                    else:
-                        return None
+                    return _download_callback
 
+                # Pass the current action to create a specific callback function for this action
                 button = pn.widgets.FileDownload(
                     label=action["name"],
-                    callback=_download_callback,
+                    callback=create_download_callback(action),
                     filename=action["filename"],
                     button_type=action["button_type"],
                     icon=action["icon"],
@@ -432,10 +438,15 @@ class DataUI(param.Parameterized):
                     icon=action["icon"],
                 )
 
-                def on_click(event, callback=action["callback"]):
-                    callback(event, self)
+                # For regular buttons, we can use a function factory to create a proper closure
+                def create_click_handler(current_action):
+                    def on_click(event):
+                        current_action["callback"](event, self)
 
-                button.on_click(on_click)
+                    return on_click
+
+                button.on_click(create_click_handler(action))
+
             action_buttons.append(button)
         return action_buttons
 
