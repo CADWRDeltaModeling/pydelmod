@@ -131,6 +131,9 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
+    def is_irregular(self, r):
+        return False
+
     def get_data_for_time_range(self, r, time_range):
         unit = r["unit"]
         if r["source"] == "schism":
