@@ -173,6 +173,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
 
 
 import click
+import yaml
 
 
 @click.command()
@@ -195,6 +196,7 @@ import click
 )
 @click.option("--flux_out", default="flux.out", help="Path to the flux.out file")
 @click.option("--reftime", default="2020-01-01", help="Reference time")
+@click.option("--yaml_file", default=None, help="Path to the yaml file")
 def show_schism_output_ui(
     schism_dir=".",
     flux_xsect_file="flow_station_xsects.yaml",
@@ -203,19 +205,49 @@ def show_schism_output_ui(
     reftime="2020-01-01",
     repo_dir="screened",
     inventory_file="inventory_datasets.csv",
+    yaml_file=None,
 ):
-    study = schismstudy.SchismStudy(
-        schism_dir,
-        flux_xsect_file=flux_xsect_file,
-        station_in_file=station_in_file,
-        flux_out=flux_out,
-        reftime=reftime,
-    )
+    if yaml_file:
+        # Load the YAML file and create multiple studies
+        with open(yaml_file, "r") as file:
+            yaml_data = yaml.safe_load(file)
+
+        studies = []
+        for study_config in yaml_data.get("schism_studies", []):
+            studies.append(
+                schismstudy.SchismStudy(
+                    base_dir=study_config["base_dir"],
+                    flux_xsect_file=study_config.get(
+                        "flux_xsect_file", "flow_station_xsects.yaml"
+                    ),
+                    station_in_file=study_config.get("station_in_file", "station.in"),
+                    flux_out=study_config.get("flux_out", "flux.out"),
+                    reftime=study_config.get("reftime", "2020-01-01"),
+                    **study_config.get("additional_parameters", {}),
+                )
+            )
+    else:
+        # Create a single study if no YAML file is provided
+        studies = [
+            schismstudy.SchismStudy(
+                schism_dir,
+                flux_xsect_file=flux_xsect_file,
+                station_in_file=station_in_file,
+                flux_out=flux_out,
+                reftime=reftime,
+            )
+        ]
+
+    # Create the datastore
     ds = datastore.StationDatastore(repo_dir=repo_dir, inventory_file=inventory_file)
+
+    # Define the time range
     time_range = (pd.Timestamp(reftime), pd.Timestamp(reftime) + pd.Timedelta(days=250))
+
+    # Create the UI
     ui = DataUI(
         SchismOutputUIDataManager(
-            study,
+            *studies,
             datastore=ds,
             time_range=time_range,
         ),
