@@ -21,7 +21,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         This is merged with the data catalog to get the station locations.
         """
         self.studies = studies
-        self.study_dir_map = {str(s.base_dir): s for s in self.studies}
+        self.study_dir_map = {str(s.output_dir): s for s in self.studies}
         self.datastore = datastore
         self.catalog = self._merge_catalogs(self.studies, self.datastore)
         self.catalog["filename"] = self.catalog["filename"].astype(str)
@@ -195,18 +195,47 @@ import yaml
     "--station_in_file", default="station.in", help="Path to the station.in file"
 )
 @click.option("--flux_out", default="flux.out", help="Path to the flux.out file")
-@click.option("--reftime", default="2020-01-01", help="Reference time")
+@click.option("--reftime", default=None, help="Reference time")
 @click.option("--yaml_file", default=None, help="Path to the yaml file")
 def show_schism_output_ui(
     schism_dir=".",
     flux_xsect_file="flow_station_xsects.yaml",
     station_in_file="station.in",
     flux_out="flux.out",
-    reftime="2020-01-01",
+    reftime=None,
     repo_dir="screened",
     inventory_file="inventory_datasets.csv",
     yaml_file=None,
 ):
+    """
+    Shows Data UI for SCHISM output files.
+
+    This function creates a Data UI for SCHISM output files, allowing users to visualize and analyze the data.
+    It can handle multiple studies and datasets, and provides options for customizing the display.
+    The function can be run from the command line or imported as a module.
+
+    If a YAML file is provided, it will be used to create multiple studies.
+    Otherwise, a single study will be created using the provided parameters.
+
+    Example YAML file::
+
+    .. code-block:: yaml
+        \b
+        schism_studies:
+            - label: Study1
+            base_dir: "study1_directory"
+            flux_xsect_file: "study1_flow_station_xsects.yaml"
+            station_in_file: "study1_station.in"
+            output_dir: "outputs"
+            param_nml_file: "param.nml"
+            flux_out: "study1_flux.out"
+            reftime: "2020-01-01"
+            - label: Study2
+            base_dir: "study2_directory"
+        datastore:
+            repo_dir: /repo/continuous/screened
+            inventory_file: "inventory_datasets.csv"
+    """
     if yaml_file:
         # Load the YAML file and create multiple studies
         with open(yaml_file, "r") as file:
@@ -217,15 +246,21 @@ def show_schism_output_ui(
             studies.append(
                 schismstudy.SchismStudy(
                     base_dir=study_config["base_dir"],
+                    output_dir=study_config.get("output_dir", "outputs"),
+                    param_nml_file=study_config.get("param_nml_file", "param.nml"),
                     flux_xsect_file=study_config.get(
                         "flux_xsect_file", "flow_station_xsects.yaml"
                     ),
                     station_in_file=study_config.get("station_in_file", "station.in"),
                     flux_out=study_config.get("flux_out", "flux.out"),
-                    reftime=study_config.get("reftime", "2020-01-01"),
+                    reftime=reftime,
                     **study_config.get("additional_parameters", {}),
                 )
             )
+
+        datastore_config = yaml_data.get("datastore", {})
+        repo_dir = datastore_config.get("repo_dir", repo_dir)
+        inventory_file = datastore_config.get("inventory_file", inventory_file)
     else:
         # Create a single study if no YAML file is provided
         studies = [
@@ -238,11 +273,16 @@ def show_schism_output_ui(
             )
         ]
 
+    # study.reftime to study.endtime is the range of a single study
+    # Initialize the union range
+    union_start = min(study.reftime for study in studies)
+    union_end = max(study.endtime for study in studies)
+
+    # Create the union range as a single variable
+    time_range = (union_start, union_end)
+
     # Create the datastore
     ds = datastore.StationDatastore(repo_dir=repo_dir, inventory_file=inventory_file)
-
-    # Define the time range
-    time_range = (pd.Timestamp(reftime), pd.Timestamp(reftime) + pd.Timedelta(days=250))
 
     # Create the UI
     ui = DataUI(

@@ -4,6 +4,7 @@ import pathlib
 import schimpy
 import pandas as pd
 import schimpy.station as station
+from schimpy import param as schimpyparam
 import schimpy.schism_yaml as schism_yaml
 import schimpy.batch_metrics as schism_metrics
 import cartopy.crs as ccrs
@@ -12,6 +13,7 @@ from shapely.geometry import LineString
 import geopandas as gpd
 import param
 import diskcache
+import datetime
 
 # use logging
 import logging
@@ -105,19 +107,32 @@ class SchismStudy(param.Parameterized):
     def __init__(
         self,
         base_dir=".",
+        output_dir="outputs",
+        param_nml_file="param.nml",
         flux_xsect_file="flow_station_xsects.yaml",
         station_in_file="station.in",
         flux_out="flux.out",
-        reftime="2020-01-01",
+        reftime=None,
         **kwargs,
     ):
         self.base_dir = pathlib.Path(base_dir)
+        self.param_nml_file = self.interpret_file_relative_to(
+            self.base_dir, pathlib.Path(param_nml_file)
+        )
+        self.output_dir = self.interpret_file_relative_to(
+            self.base_dir, pathlib.Path(output_dir)
+        )
         try:
             self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
         except:
             logger.warning("Could not create cache. Using temporary cache.")
             self.cache = diskcache.Cache()
-        self.reftime = pd.Timestamp(reftime)
+        if not reftime:
+            nml = schimpyparam.read_params(self.param_nml_file)
+            self.reftime = nml.run_start
+            self.endtime = nml.run_start + datetime.timedelta(days=nml["rnday"])
+        else:
+            self.reftime = pd.Timestamp(reftime)
         self.flux_xsect_file = self.interpret_file_relative_to(
             self.base_dir, pathlib.Path(flux_xsect_file)
         )
@@ -125,7 +140,7 @@ class SchismStudy(param.Parameterized):
             self.base_dir, pathlib.Path(station_in_file)
         )
         self.flux_out = self.interpret_file_relative_to(
-            self.base_dir, pathlib.Path(flux_out)
+            self.output_dir, pathlib.Path(flux_out)
         )
         super().__init__(**kwargs)
         stations = read_station_in(self.station_in_file)
@@ -160,10 +175,10 @@ class SchismStudy(param.Parameterized):
 
     def interpret_file_relative_to(self, base_dir, fpath):
         full_path = base_dir / fpath
-        if full_path.exists():
-            return full_path
-        else:
-            return fpath
+        if not full_path.exists():
+            logger.warning(f"File {full_path} does not exist. Using {fpath} instead.")
+            full_path = fpath
+        return full_path
 
     def get_unit_for_variable(self, var):
         if var in ["elev"]:
@@ -191,7 +206,9 @@ class SchismStudy(param.Parameterized):
                 s = self.stations_gdf.copy()
                 s["variable"] = var
                 s["unit"] = self.get_unit_for_variable(var)
-                s["filename"] = str(self.base_dir / station.staout_name(var))
+                s["filename"] = self.interpret_file_relative_to(
+                    self.output_dir, station.staout_name(var)
+                )
                 s.drop(columns=["id", "subloc", "x", "y", "z"], inplace=True)
                 s.rename(columns={"station_id": "id"}, inplace=True)
                 var_stations.append(s)
@@ -252,7 +269,9 @@ class SchismStudy(param.Parameterized):
     @lru_cache(maxsize=32)
     def get_staout(self, variable, fpath=None):
         if fpath is None:
-            fpath = str(self.base_dir / station.staout_name(variable))
+            fpath = self.interpret_file_relative_to(
+                self.output_dir, station.staout_name(variable)
+            )
         if fpath in self.cache:
             logger.info(f"Using cached staout from disk: {fpath}")
             return self.cache[fpath]
