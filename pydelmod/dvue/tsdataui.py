@@ -1,6 +1,8 @@
 from .dataui import DataUIManager, full_stack
 from datetime import datetime, timedelta
 import warnings
+from functools import lru_cache
+
 
 warnings.filterwarnings("ignore")
 
@@ -14,11 +16,17 @@ hv.extension("bokeh")
 import param
 import panel as pn
 import colorcet as cc
+from holoviews.plotting.util import process_cmap
 
 pn.extension("tabulator", notifications=True, design="native")
 #
 LINE_DASH_MAP = ["solid", "dashed", "dotted", "dotdash", "dashdot"]
 from vtools.functions.filter import cosine_lanczos
+
+
+def unique_preserve_order(seq):
+    seen = set()
+    return [x for x in seq if not (x in seen or seen.add(x))]
 
 
 def get_color_dataframe(stations, color_cycle=hv.Cycle()):
@@ -39,6 +47,15 @@ def get_colors(stations, dfc):
     Create a dictionary with station names and colors
     """
     return hv.Cycle(list(dfc.loc[stations].values.flatten()))
+
+
+@lru_cache
+def get_categorical_color_maps():
+    cmaps = hv.plotting.util.list_cmaps(
+        records=True, category="Categorical", reverse=False
+    )
+    cmaps = {c.name + "." + c.provider: c for c in cmaps}
+    return cmaps
 
 
 class TimeSeriesDataUIManager(DataUIManager):
@@ -74,13 +91,18 @@ class TimeSeriesDataUIManager(DataUIManager):
         default=(0.01, 0.99), bounds=(0, 1), step=0.01, doc="Percentile range"
     )
     file_number_column_name = param.String(default="FILE_NUM")
+    color_cycle_name = param.Selector(
+        objects=list(get_categorical_color_maps().keys()),
+        default="glasbey_dark.colorcet",
+        doc="Color cycle name",
+    )
 
     def __init__(
         self, filename_column="FILE", file_number_column_name="FILE_NUM", **params
     ):
-        self.color_cycle = hv.Cycle(cc.glasbey_dark)
         # modify catalog if filename_column is present to include file number if multiple files are present
         catalog = self.get_data_catalog()
+        self.change_color_cycle()
         self.filename_column = filename_column
         self.file_number_column_name = file_number_column_name
         self.display_fileno = False
@@ -135,6 +157,14 @@ class TimeSeriesDataUIManager(DataUIManager):
 
         return list(MarkerType)
 
+    @param.depends("color_cycle_name", watch=True)
+    def change_color_cycle(self):
+        cmapinfo = get_categorical_color_maps()[self.color_cycle_name]
+        color_list = unique_preserve_order(
+            process_cmap(cmapinfo.name, provider=cmapinfo.provider)
+        )
+        self.color_cycle = hv.Cycle(color_list)
+
     def get_widgets(self):
         control_widgets = pn.Column(
             pn.pane.HTML("Change time range of data to display:"),
@@ -158,6 +188,7 @@ class TimeSeriesDataUIManager(DataUIManager):
             ),
             self.param.irregular_curve_connection,
             self.param.regular_curve_connection,
+            self.param.color_cycle_name,
         )
 
         return control_widgets
