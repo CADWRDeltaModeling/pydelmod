@@ -266,7 +266,7 @@ class TimeSeriesDataUIManager(DataUIManager):
         total_rows = len(df)
         if total_rows > 0:  # Avoid division by zero
             progress_per_row = (
-                40 / total_rows
+                70 / total_rows
             )  # We'll use 50-90% range for the iteration
 
         # Process each row

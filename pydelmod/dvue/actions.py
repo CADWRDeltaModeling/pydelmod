@@ -18,8 +18,8 @@ class PlotAction:
             # Get selected data
             dfselected = dataui.display_table.value.iloc[dataui.display_table.selection]
 
-            # Show 50% progress
-            dataui.set_progress(50)
+            # Show 20% progress
+            dataui.set_progress(20)
 
             plot_panel = dataui._dataui_manager.create_panel(dfselected)
 
