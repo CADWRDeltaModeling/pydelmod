@@ -183,5 +183,5 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
 # %%
 exmgr = ExampleTimeSeriesDataUIManager(gdf)
 ui = dataui.DataUI(exmgr, station_id_column="station_id" if MANY_TO_ONE else None)
-ui.create_view(title="Example Time Series Data UI").show()
+ui.create_view(title="Example Time Series Data UI").servable()
 # %%
