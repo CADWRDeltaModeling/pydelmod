@@ -7,19 +7,20 @@ from shapely.geometry import Point
 from pydelmod.dvue import dataui
 
 # Sample data
+variables = ["precipitation", "wind_speed", "flow"]
+units = ["mm", "m/s", "cfs"]
 data = {
     "station_id": ["1", "2", "3"],
     "station_name": ["Station A", "Station B", "Station C"],
     "Latitude": [34.05, 36.16, 37.77],
     "Longitude": [-118.25, -115.15, -122.42],
-    "variable": ["temperature"] * 3,
-    "unit": ["deg C", "mm", "m/s"],
+    "variable": variables,
+    "unit": units,
     "interval": ["hourly", "hourly", "hourly"],
     "start_year": ["2020", "2021", "2022"],
     "max_year": ["2023", "2024", "2025"],
     "source": ["", "", ""],
 }
-variables = ["precipitation", "wind_speed", "flow"]
 # Create a DataFrame
 df = pd.DataFrame(data)
 
@@ -27,9 +28,10 @@ MANY_TO_ONE = True
 if MANY_TO_ONE:
     expanded_data = []
     for _, row in df.iterrows():
-        for variable in variables:
+        for variable, unit in zip(variables, units):
             new_row = row.copy()
             new_row["variable"] = variable
+            new_row["unit"] = unit
             expanded_data.append(new_row)
 
     df = pd.DataFrame(expanded_data).reset_index(drop=True)
@@ -127,7 +129,7 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
         return False  # only regular time series data in example
 
     def get_data_for_time_range(self, r, time_range):
-        return tsdfs[r["station_name"]], "dummy_unit", "instantaneous"
+        return tsdfs[r["station_name"]], r["unit"], "instantaneous"
 
     # methods below if geolocation data is available
     def get_tooltips(self):
