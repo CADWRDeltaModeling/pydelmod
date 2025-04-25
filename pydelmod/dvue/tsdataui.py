@@ -2,7 +2,7 @@ from .dataui import DataUIManager, full_stack
 from datetime import datetime, timedelta
 import warnings
 from functools import lru_cache
-
+import os
 
 warnings.filterwarnings("ignore")
 
@@ -368,7 +368,9 @@ class TimeSeriesDataUIManager(DataUIManager):
                 df, time_range
             )
             if len(layout_map) == 0:
-                return hv.Div("<h3>Select rows from table and click on button</h3>")
+                return hv.Div(self.get_no_selection_message()).opts(
+                    sizing_mode="stretch_both"
+                )
             else:
                 return (
                     hv.Layout(

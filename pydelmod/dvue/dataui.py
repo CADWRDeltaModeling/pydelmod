@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import geopandas as gpd
 from io import StringIO
+from functools import lru_cache
 
 # viz and ui
 import hvplot.pandas  # noqa
@@ -83,6 +84,18 @@ class DataUIManager(param.Parameterized):
     # FIXME: this should not be here
     def create_title(self, title_map, unit, r):
         raise NotImplementedError("This method should be implemented by subclasses")
+
+    @lru_cache(maxsize=128)
+    def get_no_selection_message(self):
+        """return the message to be displayed when no selection is made"""
+        import os
+
+        resource_path = os.path.join(
+            os.path.dirname(__file__), "dataui.noselection.html"
+        )
+        with open(resource_path, "r") as file:
+            no_selection_message = file.read()
+        return no_selection_message
 
     def get_tooltips(self):
         raise NotImplementedError("This method should be implemented by subclasses")
@@ -483,8 +496,8 @@ class DataUI(param.Parameterized):
             self._action_panel.extend(action_buttons)
         self._action_panel.append(pn.layout.HSpacer())
         self._display_panel.append(
-            pn.pane.Markdown(
-                "### Select rows from table and click on button",
+            pn.pane.HTML(
+                self._dataui_manager.get_no_selection_message(),
                 sizing_mode="stretch_both",
             )
         )
