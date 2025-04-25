@@ -106,6 +106,7 @@ class SchismStudy(param.Parameterized):
 
     def __init__(
         self,
+        study_name="schism",
         base_dir=".",
         output_dir="outputs",
         param_nml_file="param.nml",
@@ -115,6 +116,7 @@ class SchismStudy(param.Parameterized):
         reftime=None,
         **kwargs,
     ):
+        self.study_name = study_name
         self.base_dir = pathlib.Path(base_dir)
         self.param_nml_file = self.interpret_file_relative_to(
             self.base_dir, pathlib.Path(param_nml_file)
@@ -225,6 +227,7 @@ class SchismStudy(param.Parameterized):
                 flux_stations["unit"] = "m^3/s"
                 flux_stations["filename"] = str(self.flux_out)
             df = pd.concat(var_stations + [flux_stations])
+            df["source"] = self.study_name
             self.cache[catalog_key] = df
             return df
 

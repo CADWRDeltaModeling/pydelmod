@@ -48,7 +48,6 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         """
         dfs = [s.get_catalog() for s in studies]
         df = pd.concat(dfs)
-        df["source"] = "schism"
         if datastore is not None:
             dfobs = self._convert_to_study_format(datastore.get_catalog())
             dfobs["source"] = "datastore"
@@ -71,10 +70,10 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
 
     def build_station_name(self, r):
         name = r["id"] + ":" + r["variable"]
-        if "FILE_NUM" not in r:
+        if "source" not in r:
             return f"{name}"
         else:
-            return f'{r["FILE_NUM"]}:{name}'
+            return f'{r["source"]}:{name}'
 
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
@@ -117,8 +116,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         return title
 
     def create_curve(self, df, r, unit, file_index=None):
-        file_index_label = f"{file_index}:" if file_index is not None else ""
-        crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
+        crvlabel = f'{r["source"]}::{r["id"]}/{r["variable"]}'
         ylabel = f'{r["variable"]} ({unit})'
         title = f'{r["variable"]} @ {r["id"]}'
         crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
@@ -136,16 +134,14 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
 
     def get_data_for_time_range(self, r, time_range):
         unit = r["unit"]
-        if r["source"] == "schism":
-            base_dir = str(pathlib.Path(r["filename"]).parent)
-            study = self.study_dir_map[base_dir]
-            df = study.get_data(r)
-        elif r["source"] == "datastore":
+        if r["source"] == "datastore":
             df = self.datastore.get_data(r)
             if self.convert_units:
                 df, unit = schismstudy.convert_to_SI(df, r["unit"])
         else:
-            df = pd.DataFrame(columns=["value"], dtype=float)  # empty dataframe
+            base_dir = str(pathlib.Path(r["filename"]).parent)
+            study = self.study_dir_map[base_dir]
+            df = study.get_data(r)
         ptype = "INST-VAL"
         df = df[slice(df.first_valid_index(), df.last_valid_index())]
         return df, unit, ptype
@@ -245,6 +241,7 @@ def show_schism_output_ui(
         for study_config in yaml_data.get("schism_studies", []):
             studies.append(
                 schismstudy.SchismStudy(
+                    study_name=study_config["label"],
                     base_dir=study_config["base_dir"],
                     output_dir=study_config.get("output_dir", "outputs"),
                     param_nml_file=study_config.get("param_nml_file", "param.nml"),
