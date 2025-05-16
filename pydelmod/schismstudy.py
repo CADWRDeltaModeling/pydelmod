@@ -136,6 +136,8 @@ class SchismStudy(param.Parameterized):
         except:
             logger.warning("Could not create cache. Using temporary cache.")
             self.cache = diskcache.Cache()
+        # Clear the cache on initialization to start fresh each time
+        self.cache.clear()
         if not reftime:
             nml = schimpyparam.read_params(self.param_nml_file)
             self.reftime = nml.run_start
@@ -184,9 +186,11 @@ class SchismStudy(param.Parameterized):
 
     def interpret_file_relative_to(self, base_dir, fpath):
         full_path = base_dir / fpath
+        print(f"full_path: {full_path}")
         if not full_path.exists():
             logger.warning(f"File {full_path} does not exist. Using {fpath} instead.")
             full_path = fpath
+        print(f"full_path: {full_path}")
         return full_path
 
     def get_unit_for_variable(self, var):
@@ -215,6 +219,7 @@ class SchismStudy(param.Parameterized):
                 s = self.stations_gdf.copy()
                 s["variable"] = var
                 s["unit"] = self.get_unit_for_variable(var)
+                print(station.staout_name(var))
                 s["filename"] = self.interpret_file_relative_to(
                     self.output_dir, station.staout_name(var)
                 )
