@@ -1,3 +1,4 @@
+from .utils import get_unique_short_names
 from .dataui import DataUIManager, full_stack
 from datetime import datetime, timedelta
 import warnings
@@ -254,6 +255,10 @@ class TimeSeriesDataUIManager(DataUIManager):
         station_map = {}  # list of stations for each unit
         if self.display_fileno:
             local_unique_files = df[self.filename_column].unique()
+            short_unique_files = get_unique_short_names(local_unique_files)
+            short_unique_filemap = {
+                k: v for k, v in zip(local_unique_files, short_unique_files)
+            }
 
         # Get the DataUI instance if available
         dataui = self._dataui if hasattr(self, "_dataui") else None
@@ -296,7 +301,9 @@ class TimeSeriesDataUIManager(DataUIManager):
                 unit = "X"
             try:
                 file_index = (
-                    r[self.file_number_column_name] if self.display_fileno else ""
+                    short_unique_filemap[r[self.filename_column]]
+                    if self.display_fileno
+                    else ""
                 )
                 crv = self.create_curve(
                     data,
