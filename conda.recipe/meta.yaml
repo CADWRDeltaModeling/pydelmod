@@ -1,9 +1,12 @@
 {% set name = "pydelmod" %}
-{% set data = load_setup_py_data() %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', '') %}
+{% if version == '' %}
+  {% set version = environ.get('GIT_FULL_HASH', '0.0.0+dev')[:7] %}
+{% endif %}
 
 package:
   name:           "{{ name|lower }}"
-  version:        "{{ data['version'] }}"
+  version:        "{{ version }}"
 
 source:
   #git_url: https://github.com/CADWRDeltaModeling/pydelmod.git
@@ -12,25 +15,22 @@ source:
 build:
   number: 0
   noarch: python
-  script: python setup.py install --single-version-externally-managed --record=record.txt
+  script: {{ PYTHON }} -m pip install . -vv
   entry_points:
- {% for entry in data['entry_points']['console_scripts'] %}
-    - {{ entry.split('=')[0].strip() }} = {{ entry.split('=')[1].strip() }}
-  {% endfor %}  #skip:           true
+    - pydelmod = pydelmod.cli:main
 
 requirements:
-  build:
-    - python
-    - setuptools
-    - pytest-runner
+  host:
+    - python >=3.7
+    - pip
+    - setuptools >=64.0
+    - setuptools_scm >=7.0
+    - wheel
 
   run:
-    - python
-     # dependencies are defined in setup.py
-    {% for dep in data['install_requires'] %}
-    - {{ dep.lower() }}
-    {% endfor %}
-    {# raw is for ignoring templating with cookiecutter, leaving it for use with conda-build #}
+    - python >=3.7
+    # Add your dependencies here manually since we can't load from setup.py
+    # If you had dependencies in setup.py, list them explicitly here
 
 
 test:
@@ -41,6 +41,6 @@ test:
 
 about:
   home:           "https://github.com/CADWRDeltaModeling/pydelmod"
-  license: {{ data['license'] }}
+  license: MIT
   license_file: LICENSE
-  summary:        "python package for Delta Modeling"
+  summary:        "Python package to work with Delta Modeling tasks"

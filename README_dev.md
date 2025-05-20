@@ -29,8 +29,15 @@ Version format:
 3. Commit all changes
 4. Tag the release: `git tag v0.x.x`
 5. Push the tag: `git push --tags`
-6. Build the package: `python -m build`
-7. Upload to PyPI: `python -m twine upload dist/*`
+6. Create a new release on GitHub using the tag
+   - This will trigger the GitHub Actions workflow to publish to PyPI
+   - The conda package will be built and published by the push event
+
+Alternatively, you can manually build and upload:
+
+7. Build the package: `python -m build`
+8. Upload to PyPI: `python -m twine upload dist/*`
+9. Build conda package: `./conda_build.sh`
 
 ## Project Structure
 
@@ -67,3 +74,27 @@ For development, you can use the provided conda environment:
 conda env create -f environment_dev.yml
 conda activate dev_pydelmod
 ```
+
+## Building Conda Package
+
+To build the conda package:
+
+```bash
+# Use the helper script to automatically extract version from git
+./conda_build.sh
+
+# Or build directly with conda build
+conda build conda.recipe/
+```
+
+Note: The conda recipe uses git tags for versioning. If no tag exists, it will use the git commit hash.
+
+## Continuous Integration
+
+This package uses GitHub Actions for continuous integration:
+
+1. `python-package-conda.yml` - Builds the conda package and uploads to Anaconda.org when triggered
+2. `python-package-pip.yml` - Tests the package installation with pip across different Python versions
+3. `python-publish.yml` - Publishes the package to PyPI when a new release is created
+
+You can also manually trigger these workflows from the GitHub Actions tab in the repository.

@@ -1,6 +1,6 @@
 name: Python Package using Conda
 
-on: [push]
+on: [push, pull_request, workflow_dispatch]
 
 jobs:
   build-linux:
@@ -9,11 +9,11 @@ jobs:
       max-parallel: 5
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
-        fetch-depth: 0
+        fetch-depth: 0  # This is important for setuptools_scm to get version from git history
     - name: Set up Python 3.11
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: 3.11
     - name: Add conda to system path
@@ -27,8 +27,23 @@ jobs:
         conda create -n test_pydelmod -y conda-build conda-verify numpy anaconda-client
         source $CONDA/etc/profile.d/conda.sh
         conda activate test_pydelmod
+        
+        # Set Git version environment variables for conda build
+        GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$GIT_DESCRIBE_TAG" ]; then
+          export GIT_FULL_HASH=$(git rev-parse HEAD)
+          echo "No git tag found, using commit hash: ${GIT_FULL_HASH:0:7}"
+        else
+          export GIT_DESCRIBE_TAG=$GIT_DESCRIBE_TAG
+          echo "Using git tag: $GIT_DESCRIBE_TAG"
+        fi
+        
+        # Build and upload
         conda config --set anaconda_upload yes
-        conda build -c cadwr-dms -c defaults -c plotly --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN" conda.recipe
+        chmod +x ./conda_build.sh
+        ./conda_build.sh -c cadwr-dms -c defaults -c plotly --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN"
+        
+        # Clean up
         conda activate
         conda remove -n test_pydelmod --all
   
