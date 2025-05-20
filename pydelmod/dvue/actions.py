@@ -44,7 +44,7 @@ class PlotAction:
         except Exception as e:
             stack_str = full_stack()
             logger.error(stack_str)
-            dataui._display_panel.objects = [pn.pane.Markdown(stack_str)]
+            dataui._display_panel.objects = [pn.pane.Markdown("```"+stack_str+"```")]
             pn.state.notifications.error(
                 "Error updating plots: " + str(stack_str), duration=0
             )
