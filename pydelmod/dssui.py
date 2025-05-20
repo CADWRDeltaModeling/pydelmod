@@ -70,6 +70,10 @@ class DSSDataUIManager(TimeSeriesDataUIManager):
         self.dssfiles = dssfiles
         self.dfcatpath = self._build_map_pathname_to_catalog(self.dfcat)
         super().__init__(**kwargs)
+        self.color_cycle_column = "B"
+        self.dashed_line_cycle_column = "filename"
+        self.marker_cycle_column = "F"
+
 
     def __del__(self):
         if hasattr(self, "dssfiles"):

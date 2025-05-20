@@ -36,6 +36,10 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
                 pd.Timestamp(etime + pd.Timedelta(days=250)),
             )
         super().__init__(filename_column="filename", **kwargs)
+        self.color_cycle_column = "id"
+        self.dashed_line_cycle_column = "source"
+        self.marker_cycle_column = "variable"
+
 
     def get_widgets(self):
         control_widgets = super().get_widgets()
