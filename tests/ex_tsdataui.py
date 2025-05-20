@@ -33,9 +33,30 @@ if MANY_TO_ONE:
             new_row["variable"] = variable
             new_row["unit"] = unit
             expanded_data.append(new_row)
+            if row["station_id"] == "1":
+                new_row = row.copy()
+                new_row["variable"] = variable
+                new_row["unit"] = unit
+                new_row["interval"] = "daily"
+                expanded_data.append(new_row)
+            if row["station_id"] == "2":
+                new_row = row.copy()
+                new_row["variable"] = variable + "_x"
+                new_row["unit"] = unit
+                expanded_data.append(new_row)
 
     df = pd.DataFrame(expanded_data).reset_index(drop=True)
 
+# Expand the DataFrame to include multiple intervals
+#intervals = ["hourly", "daily", "monthly"]
+
+#expanded_data = []
+#for interval in intervals:
+#    for _, row in df.iterrows():
+#        new_row = row.copy()
+#        new_row["interval"] = interval
+#        expanded_data.append(new_row)
+#df = pd.DataFrame(expanded_data).reset_index(drop=True)
 # Set the coordinate r
 # Convert to a GeoDataFrame
 gdf = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df.Longitude, df.Latitude))
@@ -53,18 +74,99 @@ print(gdf)
 
 time_range = pd.date_range(start="1/1/2020", end="1/1/2021", freq="h")
 
-
-def create_tsdf(n=1000):
-    date_rng = pd.date_range(start="1/1/2020", end="1/1/2021", freq="h")
+def create_tsdf(interval="hourly", n=10):
+    if interval == "hourly":
+        freq = "h"
+    elif interval == "daily":
+        freq = "d"
+    elif interval == "monthly":
+        freq = "M"
+    else:
+        raise ValueError("Interval must be 'hourly' or 'daily'")
+    date_rng = pd.date_range(start="1/1/2020", end="1/1/2021", freq=freq)
     df = pd.DataFrame(
-        np.random.randint(0, 100, size=(len(date_rng))),
+        np.random.randint(0, n, size=(len(date_rng))),
         index=date_rng,
         columns=["value"],
     )
     return df
 
+def create_smooth_tsdf(interval="hourly", n=10, noise_scale=1.0):
+    """
+    Create a smooth random time series dataframe by cumulative sum of random noise.
+    """
+    if interval == "hourly":
+        freq = "h"
+    elif interval == "daily":
+        freq = "d"
+    elif interval == "monthly":
+        freq = "M"
+    else:
+        raise ValueError("Interval must be 'hourly', 'daily', or 'monthly'")
+    date_rng = pd.date_range(start="1/1/2020", end="1/1/2021", freq=freq)
+    # Generate smooth random walk
+    values = np.cumsum(np.random.randn(len(date_rng)) * noise_scale)
+    df = pd.DataFrame(values, index=date_rng, columns=["value"])
+    return df
 
-tsdfs = {sname: create_tsdf() for sname in gdf.station_name}
+def create_sin_cos_tsdf(interval="hourly", amplitude=1.0, freq_scale=1.0, phase=0.0, kind="sin"):
+    """
+    Create a time series DataFrame with sine, cosine, or both.
+    kind: "sin", "cos", or "both"
+    """
+    if interval == "hourly":
+        freq = "h"
+    elif interval == "daily":
+        freq = "d"
+    elif interval == "monthly":
+        freq = "M"
+    else:
+        raise ValueError("Interval must be 'hourly', 'daily', or 'monthly'")
+    date_rng = pd.date_range(start="1/1/2020", end="1/1/2021", freq=freq)
+    t = np.arange(len(date_rng))
+    if kind == "sin":
+        values = amplitude * np.sin(2 * np.pi * freq_scale * t / len(t) + phase)
+    elif kind == "cos":
+        values = amplitude * np.cos(2 * np.pi * freq_scale * t / len(t) + phase)
+    elif kind == "both":
+        values = amplitude * (
+            np.sin(2 * np.pi * freq_scale * t / len(t) + phase)
+            + np.cos(2 * np.pi * freq_scale * t / len(t) + phase)
+        )
+    else:
+        raise ValueError("kind must be 'sin', 'cos', or 'both'")
+    df = pd.DataFrame(values, index=date_rng, columns=["value"])
+    return df
+
+def freq_to_period(freq):
+    if freq == "hourly":
+        return "h"
+    elif freq == "daily":
+        return "d"
+    elif freq == "monthly":
+        return "M"
+    else:
+        raise ValueError(f"Unsupported frequency: {freq}")
+
+tsdfs = {
+    row["station_name"]
+    + row["unit"]
+    + row["variable"]
+    + row["interval"]: create_tsdf(interval=row["interval"])
+    for _, row in gdf.iterrows()
+}
+
+smooth_tsdfs = {
+    row["station_name"]
+    + row["unit"]
+    + row["variable"]
+    + row["interval"]: create_smooth_tsdf(interval=row["interval"])
+    for _, row in gdf.iterrows()
+}
+
+sin_df = create_sin_cos_tsdf(interval="hourly", amplitude=5, freq_scale=3, kind="sin")
+cos_df = create_sin_cos_tsdf(interval="daily", amplitude=2, freq_scale=1, kind="cos")
+both_df = create_sin_cos_tsdf(interval="hourly", amplitude=3, freq_scale=2, kind="both")
 # %%
 from pydelmod.dvue import tsdataui
 import holoviews as hv
@@ -75,7 +177,10 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
     def __init__(self, gdf):
         self.gdf = gdf
         super().__init__(filename_column="source")
-
+        self.color_cycle_column = "station_name"
+        self.dashed_line_cycle_column = "interval"
+        self.marker_cycle_column = "variable"
+    
     def get_data_catalog(self):
         return self.gdf
 
@@ -129,7 +234,11 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
         return False  # only regular time series data in example
 
     def get_data_for_time_range(self, r, time_range):
-        return tsdfs[r["station_name"]], r["unit"], "instantaneous"
+        return (
+            smooth_tsdfs[r["station_name"] + r["unit"] + r["variable"] + r["interval"]],
+            r["unit"],
+            "instantaneous",
+        )
 
     # methods below if geolocation data is available
     def get_tooltips(self):
@@ -148,7 +257,9 @@ class ExampleTimeSeriesDataUIManager(tsdataui.TimeSeriesDataUIManager):
 
     def create_curve(self, df, r, unit, file_index=None):
         file_index_label = f"{file_index}:" if file_index is not None else ""
-        crvlabel = f'{file_index_label}{r["station_id"]}/{r["variable"]}'
+        crvlabel = (
+            f'{file_index_label}{r["station_id"]}/{r["variable"]}/{r["interval"]}'
+        )
         ylabel = f'{r["variable"]} ({unit})'
         title = f'{r["variable"]} @ {r["station_id"]}'
         crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)

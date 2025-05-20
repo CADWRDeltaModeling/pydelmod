@@ -97,6 +97,16 @@ class TimeSeriesDataUIManager(DataUIManager):
         default="glasbey_dark.colorcet",
         doc="Color cycle name",
     )
+    shared_axes = param.Boolean(default=True, doc="Share axes across plots")
+    marker_cycle_column = param.Selector(
+        default=None, objects=[], doc="Column to use for marker cycle"
+    )
+    dashed_line_cycle_column = param.Selector(
+        default=None, objects=[], doc="Column to use for dashed line cycle"
+    )
+    color_cycle_column = param.Selector(
+        default=None, objects=[], doc="Column to use for color cycle"
+    )
 
     def __init__(
         self, filename_column="FILE", file_number_column_name="FILE_NUM", **params
@@ -116,6 +126,12 @@ class TimeSeriesDataUIManager(DataUIManager):
                 self.display_fileno = True
         self.time_range = self.get_time_range(self.get_data_catalog())
         super().__init__(**params)
+        table_columns = list(self.get_table_columns())
+        # Add blank (None) option at the start
+        columns_with_blank = [None] + table_columns
+        self.param.marker_cycle_column.objects = columns_with_blank
+        self.param.dashed_line_cycle_column.objects = columns_with_blank
+        self.param.color_cycle_column.objects = columns_with_blank
 
     def get_data_catalog(self):
         raise NotImplementedError("Method get_data_catalog not implemented")
@@ -154,9 +170,9 @@ class TimeSeriesDataUIManager(DataUIManager):
 
     def get_name_to_marker(self):
         """return a dictionary mapping column names to marker names"""
-        from bokeh.core.enums import MarkerType
-
-        return list(MarkerType)
+        #from bokeh.core.enums import MarkerType
+        # list(MarkerType) -> ['asterisk', 'circle', 'circle_cross', 'circle_dot', 'circle_x', 'circle_y', 'cross', 'dash', 'diamond', 'diamond_cross', 'diamond_dot', 'dot', 'hex', 'hex_dot', 'inverted_triangle', 'plus', 'square', 'square_cross', 'square_dot', 'square_pin', 'square_x', 'star', 'star_dot', 'triangle', 'triangle_dot', 'triangle_pin', 'x', 'y']
+        return ['circle', 'triangle', 'square', 'diamond', 'cross', 'x', 'star', 'plus', 'dot', 'hex', 'inverted_triangle', 'asterisk', 'circle_cross', 'square_cross', 'diamond_cross', 'circle_dot', 'square_dot', 'diamond_dot', 'star_dot', 'hex_dot', 'triangle_dot', 'circle_x', 'square_x', 'circle_y', 'y', 'dash', 'square_pin', 'triangle_pin']
 
     @param.depends("color_cycle_name", watch=True)
     def change_color_cycle(self):
@@ -178,21 +194,34 @@ class TimeSeriesDataUIManager(DataUIManager):
                     }
                 },
             ),
+        )
+        plot_widgets = pn.Column(
             pn.WidgetBox(
                 self.param.show_legend,
                 self.param.legend_position,
             ),
+            pn.WidgetBox(
+                self.param.irregular_curve_connection,
+                self.param.regular_curve_connection,
+            ),
+            self.param.marker_cycle_column,
+            self.param.dashed_line_cycle_column,
+            self.param.color_cycle_name,
+            self.param.shared_axes,  # Add checkbox for shared_axes
+        )
+        transform_widgets = pn.Column(
             self.param.fill_gap,
             self.param.do_tidal_filter,
             pn.Row(
                 self.param.sensible_range_yaxis, self.param.sensible_percentile_range
             ),
-            self.param.irregular_curve_connection,
-            self.param.regular_curve_connection,
-            self.param.color_cycle_name,
         )
-
-        return control_widgets
+        widget_tabs = pn.Tabs(
+            ("Time", control_widgets),
+            ("Plot", plot_widgets),
+            ("Transform", transform_widgets),
+        )
+        return widget_tabs
 
     def get_data(self, df):
         # Start with 0 progress
@@ -248,100 +277,139 @@ class TimeSeriesDataUIManager(DataUIManager):
         self.adjust_column_width(column_width_map)
         return column_width_map
 
+    def get_color_style_mapping(self, unique_values):
+        """
+        Map unique values to colors.
+        """
+        color_df = get_color_dataframe(unique_values, self.color_cycle)
+        return {
+            value: color_df.loc[value].values.flatten()[0] for value in unique_values
+        }
+
+    def get_line_style_mapping(self, unique_values):
+        """
+        Map unique values to line dash styles.
+        """
+        return {
+            value: LINE_DASH_MAP[i % len(LINE_DASH_MAP)]
+            for i, value in enumerate(unique_values)
+        }
+
+    def get_marker_style_mapping(self, unique_values):
+        """
+        Map unique values to marker styles.
+        """
+        from bokeh.core.enums import MarkerType
+
+        marker_types = [None] + list(MarkerType)
+        return {
+            value: marker_types[i % len(marker_types)]
+            for i, value in enumerate(unique_values)
+        }
+
+    def _process_curve_data(self, data, r, time_range):
+        """Process time series data based on index type and apply transformations."""
+        if isinstance(data.index, pd.PeriodIndex):
+            data = data[
+                (data.index.start_time >= time_range[0]) & 
+                (data.index.end_time <= time_range[1])
+            ]
+        else:  # Assume DatetimeIndex
+            data = data[
+                (data.index >= time_range[0]) & 
+                (data.index <= time_range[1])
+            ]
+            
+        # Apply optional data transformations
+        if self.fill_gap > 0:
+            data = data.interpolate(limit=self.fill_gap)
+        if self.do_tidal_filter and not self.is_irregular(r):
+            data = cosine_lanczos(data, "40h")
+            
+        return data
+
+    def _add_curve_to_layout(self, layout_map, station_map, title_map, range_map, 
+                             curve, row, unit, station_name):
+        """Add a curve to the layout maps."""
+        if unit not in layout_map:
+            layout_map[unit] = []
+            range_map[unit] = None
+            station_map[unit] = []
+            
+        layout_map[unit].append((curve, row))
+        station_map[unit].append(station_name)
+        self.append_to_title_map(title_map, unit, row)
+        
     def create_layout(self, df, time_range):
+        """
+        Create layout maps for visualizing time series data.
+        
+        Returns:
+            tuple: (layout_map, station_map, range_map, title_map)
+                layout_map: Dictionary mapping units to lists of (curve, row) tuples
+                station_map: Dictionary mapping units to lists of station names
+                range_map: Dictionary mapping units to y-axis ranges
+                title_map: Dictionary mapping units to title information
+        """
         layout_map = {}
         title_map = {}
         range_map = {}
         station_map = {}  # list of stations for each unit
+        
+        # Prepare file index mapping if needed
+        file_index_map = {}
         if self.display_fileno:
             local_unique_files = df[self.filename_column].unique()
             short_unique_files = get_unique_short_names(local_unique_files)
-            short_unique_filemap = {
-                k: v for k, v in zip(local_unique_files, short_unique_files)
-            }
+            file_index_map = dict(zip(local_unique_files, short_unique_files))
 
-        # Get the DataUI instance if available
+        # Setup progress tracking
         dataui = self._dataui if hasattr(self, "_dataui") else None
-
-        # Start at 50% progress (continuing from get_data method)
         if dataui:
             dataui.set_progress(50)
-
-        # Calculate progress increment per row
+            
+        # Calculate progress increment
         total_rows = len(df)
-        if total_rows > 0:  # Avoid division by zero
-            progress_per_row = (
-                70 / total_rows
-            )  # We'll use 50-90% range for the iteration
+        progress_per_row = 40 / max(total_rows, 1)  # We'll use 50-90% range for the iteration
 
         # Process each row
-        for i, (_, r) in enumerate(df.iterrows()):
+        for i, (_, row) in enumerate(df.iterrows()):
             try:
-                data, unit, _ = self.get_data_for_time_range(r, time_range)
-                if isinstance(data.index, pd.PeriodIndex):
-                    data = data[
-                        (data.index.start_time >= time_range[0])
-                        & (data.index.end_time <= time_range[1])
-                    ]
-                else:  # Assume DatetimeIndex
-                    data = data[
-                        (data.index >= time_range[0]) & (data.index <= time_range[1])
-                    ]
-                if self.fill_gap > 0:
-                    data = data.interpolate(limit=self.fill_gap)
-                if self.do_tidal_filter and not self.is_irregular(r):
-                    data = cosine_lanczos(data, "40h")
+                # Get and process data
+                data, unit, _ = self.get_data_for_time_range(row, time_range)
+                data = self._process_curve_data(data, row, time_range)
+                
+                # Create curve
+                file_index = file_index_map.get(row[self.filename_column], "") if self.display_fileno else ""
+                curve = self.create_curve(data, row, unit, file_index=file_index)
+                
+                # Add curve to layout
+                station_name = self.build_station_name(row)
+                self._add_curve_to_layout(layout_map, station_map, title_map, range_map, 
+                                         curve, row, unit, station_name)
+                
             except Exception as e:
                 print(full_stack())
                 if pn.state.notifications:
                     pn.state.notifications.error(
-                        f"Error while fetching data for row: {r}: {e}"
-                    )
-                data = pd.DataFrame(columns=["value"], dtype=float)
-                unit = "X"
-            try:
-                file_index = (
-                    short_unique_filemap[r[self.filename_column]]
-                    if self.display_fileno
-                    else ""
-                )
-                crv = self.create_curve(
-                    data,
-                    r,
-                    unit,
-                    file_index=file_index,
-                )
-                if isinstance(data.index, pd.PeriodIndex):
-                    crv.opts(opts.Curve(interpolation=self.regular_curve_connection))
-                if self.is_irregular(r):
-                    crv.opts(opts.Curve(interpolation=self.irregular_curve_connection))
-
-                if unit not in layout_map:
-                    layout_map[unit] = []
-                    range_map[unit] = None
-                    station_map[unit] = []
-                layout_map[unit].append(crv)
-                station_map[unit].append(self.build_station_name(r))
-                self.append_to_title_map(title_map, unit, r)
-            except Exception as e:
-                print(full_stack())
-                if pn.state.notifications:
-                    pn.state.notifications.error(
-                        f"Error while creating curve for row: {r}: {e}"
+                        f"Error processing row: {row}: {e}"
                     )
 
-            # Update progress after each row is processed - scale from 50 to 90%
+            # Update progress
             if dataui and total_rows > 0:
                 current_progress = 50 + int(progress_per_row * (i + 1))
                 dataui.set_progress(current_progress)
 
+        # Post-processing
         title_map = {k: self.create_title(v) for k, v in title_map.items()}
+        
+        # Calculate y-axis ranges if needed
         if self.sensible_range_yaxis:
-            for unit in layout_map.keys():
-                for crv in layout_map[unit]:
-                    range_map[unit] = self._calculate_range(range_map[unit], crv.data)
+            for unit, curves in layout_map.items():
+                for curve, _ in curves:
+                    range_map[unit] = self._calculate_range(range_map[unit], curve.data)
 
-        # Ensure we reach 90% when layout creation is complete
+        # Finalize progress
         if dataui:
             dataui.set_progress(90)
 
@@ -366,52 +434,166 @@ class TimeSeriesDataUIManager(DataUIManager):
             ]
         return new_range
 
+    def _prepare_style_maps(self, df):
+        """Prepare color, line style, and marker style mappings."""
+        style_maps = {'color': None, 'line': None, 'marker': None}
+        
+        # Color map
+        if self.color_cycle_column:
+            color_values = df[self.color_cycle_column].unique()
+            style_maps['color'] = self.get_color_style_mapping(color_values)
+            
+        # Line style map
+        if self.dashed_line_cycle_column:
+            line_style_values = df[self.dashed_line_cycle_column].unique()
+            style_maps['line'] = self.get_line_style_mapping(line_style_values)
+            
+        # Marker map
+        if self.marker_cycle_column:
+            marker_values = df[self.marker_cycle_column].unique()
+            style_maps['marker'] = self.get_marker_style_mapping(marker_values)
+            
+        return style_maps
+        
+    def _get_style_combinations(self, stations, curves_data, style_maps):
+        """
+        Determine which color and line style combinations exist within a unit.
+        
+        Args:
+            stations: List of station names
+            curves_data: List of (curve, row) tuples
+            style_maps: Dictionary of style mappings
+        
+        Returns:
+            tuple: (combinations_dict, has_duplicates, has_style_duplicates)
+        """
+        has_duplicates = len(stations) != len(set(stations))
+        color_map, line_map = style_maps['color'], style_maps['line']
+        
+        # First pass to collect color + line style combinations
+        combinations = {}
+        for i, (_, row) in enumerate(curves_data):
+            color_val = row[self.color_cycle_column] if color_map and self.color_cycle_column else None
+            line_style_val = row[self.dashed_line_cycle_column] if line_map and self.dashed_line_cycle_column and has_duplicates else None
+            
+            combo_key = (color_val, line_style_val)
+            if combo_key not in combinations:
+                combinations[combo_key] = []
+            combinations[combo_key].append(i)
+        
+        # Check for duplicate combinations
+        has_style_duplicates = any(len(indices) > 1 for indices in combinations.values())
+        
+        return combinations, has_duplicates, has_style_duplicates
+        
+    def _apply_curve_styling(self, curve, row, has_duplicates, has_style_duplicates, 
+                             style_maps, style_combinations):
+        """
+        Apply styling options to a curve based on context and available styles.
+        
+        The logic ensures markers are only used when there are multiple curves
+        with the same color and line style combination in the layout.
+        """
+        color_map, line_map, marker_map = style_maps['color'], style_maps['line'], style_maps['marker']
+        
+        # Base styling options
+        curve_opts = {}
+        
+        # Apply color
+        if color_map and self.color_cycle_column:
+            curve_opts['color'] = color_map.get(row[self.color_cycle_column], 'black')
+            
+        # Apply line style if needed
+        if has_duplicates and line_map and self.dashed_line_cycle_column:
+            curve_opts['line_dash'] = line_map.get(row[self.dashed_line_cycle_column], 'solid')
+            
+        # Apply basic styling
+        styled_curve = curve.opts(opts.Curve(**curve_opts))
+        
+        # Add markers only when there are multiple curves with the same color and line style
+        if marker_map and self.marker_cycle_column:
+            # Get the combo key for this curve
+            current_color = row[self.color_cycle_column] if self.color_cycle_column else None
+            current_line_style = row[self.dashed_line_cycle_column] if has_duplicates and self.dashed_line_cycle_column else None
+            combo_key = (current_color, current_line_style)
+            
+            # Only add markers if this specific style combination appears multiple times
+            if combo_key in style_combinations and len(style_combinations[combo_key]) > 1:
+                marker_style = marker_map.get(row[self.marker_cycle_column], None)
+                if marker_style is not None:
+                    scatter = hv.Scatter(curve.data, label=curve.label).opts(
+                        opts.Scatter(
+                            marker=marker_style, 
+                            size=5, 
+                            color=curve_opts.get('color', 'black')
+                        )
+                    )
+                    styled_curve = styled_curve * scatter
+                    
+        return styled_curve
+
     def create_panel(self, df):
+        """
+        Create visualization panel from the data.
+        
+        This method applies styling to curves based on selected attributes and
+        arranges them in overlays and layouts.
+        """
         time_range = self.time_range
         try:
+            # Get station IDs and prepare color dataframe
             stationids = self.get_station_ids(df)
             color_df = get_color_dataframe(stationids, self.color_cycle)
+
+            # Prepare style mappings (color, line style, marker)
+            style_maps = self._prepare_style_maps(df)
+            
+            # Create data layout
             layout_map, station_map, range_map, title_map = self.create_layout(
                 df, time_range
             )
+
             if len(layout_map) == 0:
                 return hv.Div(self.get_no_selection_message()).opts(
                     sizing_mode="stretch_both"
                 )
-            else:
-                return (
-                    hv.Layout(
-                        [
-                            hv.Overlay(layout_map[k])
-                            .opts(
-                                opts.Curve(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                opts.Scatter(color=get_colors(station_map[k], color_df))
-                            )
-                            .opts(
-                                show_legend=self.show_legend,
-                                legend_position=self.legend_position,
-                                ylim=(
-                                    tuple(range_map[k])
-                                    if range_map[k] is not None
-                                    else (None, None)
-                                ),
-                                title=title_map[k],
-                                min_height=400,
-                            )
-                            for k in layout_map
-                        ]
+            
+            # Build visualization layout
+            overlays = []
+            for unit, curves_data in layout_map.items():
+                stations = station_map[unit]
+                
+                # Analyze style combinations
+                style_combinations, has_duplicates, has_style_duplicates = \
+                    self._get_style_combinations(stations, curves_data, style_maps)
+                
+                # Apply styling to each curve
+                styled_curves = []
+                for i, (curve, row) in enumerate(curves_data):
+                    styled_curve = self._apply_curve_styling(
+                        curve, row, has_duplicates, has_style_duplicates, 
+                        style_maps, style_combinations
                     )
-                    .cols(1)
-                    .opts(
-                        shared_axes=False,
-                        axiswise=True,
-                        sizing_mode="stretch_both",
-                    )
+                    styled_curves.append(styled_curve)
+                
+                # Create overlay for this unit
+                overlay = hv.Overlay(styled_curves).opts(
+                    show_legend=self.show_legend,
+                    legend_position=self.legend_position,
+                    ylim=(tuple(range_map[unit]) if range_map[unit] is not None else (None, None)),
+                    title=title_map[unit],
+                    min_height=400,
                 )
+                overlays.append(overlay)
+            
+            # Return final layout
+            return hv.Layout(overlays).cols(1).opts(
+                shared_axes=self.shared_axes,
+                axiswise=True,
+                sizing_mode="stretch_both",
+            )
         except Exception as e:
             stackmsg = full_stack()
             print(stackmsg)
-            pn.state.notifications.error(f"Error while fetching data for {e}")
-            return hv.Div(f"<h3> Exception while fetching data </h3> <pre>{e}</pre>")
+            pn.state.notifications.error(f"Error while creating panel: {e}")
+            return hv.Div(f"<h3> Exception while creating panel </h3> <pre>{e}</pre>")
