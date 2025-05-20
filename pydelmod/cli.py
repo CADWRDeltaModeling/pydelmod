@@ -281,7 +281,7 @@ def stations_output_file(
     "config_file",
     type=click.Path(dir_okay=False, exists=True, readable=True),
 )
-def dsm2_analyze(config_file="config.yaml"):
+def dsm2_analyze(config_file):
     """
     Run DSM2 analysis based on the configuration file
 
@@ -302,6 +302,7 @@ from pydelmod import calibplotui
 from pydelmod import schismui
 from pydelmod import schismcalibplotui
 from pydelmod import ptm_animator
+from pydelmod.nbplot import calsim_dsm2_analysis
 
 main.add_command(schismui.show_schism_output_ui)
 main.add_command(schismcalibplotui.schism_calib_plot_ui)
