@@ -5,8 +5,7 @@
 
 from setuptools import setup, find_packages
 
-##------------------ VERSIONING BEST PRACTICES --------------------------##
-import versioneer
+##------------------ VERSIONING NOW HANDLED BY SETUPTOOLS_SCM IN PYPROJECT.TOML --------------------------##
 
 with open('README.rst') as readme_file:
     readme = readme_file.read()
@@ -50,7 +49,6 @@ setup(
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/CADWRDeltaModeling/pydelmod',
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    # Version is now managed by setuptools_scm in pyproject.toml
     zip_safe=False,
 )
