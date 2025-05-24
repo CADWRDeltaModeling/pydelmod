@@ -1,3 +1,16 @@
+# use logging
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+# Configure logger to output to standard output
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)
+formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
 # from stackoverflow.com https://stackoverflow.com/questions/6086976/how-to-get-a-complete-exception-stack-trace-in-python
 def full_stack():
     import traceback, sys
@@ -58,3 +71,13 @@ def get_unique_short_names(paths):
                     result[i] = os.path.join(*parts)
 
     return result
+
+
+def interpret_file_relative_to(base_dir, fpath):
+    full_path = base_dir / fpath
+    print(f"full_path: {full_path}")
+    if not full_path.exists():
+        logger.warning(f"File {full_path} does not exist. Using {fpath} instead.")
+        full_path = fpath
+    print(f"full_path: {full_path}")
+    return full_path

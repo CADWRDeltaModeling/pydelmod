@@ -5,6 +5,7 @@ import holoviews as hv
 hv.extension("bokeh")
 from .dvue.dataui import DataUI
 from .dvue.tsdataui import TimeSeriesDataUIManager
+from .dvue import utils
 from pydelmod import schismstudy, datastore
 import pathlib
 import param
@@ -240,9 +241,11 @@ def show_schism_output_ui(
         # Load the YAML file and create multiple studies
         with open(yaml_file, "r") as file:
             yaml_data = yaml.safe_load(file)
-
+        # get the base directory of the yaml file
+        yaml_file_base_dir = pathlib.Path(yaml_file).parent
         studies = []
         for study_config in yaml_data.get("schism_studies", []):
+            study_config["base_dir"] = utils.interpret_file_relative_to(yaml_file_base_dir, study_config["base_dir"])
             studies.append(
                 schismstudy.SchismStudy(
                     study_name=study_config["label"],
