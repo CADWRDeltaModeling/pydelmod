@@ -377,6 +377,7 @@ class TimeSeriesDataUIManager(DataUIManager):
             try:
                 # Get and process data
                 data, unit, _ = self.get_data_for_time_range(row, time_range)
+                unit = unit.lower() # lowercase the units
                 data = self._process_curve_data(data, row, time_range)
                 
                 # Create curve
@@ -455,6 +456,12 @@ class TimeSeriesDataUIManager(DataUIManager):
             
         return style_maps
         
+    def _calculate_has_duplicates(self, curves_data):
+        station_names=[]
+        for i, (_, row) in enumerate(curves_data):
+            station_names.append(row[self.color_cycle_column])
+        return len(station_names) != len(set(station_names))
+            
     def _get_style_combinations(self, stations, curves_data, style_maps):
         """
         Determine which color and line style combinations exist within a unit.
@@ -467,7 +474,7 @@ class TimeSeriesDataUIManager(DataUIManager):
         Returns:
             tuple: (combinations_dict, has_duplicates, has_style_duplicates)
         """
-        has_duplicates = len(stations) != len(set(stations))
+        has_duplicates = self._calculate_has_duplicates(curves_data)
         color_map, line_map = style_maps['color'], style_maps['line']
         
         # First pass to collect color + line style combinations
