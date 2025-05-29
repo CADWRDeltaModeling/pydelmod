@@ -36,7 +36,7 @@ class PlotAction:
             else:
                 dataui._tab_count = 0
                 dataui._display_panel.objects = [
-                    pn.Tabs((str(dataui._tab_count), plot_panel), closable=True)
+                    pn.Tabs((str(dataui._tab_count), plot_panel), closable=True, dynamic=True)
                 ]
 
             # Complete the progress
