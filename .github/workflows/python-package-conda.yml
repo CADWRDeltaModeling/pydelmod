@@ -19,8 +19,7 @@ jobs:
     - name: Add conda to system path
       run: |
         # $CONDA is an environment variable pointing to the root of the miniconda directory
-        echo $CONDA/bin >> $GITHUB_PATH
-    - name: Conda build package and upload to anaconda.org
+        echo $CONDA/bin >> $GITHUB_PATH    - name: Conda build package and upload to anaconda.org
       env: 
         ANACONDA_CHANNEL_UPLOAD_TOKEN: ${{ secrets.ANACONDA_CHANNEL_UPLOAD_TOKEN }}
       run: |
@@ -28,17 +27,7 @@ jobs:
         source $CONDA/etc/profile.d/conda.sh
         conda activate test_pydelmod
         
-        # Set Git version environment variables for conda build
-        GIT_DESCRIBE_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-        if [ -z "$GIT_DESCRIBE_TAG" ]; then
-          export GIT_FULL_HASH=$(git rev-parse HEAD)
-          echo "No git tag found, using commit hash: ${GIT_FULL_HASH:0:7}"
-        else
-          export GIT_DESCRIBE_TAG=$GIT_DESCRIBE_TAG
-          echo "Using git tag: $GIT_DESCRIBE_TAG"
-        fi
-        
-        # Build and upload
+        # Build and upload - the conda_build.sh script will handle versioning
         conda config --set anaconda_upload yes
         chmod +x ./conda_build.sh
         ./conda_build.sh -c cadwr-dms -c conda-forge --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN"

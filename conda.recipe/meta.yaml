@@ -1,7 +1,7 @@
 {% set name = "pydelmod" %}
-{% set version = environ.get('GIT_DESCRIBE_TAG', '') %}
+{% set version = environ.get('VERSION', '') %}
 {% if version == '' %}
-  {% set version = environ.get('GIT_FULL_HASH', '0.0.0+dev')[:7] %}
+  {% set version = "0.0.0.dev" %}
 {% endif %}
 
 package:
