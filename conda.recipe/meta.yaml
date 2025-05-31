@@ -18,6 +18,8 @@ build:
   script: {{ PYTHON }} -m pip install . -vv
   entry_points:
     - pydelmod = pydelmod.cli:main
+  include_recipe: False
+  preserve_egg_dir: True
 
 requirements:
   host:
@@ -26,7 +28,6 @@ requirements:
     - setuptools >=64.0
     - setuptools_scm >=7.0
     - wheel
-
   run:
     - python >=3.7
     # Add your dependencies here manually since we can't load from setup.py
@@ -38,6 +39,9 @@ test:
     - pydelmod
   requires:
     - pytest
+  
+files:
+  - pydelmod/dvue/dataui.noselection.html
 
 about:
   home:           "https://github.com/CADWRDeltaModeling/pydelmod"

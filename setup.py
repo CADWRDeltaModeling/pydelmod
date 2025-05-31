@@ -43,8 +43,10 @@ setup(
     long_description=readme + '\n\n' + history,
     include_package_data=True,
     keywords='pydelmod',
-    name='pydelmod',
-    packages=find_packages(include=['pydelmod', 'pydelmod.*']),
+    name='pydelmod',    packages=find_packages(include=['pydelmod', 'pydelmod.*']),
+    package_data={
+        'pydelmod': ['dvue/*.html'],
+    },
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,

@@ -41,6 +41,9 @@ zip-safe = false
 include-package-data = true
 packages = {find = {include = ["pydelmod", "pydelmod.*"]}}
 
+[tool.setuptools.package-data]
+"pydelmod" = ["dvue/*.html"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "ex_*.py"]

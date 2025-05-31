@@ -41,7 +41,7 @@ jobs:
         # Build and upload
         conda config --set anaconda_upload yes
         chmod +x ./conda_build.sh
-        ./conda_build.sh -c cadwr-dms -c defaults -c plotly --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN"
+        ./conda_build.sh -c cadwr-dms -c conda-forge --user cadwr-dms --token "$ANACONDA_CHANNEL_UPLOAD_TOKEN"
         
         # Clean up
         conda activate
