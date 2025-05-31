@@ -193,6 +193,10 @@ class DataUI(param.Parameterized):
         default="",
         doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
     )
+    use_regex_filter = param.Boolean(
+        default=False, 
+        doc="Use regex for table filtering instead of 'like' functionality"
+    )
 
     def __init__(
         self, dataui_manager, crs=ccrs.PlateCarree(), station_id_column=None, **kwargs
@@ -470,6 +474,21 @@ class DataUI(param.Parameterized):
         await asyncio.sleep(0.5)
         self.hide_progress()
 
+    @param.depends("use_regex_filter", watch=True)
+    def update_data_table_filters(self):
+        """Update the table filters based on the use_regex_filter parameter."""
+        if self.use_regex_filter:
+            # Update filters to use regex
+            for column in self.display_table.header_filters:
+                #self.display_table.header_filters[column]["type"] = "regex"
+                self.display_table.header_filters[column]["func"] = "regex"
+        else:
+            # Revert to 'like' functionality
+            for column in self.display_table.header_filters:
+                #self.display_table.header_filters[column]["type"] = "input"
+                self.display_table.header_filters[column]["func"] = "like"
+        self.display_table.header_filters = self.display_table.header_filters
+
     def create_data_table(self, dfs):
         column_width_map = self._dataui_manager.get_table_column_width_map()
         dfs = dfs[self._dataui_manager.get_table_columns()]
@@ -561,7 +580,10 @@ class DataUI(param.Parameterized):
             bar_color="primary",
             visible=False,
         )
-
+        
+        table_options = pn.WidgetBox(
+            "Table Options",
+            self.param.use_regex_filter,)
         if hasattr(self, "_map_features"):
             map_options = pn.WidgetBox(
                 "Map Options",
@@ -604,6 +626,7 @@ class DataUI(param.Parameterized):
                 pn.Tabs(
                     ("Map", map_view),
                     ("Options", control_widgets),
+                    ("Table Options", table_options),
                     ("Map Options", map_options),
                 ),
                 self.progress_bar,
