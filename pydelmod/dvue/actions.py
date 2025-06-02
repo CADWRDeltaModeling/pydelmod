@@ -15,6 +15,13 @@ class PlotAction:
             dataui._display_panel.loading = True
             dataui.set_progress(-1)  # Start indeterminate progress
 
+            # Check if there's a selection
+            if not dataui.display_table.selection or len(dataui.display_table.selection) == 0:
+                if pn.state.notifications is not None:
+                    pn.state.notifications.warning('Please select at least one row from the table.', duration=3000)
+                logger.warning('No rows selected for plotting')
+                return
+
             # Get selected data
             dfselected = dataui.display_table.value.iloc[dataui.display_table.selection]
 
@@ -45,17 +52,26 @@ class PlotAction:
             stack_str = full_stack()
             logger.error(stack_str)
             dataui._display_panel.objects = [pn.pane.Markdown("```"+stack_str+"```")]
-            pn.state.notifications.error(
-                "Error updating plots: " + str(stack_str), duration=0
-            )
+            # Handle the case where notifications might be None
+            if pn.state.notifications is not None:
+                pn.state.notifications.error(
+                    "Error updating plots: " + str(stack_str), duration=0
+                )
+            else:
+                # Log error when notifications is not available
+                logger.error(f"Could not display notification: {str(stack_str)}")
         finally:
             dataui._display_panel.loading = False
             # Hide progress after a short delay to show completion
             import asyncio
 
-            pn.state.curdoc.add_next_tick_callback(
-                lambda: asyncio.create_task(self._hide_progress_after_delay(dataui))
-            )
+            # Hide the progress bar immediately when no selection
+            if not dataui.display_table.selection or len(dataui.display_table.selection) == 0:
+                dataui.hide_progress()
+            else:
+                pn.state.curdoc.add_next_tick_callback(
+                    lambda: asyncio.create_task(self._hide_progress_after_delay(dataui))
+                )
 
     async def _hide_progress_after_delay(self, dataui):
         """Hide the progress bar after a short delay to show completion"""
@@ -71,6 +87,13 @@ class DownloadDataAction:
         try:
             # Show indeterminate progress initially
             dataui.set_progress(-1)
+
+            # Check if there's a selection
+            if not dataui.display_table.selection or len(dataui.display_table.selection) == 0:
+                if pn.state.notifications is not None:
+                    pn.state.notifications.warning('Please select at least one row from the table.', duration=3000)
+                logger.warning('No rows selected for download')
+                return None
 
             dfselected = dataui.display_table.value.iloc[dataui.display_table.selection]
 
@@ -93,14 +116,18 @@ class DownloadDataAction:
 
             return sio
         except Exception as e:
-            pn.state.notifications.error(
-                "Error downloading data: " + str(e), duration=0
-            )
+            logger.error(f"Error downloading data: {e}")
+            if pn.state.notifications is not None:
+                pn.state.notifications.error(
+                    "Error downloading data: " + str(e), duration=0
+                )
             return None
         finally:
             dataui._display_panel.loading = False
-            # We don't hide the progress bar here as the download might still be in progress
-            # The progress bar will be hidden when the download is complete
+            # Hide the progress bar if we returned early due to no selection
+            if not dataui.display_table.selection or len(dataui.display_table.selection) == 0:
+                dataui.hide_progress()
+            # For regular cases, the progress bar will be hidden when the download is complete
 
 
 class DownloadDataCatalogAction:
@@ -126,7 +153,8 @@ class DownloadDataCatalogAction:
             return sio
         except Exception as e:
             logger.error(f"Error downloading catalog: {e}")
-            pn.state.notifications.error("Failed to download catalog")
+            if pn.state.notifications is not None:
+                pn.state.notifications.error("Failed to download catalog")
             return None
         finally:
             dataui._display_panel.loading = False
