@@ -97,6 +97,10 @@ class TimeSeriesDataUIManager(DataUIManager):
         default="glasbey_dark.colorcet",
         doc="Color cycle name",
     )
+    plot_group_by_column = param.Selector(
+        default=None,
+        objects=[],
+        doc="Column to group plots by. When None, curves are grouped by unit.")
     shared_axes = param.Boolean(default=True, doc="Share axes across plots")
     marker_cycle_column = param.Selector(
         default=None, objects=[], doc="Column to use for marker cycle"
@@ -132,6 +136,7 @@ class TimeSeriesDataUIManager(DataUIManager):
         self.param.marker_cycle_column.objects = columns_with_blank
         self.param.dashed_line_cycle_column.objects = columns_with_blank
         self.param.color_cycle_column.objects = columns_with_blank
+        self.param.plot_group_by_column.objects = columns_with_blank
 
     def get_data_catalog(self):
         raise NotImplementedError("Method get_data_catalog not implemented")
@@ -204,8 +209,13 @@ class TimeSeriesDataUIManager(DataUIManager):
                 self.param.irregular_curve_connection,
                 self.param.regular_curve_connection,
             ),
-            self.param.marker_cycle_column,
-            self.param.dashed_line_cycle_column,
+            pn.WidgetBox(
+                pn.pane.Markdown("**Group and Style Options:**"),
+                self.param.plot_group_by_column,  # Option for grouping plots
+                self.param.color_cycle_column,    # Group related options together
+                self.param.dashed_line_cycle_column,
+                self.param.marker_cycle_column,
+            ),
             self.param.color_cycle_name,
             self.param.shared_axes,  # Add checkbox for shared_axes
         )
@@ -329,27 +339,44 @@ class TimeSeriesDataUIManager(DataUIManager):
         return data
 
     def _add_curve_to_layout(self, layout_map, station_map, title_map, range_map, 
-                             curve, row, unit, station_name):
-        """Add a curve to the layout maps."""
-        if unit not in layout_map:
-            layout_map[unit] = []
-            range_map[unit] = None
-            station_map[unit] = []
+                             curve, row, unit, station_name, group_key=None):
+        """Add a curve to the layout maps using the specified group key.
+        
+        Args:
+            layout_map: Dictionary mapping group keys to lists of (curve, row) tuples
+            station_map: Dictionary mapping group keys to lists of station names
+            title_map: Dictionary mapping group keys to title information
+            range_map: Dictionary mapping group keys to y-axis ranges
+            curve: The curve to add
+            row: The data row
+            unit: The unit of measure (used as default group key if group_key is None)
+            station_name: The name of the station
+            group_key: The key to group by (defaults to unit if None)
+        """
+        # Use unit as the default group key if group_key is None
+        group_key = group_key if group_key is not None else unit
+        
+        if group_key not in layout_map:
+            layout_map[group_key] = []
+            range_map[group_key] = None
+            station_map[group_key] = []
             
-        layout_map[unit].append((curve, row))
-        station_map[unit].append(station_name)
-        self.append_to_title_map(title_map, unit, row)
+        layout_map[group_key].append((curve, row))
+        station_map[group_key].append(station_name)
+        self.append_to_title_map(title_map, group_key, row)
         
     def create_layout(self, df, time_range):
         """
         Create layout maps for visualizing time series data.
         
+        Groups curves based on plot_group_by_column if specified, otherwise by unit.
+        
         Returns:
             tuple: (layout_map, station_map, range_map, title_map)
-                layout_map: Dictionary mapping units to lists of (curve, row) tuples
-                station_map: Dictionary mapping units to lists of station names
-                range_map: Dictionary mapping units to y-axis ranges
-                title_map: Dictionary mapping units to title information
+                layout_map: Dictionary mapping group keys to lists of (curve, row) tuples
+                station_map: Dictionary mapping group keys to lists of station names
+                range_map: Dictionary mapping group keys to y-axis ranges
+                title_map: Dictionary mapping group keys to title information
         """
         layout_map = {}
         title_map = {}
@@ -386,8 +413,19 @@ class TimeSeriesDataUIManager(DataUIManager):
                 
                 # Add curve to layout
                 station_name = self.build_station_name(row)
+                
+                # Determine group key based on plot_group_by_column
+                group_key = None
+                if self.plot_group_by_column:
+                    # Use the value from the column specified by plot_group_by_column
+                    # if that column exists in the row's data
+                    if self.plot_group_by_column in row:
+                        group_value = row[self.plot_group_by_column]
+                        if group_value is not None and str(group_value).strip() != "":
+                            group_key = str(group_value)
+                
                 self._add_curve_to_layout(layout_map, station_map, title_map, range_map, 
-                                         curve, row, unit, station_name)
+                                         curve, row, unit, station_name, group_key=group_key)
                 
             except Exception as e:
                 print(full_stack())
@@ -402,7 +440,7 @@ class TimeSeriesDataUIManager(DataUIManager):
                 dataui.set_progress(current_progress)
 
         # Post-processing
-        title_map = {k: self.create_title(v) for k, v in title_map.items()}
+        title_map = self._update_title_for_custom_grouping(title_map)
         
         # Calculate y-axis ranges if needed
         if self.sensible_range_yaxis:
@@ -457,10 +495,24 @@ class TimeSeriesDataUIManager(DataUIManager):
         return style_maps
         
     def _calculate_has_duplicates(self, curves_data):
-        station_names=[]
-        for i, (_, row) in enumerate(curves_data):
-            station_names.append(row[self.color_cycle_column])
-        return len(station_names) != len(set(station_names))
+        """Check if there are duplicate station names in the curves data."""
+        # If no color cycle column is specified, return False
+        if not self.color_cycle_column:
+            return False
+            
+        try:
+            station_names = []
+            for i, (_, row) in enumerate(curves_data):
+                if self.color_cycle_column in row:
+                    station_names.append(row[self.color_cycle_column])
+                else:
+                    # If missing, use index to avoid duplicates
+                    station_names.append(f"curve_{i}")
+            return len(station_names) != len(set(station_names))
+        except Exception as e:
+            # Fallback to avoid breaking the app
+            print(f"Error in _calculate_has_duplicates: {e}")
+            return False
             
     def _get_style_combinations(self, stations, curves_data, style_maps):
         """
@@ -567,8 +619,8 @@ class TimeSeriesDataUIManager(DataUIManager):
             
             # Build visualization layout
             overlays = []
-            for unit, curves_data in layout_map.items():
-                stations = station_map[unit]
+            for group_key, curves_data in layout_map.items():
+                stations = station_map[group_key]
                 
                 # Analyze style combinations
                 style_combinations, has_duplicates, has_style_duplicates = \
@@ -583,12 +635,12 @@ class TimeSeriesDataUIManager(DataUIManager):
                     )
                     styled_curves.append(styled_curve)
                 
-                # Create overlay for this unit
+                # Create overlay for this group
                 overlay = hv.Overlay(styled_curves).opts(
                     show_legend=self.show_legend,
                     legend_position=self.legend_position,
-                    ylim=(tuple(range_map[unit]) if range_map[unit] is not None else (None, None)),
-                    title=title_map[unit],
+                    ylim=(tuple(range_map[group_key]) if range_map[group_key] is not None else (None, None)),
+                    title=title_map[group_key],
                     min_height=400,
                 )
                 overlays.append(overlay)
@@ -604,3 +656,36 @@ class TimeSeriesDataUIManager(DataUIManager):
             print(stackmsg)
             pn.state.notifications.error(f"Error while creating panel: {e}")
             return hv.Div(f"<h3> Exception while creating panel </h3> <pre>{e}</pre>")
+    
+    def _update_title_for_custom_grouping(self, title_map):
+        """
+        Update title map when custom grouping is used.
+        
+        This method adds grouping information to titles when a custom plot_group_by_column
+        is used instead of the default unit-based grouping.
+        
+        Args:
+            title_map: The title map to update
+            
+        Returns:
+            Updated title map with grouping information
+        """
+        # Process each key-value pair to create titles
+        processed_titles = {}
+        for group_key, title_info in title_map.items():
+            base_title = self.create_title(title_info)
+            
+            # When using custom grouping, add the group info and column name
+            if self.plot_group_by_column:
+                column_name = self.plot_group_by_column
+                if str(group_key) != base_title:  # Avoid redundancy
+                    title = f"{column_name}: {group_key} - {base_title}"
+                else:
+                    title = f"{column_name}: {group_key}"
+            else:
+                # No custom grouping, use base title
+                title = base_title
+                
+            processed_titles[group_key] = title
+            
+        return processed_titles
