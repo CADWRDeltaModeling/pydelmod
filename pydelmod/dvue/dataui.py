@@ -169,6 +169,12 @@ class DataUI(param.Parameterized):
     Actions on the selections are supported via the buttons on the table. These are configurable by the catalog manager.
     """
 
+    view_type = param.Selector(
+        objects=["combined", "table", "display"],
+        default="combined",
+        doc="Type of view to display: combined, table only, or display panel only",
+    )
+
     map_color_category = param.Selector(
         objects=[],
         doc="Options for the map color category selection",
@@ -194,8 +200,8 @@ class DataUI(param.Parameterized):
         doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
     )
     use_regex_filter = param.Boolean(
-        default=False, 
-        doc="Use regex for table filtering instead of 'like' functionality"
+        default=False,
+        doc="Use regex for table filtering instead of 'like' functionality",
     )
 
     def __init__(
@@ -480,12 +486,12 @@ class DataUI(param.Parameterized):
         if self.use_regex_filter:
             # Update filters to use regex
             for column in self.display_table.header_filters:
-                #self.display_table.header_filters[column]["type"] = "regex"
+                # self.display_table.header_filters[column]["type"] = "regex"
                 self.display_table.header_filters[column]["func"] = "regex"
         else:
             # Revert to 'like' functionality
             for column in self.display_table.header_filters:
-                #self.display_table.header_filters[column]["type"] = "input"
+                # self.display_table.header_filters[column]["type"] = "input"
                 self.display_table.header_filters[column]["func"] = "like"
         self.display_table.header_filters = self.display_table.header_filters
 
@@ -522,15 +528,16 @@ class DataUI(param.Parameterized):
         )
         gspec = pn.GridStack(
             sizing_mode="stretch_both", allow_resize=True, allow_drag=False
-        )  # ,
+        )
         gspec[0, 0:5] = self._action_panel
         gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
         gspec[6:15, 0:10] = fullscreen.FullScreen(self._display_panel)
+        self._main_panel = gspec
         return gspec
 
     def setup_location_sync(self):
-        self.location = location.Location()
-        self.location.sync(self.display_table, ["filters", "selection"])
+        pn.state.location.param.watch(self.update_view_from_location, "hash")
+        self.update_view_from_location()
 
     def get_version(self):
         try:
@@ -565,9 +572,63 @@ class DataUI(param.Parameterized):
         about_btn.on_click(about_callback)
         return about_btn
 
+    def _create_main_view(self):
+        """Create the main view content based on the current view_type"""
+        if self.view_type == "table":
+            gspec = pn.GridStack(
+                sizing_mode="stretch_both", allow_resize=False, allow_drag=False
+            )
+            gspec[0, 0:5] = self._action_panel
+            gspec[1:15, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
+            return gspec
+        elif self.view_type == "display":
+            gspec = pn.GridStack(
+                sizing_mode="stretch_both", allow_resize=False, allow_drag=False
+            )
+            gspec[0, 0:5] = self._action_panel
+            gspec[1:15, 0:10] = fullscreen.FullScreen(self._display_panel)
+            return gspec
+        else:  # combined view
+            return pn.Column(
+                pn.Row(self._main_panel, sizing_mode="stretch_both"),
+                sizing_mode="stretch_both",
+            )
+
+    def create_view_navigation(self):
+        """Create navigation buttons for switching between views"""
+        nav_buttons = pn.Row(
+            pn.widgets.Button(name="Combined", button_type="primary"),
+            pn.widgets.Button(name="Table", button_type="primary"),
+            pn.widgets.Button(name="Display", button_type="primary"),
+        )
+
+        def set_hash(event):
+            button_name = event.obj.name.lower().split()[0]
+            pn.state.location.hash = f"#{button_name}"
+
+        for btn in nav_buttons:
+            btn.on_click(set_hash)
+
+        return nav_buttons
+
+    def update_view_from_location(self, event=None):
+        """Update the view based on the URL hash value"""
+        hash_value = pn.state.location.hash.lstrip("#")
+
+        # Map hash values to view types
+        if hash_value == "table":
+            self.view_type = "table"
+        elif hash_value == "display":
+            self.view_type = "display"
+        else:
+            self.view_type = "combined"
+
+        # Update the template main content based on the selected view
+        if hasattr(self, "_main_view"):
+            self._main_view.objects = [self._create_main_view()]
+
     def create_view(self, title="Data User Interface"):
         main_panel = self.create_data_table(self._dfcat)
-        self.setup_location_sync()
         control_widgets = self._dataui_manager.get_widgets()
 
         # Create progress bar
@@ -580,10 +641,11 @@ class DataUI(param.Parameterized):
             bar_color="primary",
             visible=False,
         )
-        
+
         table_options = pn.WidgetBox(
             "Table Options",
-            self.param.use_regex_filter,)
+            self.param.use_regex_filter,
+        )
         if hasattr(self, "_map_features"):
             map_options = pn.WidgetBox(
                 "Map Options",
@@ -635,7 +697,13 @@ class DataUI(param.Parameterized):
             sidebar_view = pn.Column(
                 pn.Tabs(("Options", control_widgets)), self.progress_bar
             )
-        main_view = pn.Column(pn.Row(main_panel, sizing_mode="stretch_both"))
+        # Create view navigation buttons
+        nav_buttons = pn.Row(self.create_view_navigation())
+
+        # Create the initial main view based on URL hash
+        self._main_view = pn.Column(
+            self._create_main_view(), sizing_mode="stretch_both"
+        )
 
         template = pn.template.VanillaTemplate(
             title=title,
@@ -643,11 +711,19 @@ class DataUI(param.Parameterized):
             sidebar_width=450,
             header_color="lightgray",
         )
-        template.main.append(main_view)
+
+        # Add navigation before the main content
+        template.header.append(nav_buttons)
+        template.main.append(self._main_view)
+
         # Adding about button
         template.modal.append(self.get_about_text())
         sidebar_view.append(self.create_about_button(template))
         self._template = template
+
+        # finally sync location views
+        self.setup_location_sync()
+
         return template
 
     def set_progress(self, value):
