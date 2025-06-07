@@ -530,8 +530,12 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_both", allow_resize=True, allow_drag=False
         )
         gspec[0, 0:5] = self._action_panel
-        gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-        gspec[6:15, 0:10] = fullscreen.FullScreen(self._display_panel)
+        gspec[1:5, 0:10] = fullscreen.FullScreen(
+            pn.Row(self.display_table, scroll=True)
+        )
+        gspec[6:15, 0:10] = fullscreen.FullScreen(
+            pn.Row(self._display_panel, scroll=True)
+        )
         self._main_panel = gspec
         return gspec
 
@@ -579,18 +583,22 @@ class DataUI(param.Parameterized):
                 sizing_mode="stretch_both", allow_resize=False, allow_drag=False
             )
             gspec[0, 0:5] = self._action_panel
-            gspec[1:15, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
+            gspec[1:15, 0:10] = fullscreen.FullScreen(
+                pn.Row(self.display_table, scroll=True)
+            )
             return gspec
         elif self.view_type == "display":
             gspec = pn.GridStack(
                 sizing_mode="stretch_both", allow_resize=False, allow_drag=False
             )
             gspec[0, 0:5] = self._action_panel
-            gspec[1:15, 0:10] = fullscreen.FullScreen(self._display_panel)
+            gspec[1:15, 0:10] = fullscreen.FullScreen(
+                pn.Row(self._display_panel, scroll=True)
+            )
             return gspec
         else:  # combined view
             return pn.Column(
-                pn.Row(self._main_panel, sizing_mode="stretch_both"),
+                pn.Row(self._main_panel, sizing_mode="stretch_both", scroll=True),
                 sizing_mode="stretch_both",
             )
 
