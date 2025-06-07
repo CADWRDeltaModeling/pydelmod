@@ -7,6 +7,7 @@ from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
 from pydelmod import create_ann_inputs
 from pydelmod import datastore2dss
+from pydelmod._version import __version__
 import sys
 import click
 import panel as pn
@@ -18,7 +19,9 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
+@click.version_option(__version__, "-v", "--version", message="%(prog)s, version %(version)s")
 def main():
+    """PyDelMod - Python Delta Modeling Tools."""
     pass
 
 
