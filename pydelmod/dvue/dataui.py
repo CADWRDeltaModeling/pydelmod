@@ -540,8 +540,9 @@ class DataUI(param.Parameterized):
         return gspec
 
     def setup_location_sync(self):
-        pn.state.location.param.watch(self.update_view_from_location, "hash")
-        self.update_view_from_location()
+        if pn.state.location:
+            pn.state.location.param.watch(self.update_view_from_location, "hash")
+            self.update_view_from_location()
 
     def get_version(self):
         try:
