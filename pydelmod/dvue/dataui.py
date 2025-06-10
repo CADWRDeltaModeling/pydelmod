@@ -512,7 +512,7 @@ class DataUI(param.Parameterized):
             },
         )
 
-        self._display_panel = pn.Row()
+        self._display_panel = pn.Row(sizing_mode="stretch_both")
         self._action_panel = pn.Row()
         actions = self._dataui_manager.get_data_actions()
 
@@ -603,6 +603,92 @@ class DataUI(param.Parameterized):
                 sizing_mode="stretch_both",
             )
 
+    def set_progress(self, value):
+        """
+        Set the progress bar value.
+
+        Parameters:
+        -----------
+        value : int
+            Value between 0-100 for progress percentage, or -1 for indeterminate progress
+        """
+        self.progress_bar.visible = True
+        if value == -1:
+            # Set to indeterminate mode
+            self.progress_bar.indeterminate = True
+        else:
+            self.progress_bar.indeterminate = False
+            self.progress_bar.value = max(
+                0, min(100, value)
+            )  # Ensure value is between 0-100
+
+    def hide_progress(self):
+        """Hide the progress bar."""
+        self.progress_bar.visible = False
+        self.progress_bar.value = 0
+        self.progress_bar.indeterminate = False
+
+    def show_map_in_display_panel(self, event):
+        """Display the map in the display panel area as a closable tab"""
+        try:
+            # Set progress indicator while loading the map
+            self._display_panel.loading = True
+            self.set_progress(-1)  # Start indeterminate progress
+
+            # Create a copy of the map for the display panel
+            map_display = pn.Column(
+                self._tmap * self._map_function,
+                min_width=800,
+                min_height=600,
+                sizing_mode="stretch_both",
+            )
+
+            # Show 90% progress
+            self.set_progress(90)
+
+            # Check if there are already tabs in the display panel
+            if len(self._display_panel.objects) > 0 and isinstance(
+                self._display_panel.objects[0], pn.Tabs
+            ):
+                # Add to existing tabs
+                tabs = self._display_panel.objects[0]
+
+                # Initialize tab_count if it doesn't exist
+                if not hasattr(self, "_tab_count"):
+                    self._tab_count = 0
+
+                self._tab_count += 1
+                tabs.append((f"Interactive Map {self._tab_count}", map_display))
+                tabs.active = len(tabs) - 1  # Activate the new tab
+            else:
+                # Create a new tabs panel
+                self._tab_count = 1
+                self._display_panel.objects = [
+                    pn.Tabs(
+                        (f"Interactive Map {self._tab_count}", map_display),
+                        closable=True,
+                        dynamic=True,
+                    )
+                ]
+
+            # Complete the progress
+            self.set_progress(100)
+        except Exception as e:
+            stack_str = full_stack()
+            logger.error(stack_str)
+            if pn.state.notifications is not None:
+                pn.state.notifications.error(
+                    "Error displaying map: " + str(stack_str), duration=0
+                )
+        finally:
+            self._display_panel.loading = False
+            # Hide progress after a short delay to show completion
+            import asyncio
+
+            pn.state.curdoc.add_next_tick_callback(
+                lambda: asyncio.create_task(self._hide_progress_after_delay())
+            )
+
     def create_view_navigation(self):
         """Create navigation buttons for switching between views"""
         nav_buttons = pn.Row(
@@ -685,14 +771,19 @@ class DataUI(param.Parameterized):
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
-            map_view = fullscreen.FullScreen(
-                pn.Column(
-                    self._tmap * self._map_function,
-                    map_tooltip,
-                    min_width=450,
-                    min_height=550,
-                )
+
+            # Create a button to show map in display panel
+            map_display_btn = pn.widgets.Button(
+                name="Show Map in Display", button_type="primary", icon="map", width=150
             )
+            map_display_btn.on_click(self.show_map_in_display_panel)
+
+            map_view = pn.Column(
+                pn.Row(map_display_btn, pn.layout.HSpacer(), map_tooltip),
+                self._tmap * self._map_function,
+                min_width=450,
+            )
+
             sidebar_view = pn.Column(
                 pn.Tabs(
                     ("Map", map_view),
@@ -701,10 +792,12 @@ class DataUI(param.Parameterized):
                     ("Map Options", map_options),
                 ),
                 self.progress_bar,
+                sizing_mode="stretch_both",
             )
         else:
             sidebar_view = pn.Column(
-                pn.Tabs(("Options", control_widgets)), self.progress_bar
+                pn.Tabs(("Options", control_widgets), ("Table Options", table_options)),
+                self.progress_bar,
             )
         # Create view navigation buttons
         nav_buttons = pn.Row(self.create_view_navigation())
@@ -722,40 +815,16 @@ class DataUI(param.Parameterized):
         )
 
         # Add navigation before the main content
-        template.header.append(nav_buttons)
+        about_button = self.create_about_button(template)
+        template.header.append(pn.Row(nav_buttons, pn.layout.HSpacer(), about_button))
         template.main.append(self._main_view)
 
         # Adding about button
         template.modal.append(self.get_about_text())
-        sidebar_view.append(self.create_about_button(template))
+        # sidebar_view.append(self.create_about_button(template))
         self._template = template
 
         # finally sync location views
         self.setup_location_sync()
 
         return template
-
-    def set_progress(self, value):
-        """
-        Set the progress bar value.
-
-        Parameters:
-        -----------
-        value : int
-            Value between 0-100 for progress percentage, or -1 for indeterminate progress
-        """
-        self.progress_bar.visible = True
-        if value == -1:
-            # Set to indeterminate mode
-            self.progress_bar.indeterminate = True
-        else:
-            self.progress_bar.indeterminate = False
-            self.progress_bar.value = max(
-                0, min(100, value)
-            )  # Ensure value is between 0-100
-
-    def hide_progress(self):
-        """Hide the progress bar."""
-        self.progress_bar.visible = False
-        self.progress_bar.value = 0
-        self.progress_bar.indeterminate = False
