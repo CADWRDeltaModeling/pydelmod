@@ -7,6 +7,7 @@ from pydelmod import postpro_dsm2, checklist_dsm2
 from pydelmod import dsm2_chan_mann_disp
 from pydelmod import create_ann_inputs
 from pydelmod import datastore2dss
+from pydelmod._version import __version__
 import sys
 import click
 import panel as pn
@@ -18,7 +19,9 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
+@click.version_option(__version__, "-v", "--version", message="%(prog)s, version %(version)s")
 def main():
+    """PyDelMod - Python Delta Modeling Tools."""
     pass
 
 
@@ -281,7 +284,7 @@ def stations_output_file(
     "config_file",
     type=click.Path(dir_okay=False, exists=True, readable=True),
 )
-def dsm2_analyze(config_file="config.yaml"):
+def dsm2_analyze(config_file):
     """
     Run DSM2 analysis based on the configuration file
 
@@ -302,6 +305,7 @@ from pydelmod import calibplotui
 from pydelmod import schismui
 from pydelmod import schismcalibplotui
 from pydelmod import ptm_animator
+from pydelmod.nbplot import calsim_dsm2_analysis
 
 main.add_command(schismui.show_schism_output_ui)
 main.add_command(schismcalibplotui.schism_calib_plot_ui)

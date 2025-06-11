@@ -7,5 +7,8 @@ __email__ = 'knam@water.ca.gov'
 
 __all__ = ['nbplot', 'utilities']
 
-from . import _version
-__version__ = _version.get_versions()['version']
+try:
+    from . import _version
+    __version__ = _version.__version__
+except (ImportError, AttributeError):
+    __version__ = '0.0.0+unknown'

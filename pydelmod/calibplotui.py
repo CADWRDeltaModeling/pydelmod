@@ -257,4 +257,4 @@ def calib_plot_ui(config_file, base_dir=None, **kwargs):
         config_file, base_dir=base_dir, polygon_bounds=california, **kwargs
     )
 
-    DataUI(manager).create_view().show()
+    DataUI(manager).create_view(title="DSM2 Calib Plot UI").show()

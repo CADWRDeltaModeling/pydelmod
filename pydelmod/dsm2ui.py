@@ -44,6 +44,10 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
             )
         self.station_id_column = "NAME"
         super().__init__(file_number_column_name="FILE_NO", **kwargs)
+        self.color_cycle_column = "NAME"
+        self.dashed_line_cycle_column = "FILE"
+        self.marker_cycle_column = "VARIABLE"
+
 
     def build_station_name(self, r):
         if self.display_fileno:
@@ -196,6 +200,10 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
             time_range=self.time_range,
             **kwargs,
         )
+        self.color_cycle_column = "id"
+        self.dashed_line_cycle_column = "filename"
+        self.marker_cycle_column = "variable"
+
 
     def read_tidefile(tidefile, guess="hydro"):
         try:
@@ -630,7 +638,7 @@ def show_dsm2_output_ui(echo_files, channel_shapefile=None):
 
     plotter = build_output_plotter(*echo_files, channel_shapefile=channel_shapefile)
     ui = dataui.DataUI(plotter, crs=ccrs.UTM(10))
-    ui.create_view().show()
+    ui.create_view(title="DSM2 Output UI").show()
 
 
 @click.command()
@@ -661,4 +669,4 @@ def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
     ui = dataui.DataUI(
         tidefile_manager, crs=ccrs.epsg("26910"), station_id_column="geoid"
     )
-    ui.create_view().show()
+    ui.create_view(title="DSM2 Tidefile UI").show()

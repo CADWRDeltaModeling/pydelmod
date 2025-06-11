@@ -6,6 +6,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import geopandas as gpd
 from io import StringIO
+from functools import lru_cache
 
 # viz and ui
 import hvplot.pandas  # noqa
@@ -84,6 +85,18 @@ class DataUIManager(param.Parameterized):
     def create_title(self, title_map, unit, r):
         raise NotImplementedError("This method should be implemented by subclasses")
 
+    @lru_cache(maxsize=128)
+    def get_no_selection_message(self):
+        """return the message to be displayed when no selection is made"""
+        import os
+
+        resource_path = os.path.join(
+            os.path.dirname(__file__), "dataui.noselection.html"
+        )
+        with open(resource_path, "r") as file:
+            no_selection_message = file.read()
+        return no_selection_message
+
     def get_tooltips(self):
         raise NotImplementedError("This method should be implemented by subclasses")
 
@@ -156,6 +169,12 @@ class DataUI(param.Parameterized):
     Actions on the selections are supported via the buttons on the table. These are configurable by the catalog manager.
     """
 
+    view_type = param.Selector(
+        objects=["combined", "table", "display"],
+        default="combined",
+        doc="Type of view to display: combined, table only, or display panel only",
+    )
+
     map_color_category = param.Selector(
         objects=[],
         doc="Options for the map color category selection",
@@ -180,6 +199,10 @@ class DataUI(param.Parameterized):
         default="",
         doc='Query to filter stations. See <a href="https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.query.html">Pandas Query</a> for details. E.g. max_year <= 2023',
     )
+    use_regex_filter = param.Boolean(
+        default=False,
+        doc="Use regex for table filtering instead of 'like' functionality",
+    )
 
     def __init__(
         self, dataui_manager, crs=ccrs.PlateCarree(), station_id_column=None, **kwargs
@@ -188,6 +211,7 @@ class DataUI(param.Parameterized):
         self._station_id_column = station_id_column
         super().__init__(**kwargs)
         self._dataui_manager = dataui_manager
+        self._dataui_manager._dataui = self  # insert a reference to self in the dataui_manager for progress bar updates for example
         self._dfcat = self._dataui_manager.get_data_catalog()
         self.param.map_color_category.objects = (
             self._dataui_manager.get_map_color_columns()
@@ -402,17 +426,29 @@ class DataUI(param.Parameterized):
         action_buttons = []
         for action in actions:
             if action["action_type"] == "download":
+                # Create a closure that captures the current action
+                def create_download_callback(current_action):
+                    def _download_callback():
+                        sio = current_action["callback"](None, self)
+                        # Hide progress when download is initiated
+                        import asyncio
 
-                def _download_callback():
-                    sio = action["callback"](None, self)
-                    if sio:
-                        return sio
-                    else:
-                        return None
+                        pn.state.curdoc.add_next_tick_callback(
+                            lambda: asyncio.create_task(
+                                self._hide_progress_after_delay()
+                            )
+                        )
+                        if sio:
+                            return sio
+                        else:
+                            return None
 
+                    return _download_callback
+
+                # Pass the current action to create a specific callback function for this action
                 button = pn.widgets.FileDownload(
                     label=action["name"],
-                    callback=_download_callback,
+                    callback=create_download_callback(action),
                     filename=action["filename"],
                     button_type=action["button_type"],
                     icon=action["icon"],
@@ -425,12 +461,39 @@ class DataUI(param.Parameterized):
                     icon=action["icon"],
                 )
 
-                def on_click(event, callback=action["callback"]):
-                    callback(event, self)
+                # For regular buttons, we can use a function factory to create a proper closure
+                def create_click_handler(current_action):
+                    def on_click(event):
+                        current_action["callback"](event, self)
 
-                button.on_click(on_click)
+                    return on_click
+
+                button.on_click(create_click_handler(action))
+
             action_buttons.append(button)
         return action_buttons
+
+    async def _hide_progress_after_delay(self):
+        """Hide the progress bar after a short delay to show completion"""
+        import asyncio
+
+        await asyncio.sleep(0.5)
+        self.hide_progress()
+
+    @param.depends("use_regex_filter", watch=True)
+    def update_data_table_filters(self):
+        """Update the table filters based on the use_regex_filter parameter."""
+        if self.use_regex_filter:
+            # Update filters to use regex
+            for column in self.display_table.header_filters:
+                # self.display_table.header_filters[column]["type"] = "regex"
+                self.display_table.header_filters[column]["func"] = "regex"
+        else:
+            # Revert to 'like' functionality
+            for column in self.display_table.header_filters:
+                # self.display_table.header_filters[column]["type"] = "input"
+                self.display_table.header_filters[column]["func"] = "like"
+        self.display_table.header_filters = self.display_table.header_filters
 
     def create_data_table(self, dfs):
         column_width_map = self._dataui_manager.get_table_column_width_map()
@@ -443,10 +506,13 @@ class DataUI(param.Parameterized):
             sizing_mode="stretch_width",
             header_filters=self._dataui_manager.get_table_filters(),
             page_size=200,
-            configuration={"headerFilterLiveFilterDelay": 600},
+            configuration={
+                "headerFilterLiveFilterDelay": 600,
+                "columnDefaults": {"tooltip": True},
+            },
         )
 
-        self._display_panel = pn.Row()
+        self._display_panel = pn.Row(sizing_mode="stretch_both")
         self._action_panel = pn.Row()
         actions = self._dataui_manager.get_data_actions()
 
@@ -455,22 +521,28 @@ class DataUI(param.Parameterized):
             self._action_panel.extend(action_buttons)
         self._action_panel.append(pn.layout.HSpacer())
         self._display_panel.append(
-            pn.pane.Markdown(
-                "### Select rows from table and click on button",
+            pn.pane.HTML(
+                self._dataui_manager.get_no_selection_message(),
                 sizing_mode="stretch_both",
             )
         )
         gspec = pn.GridStack(
             sizing_mode="stretch_both", allow_resize=True, allow_drag=False
-        )  # ,
+        )
         gspec[0, 0:5] = self._action_panel
-        gspec[1:5, 0:10] = fullscreen.FullScreen(pn.Row(self.display_table))
-        gspec[6:15, 0:10] = fullscreen.FullScreen(self._display_panel)
+        gspec[1:5, 0:10] = fullscreen.FullScreen(
+            pn.Row(self.display_table, scroll=True)
+        )
+        gspec[6:15, 0:10] = fullscreen.FullScreen(
+            pn.Row(self._display_panel, scroll=True)
+        )
+        self._main_panel = gspec
         return gspec
 
     def setup_location_sync(self):
-        self.location = location.Location()
-        self.location.sync(self.display_table, ["filters", "selection"])
+        if pn.state.location:
+            pn.state.location.param.watch(self.update_view_from_location, "hash")
+            self.update_view_from_location()
 
     def get_version(self):
         try:
@@ -505,10 +577,170 @@ class DataUI(param.Parameterized):
         about_btn.on_click(about_callback)
         return about_btn
 
-    def create_view(self):
+    def _create_main_view(self):
+        """Create the main view content based on the current view_type"""
+        if self.view_type == "table":
+            gspec = pn.GridStack(
+                sizing_mode="stretch_both", allow_resize=False, allow_drag=False
+            )
+            gspec[0, 0:5] = self._action_panel
+            gspec[1:15, 0:10] = fullscreen.FullScreen(
+                pn.Row(self.display_table, scroll=True)
+            )
+            return gspec
+        elif self.view_type == "display":
+            gspec = pn.GridStack(
+                sizing_mode="stretch_both", allow_resize=False, allow_drag=False
+            )
+            gspec[0, 0:5] = self._action_panel
+            gspec[1:15, 0:10] = fullscreen.FullScreen(
+                pn.Row(self._display_panel, scroll=True)
+            )
+            return gspec
+        else:  # combined view
+            return pn.Column(
+                pn.Row(self._main_panel, sizing_mode="stretch_both", scroll=True),
+                sizing_mode="stretch_both",
+            )
+
+    def set_progress(self, value):
+        """
+        Set the progress bar value.
+
+        Parameters:
+        -----------
+        value : int
+            Value between 0-100 for progress percentage, or -1 for indeterminate progress
+        """
+        self.progress_bar.visible = True
+        if value == -1:
+            # Set to indeterminate mode
+            self.progress_bar.indeterminate = True
+        else:
+            self.progress_bar.indeterminate = False
+            self.progress_bar.value = max(
+                0, min(100, value)
+            )  # Ensure value is between 0-100
+
+    def hide_progress(self):
+        """Hide the progress bar."""
+        self.progress_bar.visible = False
+        self.progress_bar.value = 0
+        self.progress_bar.indeterminate = False
+
+    def show_map_in_display_panel(self, event):
+        """Display the map in the display panel area as a closable tab"""
+        try:
+            # Set progress indicator while loading the map
+            self._display_panel.loading = True
+            self.set_progress(-1)  # Start indeterminate progress
+
+            # Create a copy of the map for the display panel
+            map_display = pn.Column(
+                self._tmap * self._map_function,
+                min_width=800,
+                min_height=600,
+                sizing_mode="stretch_both",
+            )
+
+            # Show 90% progress
+            self.set_progress(90)
+
+            # Check if there are already tabs in the display panel
+            if len(self._display_panel.objects) > 0 and isinstance(
+                self._display_panel.objects[0], pn.Tabs
+            ):
+                # Add to existing tabs
+                tabs = self._display_panel.objects[0]
+
+                # Initialize tab_count if it doesn't exist
+                if not hasattr(self, "_tab_count"):
+                    self._tab_count = 0
+
+                self._tab_count += 1
+                tabs.append((f"Interactive Map {self._tab_count}", map_display))
+                tabs.active = len(tabs) - 1  # Activate the new tab
+            else:
+                # Create a new tabs panel
+                self._tab_count = 1
+                self._display_panel.objects = [
+                    pn.Tabs(
+                        (f"Interactive Map {self._tab_count}", map_display),
+                        closable=True,
+                        dynamic=True,
+                    )
+                ]
+
+            # Complete the progress
+            self.set_progress(100)
+        except Exception as e:
+            stack_str = full_stack()
+            logger.error(stack_str)
+            if pn.state.notifications is not None:
+                pn.state.notifications.error(
+                    "Error displaying map: " + str(stack_str), duration=0
+                )
+        finally:
+            self._display_panel.loading = False
+            # Hide progress after a short delay to show completion
+            import asyncio
+
+            pn.state.curdoc.add_next_tick_callback(
+                lambda: asyncio.create_task(self._hide_progress_after_delay())
+            )
+
+    def create_view_navigation(self):
+        """Create navigation buttons for switching between views"""
+        nav_buttons = pn.Row(
+            pn.widgets.Button(name="Combined", button_type="primary"),
+            pn.widgets.Button(name="Table", button_type="primary"),
+            pn.widgets.Button(name="Display", button_type="primary"),
+        )
+
+        def set_hash(event):
+            button_name = event.obj.name.lower().split()[0]
+            pn.state.location.hash = f"#{button_name}"
+
+        for btn in nav_buttons:
+            btn.on_click(set_hash)
+
+        return nav_buttons
+
+    def update_view_from_location(self, event=None):
+        """Update the view based on the URL hash value"""
+        hash_value = pn.state.location.hash.lstrip("#")
+
+        # Map hash values to view types
+        if hash_value == "table":
+            self.view_type = "table"
+        elif hash_value == "display":
+            self.view_type = "display"
+        else:
+            self.view_type = "combined"
+
+        # Update the template main content based on the selected view
+        if hasattr(self, "_main_view"):
+            self._main_view.objects = [self._create_main_view()]
+
+    def create_view(self, title="Data User Interface"):
         main_panel = self.create_data_table(self._dfcat)
-        self.setup_location_sync()
         control_widgets = self._dataui_manager.get_widgets()
+
+        # Create progress bar
+        self.progress_bar = pn.indicators.Progress(
+            name="Progress",
+            value=0,
+            min_width=400,
+            sizing_mode="stretch_width",
+            margin=(10, 5, 10, 5),
+            bar_color="primary",
+            visible=False,
+        )
+
+        table_options = pn.WidgetBox(
+            "Table Options",
+            self.param.use_regex_filter,
+        )
         if hasattr(self, "_map_features"):
             map_options = pn.WidgetBox(
                 "Map Options",
@@ -539,34 +771,60 @@ class DataUI(param.Parameterized):
                 value="""Map of geographical features. Click on a feature to see data available in the table. <br/>
                 See <a href="https://docs.bokeh.org/en/latest/docs/user_guide/interaction/tools.html">Bokeh Tools</a> for toolbar operation"""
             )
-            map_view = fullscreen.FullScreen(
-                pn.Column(
-                    self._tmap * self._map_function,
-                    map_tooltip,
-                    min_width=450,
-                    min_height=550,
-                )
+
+            # Create a button to show map in display panel
+            map_display_btn = pn.widgets.Button(
+                name="Show Map in Display", button_type="primary", icon="map", width=150
             )
+            map_display_btn.on_click(self.show_map_in_display_panel)
+
+            map_view = pn.Column(
+                pn.Row(map_display_btn, pn.layout.HSpacer(), map_tooltip),
+                self._tmap * self._map_function,
+                min_width=450,
+            )
+
             sidebar_view = pn.Column(
                 pn.Tabs(
                     ("Map", map_view),
                     ("Options", control_widgets),
+                    ("Table Options", table_options),
                     ("Map Options", map_options),
-                )
+                ),
+                self.progress_bar,
+                sizing_mode="stretch_both",
             )
         else:
-            sidebar_view = pn.Column(pn.Tabs(("Options", control_widgets)))
-        main_view = pn.Column(pn.Row(main_panel, sizing_mode="stretch_both"))
+            sidebar_view = pn.Column(
+                pn.Tabs(("Options", control_widgets), ("Table Options", table_options)),
+                self.progress_bar,
+            )
+        # Create view navigation buttons
+        nav_buttons = pn.Row(self.create_view_navigation())
+
+        # Create the initial main view based on URL hash
+        self._main_view = pn.Column(
+            self._create_main_view(), sizing_mode="stretch_both"
+        )
 
         template = pn.template.VanillaTemplate(
-            title="Data User Interface",
+            title=title,
             sidebar=[sidebar_view],
             sidebar_width=450,
             header_color="lightgray",
         )
-        template.main.append(main_view)
+
+        # Add navigation before the main content
+        about_button = self.create_about_button(template)
+        template.header.append(pn.Row(nav_buttons, pn.layout.HSpacer(), about_button))
+        template.main.append(self._main_view)
+
         # Adding about button
         template.modal.append(self.get_about_text())
-        sidebar_view.append(self.create_about_button(template))
+        # sidebar_view.append(self.create_about_button(template))
         self._template = template
+
+        # finally sync location views
+        self.setup_location_sync()
+
         return template

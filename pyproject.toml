@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=64.0", "wheel", "setuptools_scm>=7.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools_scm]
+write_to = "pydelmod/_version.py"
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.1"
+
+[project]
+name = "pydelmod"
+dynamic = ["version"]
+description = "Python package to work with Delta Modeling tasks"
+readme = "README.rst"
+requires-python = ">=3.7"
+license = "MIT"  # Use simple string for license instead of table
+authors = [
+    {name = "Kijin Nam", email = "knam@water.ca.gov"}
+]
+keywords = ["pydelmod", "delta", "modeling", "hydrology"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Developers",
+    "Natural Language :: English",
+    "Programming Language :: Python :: 3.7",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/CADWRDeltaModeling/pydelmod"
+Documentation = "https://github.com/CADWRDeltaModeling/pydelmod/docs"
+"Bug Reports" = "https://github.com/CADWRDeltaModeling/pydelmod/issues"
+"Source Code" = "https://github.com/CADWRDeltaModeling/pydelmod"
+
+[project.scripts]
+pydelmod = "pydelmod.cli:main"
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = true
+packages = {find = {include = ["pydelmod", "pydelmod.*"]}}
+
+[tool.setuptools.package-data]
+"pydelmod" = ["dvue/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "ex_*.py"]
+collect_ignore = ["setup.py"]
+addopts = "--doctest-modules"

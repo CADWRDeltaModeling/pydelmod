@@ -5,6 +5,7 @@ import holoviews as hv
 hv.extension("bokeh")
 from .dvue.dataui import DataUI
 from .dvue.tsdataui import TimeSeriesDataUIManager
+from .dvue import utils
 from pydelmod import schismstudy, datastore
 import pathlib
 import param
@@ -21,7 +22,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         This is merged with the data catalog to get the station locations.
         """
         self.studies = studies
-        self.study_dir_map = {str(s.base_dir): s for s in self.studies}
+        self.study_dir_map = {str(s.output_dir): s for s in self.studies}
         self.datastore = datastore
         self.catalog = self._merge_catalogs(self.studies, self.datastore)
         self.catalog["filename"] = self.catalog["filename"].astype(str)
@@ -36,6 +37,10 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
                 pd.Timestamp(etime + pd.Timedelta(days=250)),
             )
         super().__init__(filename_column="filename", **kwargs)
+        self.color_cycle_column = "id"
+        self.dashed_line_cycle_column = "source"
+        self.marker_cycle_column = "variable"
+
 
     def get_widgets(self):
         control_widgets = super().get_widgets()
@@ -48,7 +53,6 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         """
         dfs = [s.get_catalog() for s in studies]
         df = pd.concat(dfs)
-        df["source"] = "schism"
         if datastore is not None:
             dfobs = self._convert_to_study_format(datastore.get_catalog())
             dfobs["source"] = "datastore"
@@ -71,10 +75,10 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
 
     def build_station_name(self, r):
         name = r["id"] + ":" + r["variable"]
-        if "FILE_NUM" not in r:
+        if "source" not in r:
             return f"{name}"
         else:
-            return f'{r["FILE_NUM"]}:{name}'
+            return f'{r["source"]}:{name}'
 
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
@@ -117,8 +121,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
         return title
 
     def create_curve(self, df, r, unit, file_index=None):
-        file_index_label = f"{file_index}:" if file_index is not None else ""
-        crvlabel = f'{file_index_label}{r["id"]}/{r["variable"]}'
+        crvlabel = f'{r["source"]}::{r["id"]}/{r["variable"]}'
         ylabel = f'{r["variable"]} ({unit})'
         title = f'{r["variable"]} @ {r["id"]}'
         crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
@@ -131,18 +134,19 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
             tools=["hover"],
         )
 
+    def is_irregular(self, r):
+        return False
+
     def get_data_for_time_range(self, r, time_range):
         unit = r["unit"]
-        if r["source"] == "schism":
-            base_dir = str(pathlib.Path(r["filename"]).parent)
-            study = self.study_dir_map[base_dir]
-            df = study.get_data(r)
-        elif r["source"] == "datastore":
+        if r["source"] == "datastore":
             df = self.datastore.get_data(r)
             if self.convert_units:
                 df, unit = schismstudy.convert_to_SI(df, r["unit"])
         else:
-            df = pd.DataFrame(columns=["value"], dtype=float)  # empty dataframe
+            base_dir = str(pathlib.Path(r["filename"]).parent)
+            study = self.study_dir_map[base_dir]
+            df = study.get_data(r)
         ptype = "INST-VAL"
         df = df[slice(df.first_valid_index(), df.last_valid_index())]
         return df, unit, ptype
@@ -170,6 +174,7 @@ class SchismOutputUIDataManager(TimeSeriesDataUIManager):
 
 
 import click
+import yaml
 
 
 @click.command()
@@ -191,31 +196,105 @@ import click
     "--station_in_file", default="station.in", help="Path to the station.in file"
 )
 @click.option("--flux_out", default="flux.out", help="Path to the flux.out file")
-@click.option("--reftime", default="2020-01-01", help="Reference time")
+@click.option("--reftime", default=None, help="Reference time")
+@click.option("--yaml_file", default=None, help="Path to the yaml file")
 def show_schism_output_ui(
     schism_dir=".",
     flux_xsect_file="flow_station_xsects.yaml",
     station_in_file="station.in",
     flux_out="flux.out",
-    reftime="2020-01-01",
+    reftime=None,
     repo_dir="screened",
     inventory_file="inventory_datasets.csv",
+    yaml_file=None,
 ):
-    study = schismstudy.SchismStudy(
-        schism_dir,
-        flux_xsect_file=flux_xsect_file,
-        station_in_file=station_in_file,
-        flux_out=flux_out,
-        reftime=reftime,
-    )
+    """
+    Shows Data UI for SCHISM output files.
+
+    This function creates a Data UI for SCHISM output files, allowing users to visualize and analyze the data.
+    It can handle multiple studies and datasets, and provides options for customizing the display.
+    The function can be run from the command line or imported as a module.
+
+    If a YAML file is provided, it will be used to create multiple studies.
+    Otherwise, a single study will be created using the provided parameters.
+
+    Example YAML file::
+
+    .. code-block:: yaml
+        \b
+        schism_studies:
+            - label: Study1
+            base_dir: "study1_directory"
+            flux_xsect_file: "study1_flow_station_xsects.yaml"
+            station_in_file: "study1_station.in"
+            output_dir: "outputs"
+            param_nml_file: "param.nml"
+            flux_out: "study1_flux.out"
+            reftime: "2020-01-01"
+            - label: Study2
+            base_dir: "study2_directory"
+        datastore:
+            repo_dir: /repo/continuous/screened
+            inventory_file: "inventory_datasets.csv"
+    """
+    if yaml_file:
+        # Load the YAML file and create multiple studies
+        with open(yaml_file, "r") as file:
+            yaml_data = yaml.safe_load(file)
+        # get the base directory of the yaml file
+        yaml_file_base_dir = pathlib.Path(yaml_file).parent
+        studies = []
+        for study_config in yaml_data.get("schism_studies", []):
+            study_config["base_dir"] = utils.interpret_file_relative_to(yaml_file_base_dir, study_config["base_dir"])
+            studies.append(
+                schismstudy.SchismStudy(
+                    study_name=study_config["label"],
+                    base_dir=study_config["base_dir"],
+                    output_dir=study_config.get("output_dir", "outputs"),
+                    param_nml_file=study_config.get("param_nml_file", "param.nml"),
+                    flux_xsect_file=study_config.get(
+                        "flux_xsect_file", "flow_station_xsects.yaml"
+                    ),
+                    station_in_file=study_config.get("station_in_file", "station.in"),
+                    flux_out=study_config.get("flux_out", "flux.out"),
+                    reftime=reftime,
+                    **study_config.get("additional_parameters", {}),
+                )
+            )
+
+        datastore_config = yaml_data.get("datastore", {})
+        repo_dir = datastore_config.get("repo_dir", repo_dir)
+        inventory_file = datastore_config.get("inventory_file", inventory_file)
+    else:
+        # Create a single study if no YAML file is provided
+        studies = [
+            schismstudy.SchismStudy(
+                schism_dir,
+                flux_xsect_file=flux_xsect_file,
+                station_in_file=station_in_file,
+                flux_out=flux_out,
+                reftime=reftime,
+            )
+        ]
+
+    # study.reftime to study.endtime is the range of a single study
+    # Initialize the union range
+    union_start = min(study.reftime for study in studies)
+    union_end = max(study.endtime for study in studies)
+
+    # Create the union range as a single variable
+    time_range = (union_start, union_end)
+
+    # Create the datastore
     ds = datastore.StationDatastore(repo_dir=repo_dir, inventory_file=inventory_file)
-    time_range = (pd.Timestamp(reftime), pd.Timestamp(reftime) + pd.Timedelta(days=250))
+
+    # Create the UI
     ui = DataUI(
         SchismOutputUIDataManager(
-            study,
+            *studies,
             datastore=ds,
             time_range=time_range,
         ),
         crs=ccrs.UTM(10),
     )
-    ui.create_view().show()
+    ui.create_view(title="Schism Output UI").show()

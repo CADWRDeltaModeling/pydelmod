@@ -5,8 +5,7 @@
 
 from setuptools import setup, find_packages
 
-##------------------ VERSIONING BEST PRACTICES --------------------------##
-import versioneer
+##------------------ VERSIONING NOW HANDLED BY SETUPTOOLS_SCM IN PYPROJECT.TOML --------------------------##
 
 with open('README.rst') as readme_file:
     readme = readme_file.read()
@@ -44,13 +43,14 @@ setup(
     long_description=readme + '\n\n' + history,
     include_package_data=True,
     keywords='pydelmod',
-    name='pydelmod',
-    packages=find_packages(include=['pydelmod', 'pydelmod.*']),
+    name='pydelmod',    packages=find_packages(include=['pydelmod', 'pydelmod.*']),
+    package_data={
+        'pydelmod': ['dvue/*.html'],
+    },
     setup_requires=setup_requirements,
     test_suite='tests',
     tests_require=test_requirements,
     url='https://github.com/CADWRDeltaModeling/pydelmod',
-    version=versioneer.get_version(),
-    cmdclass=versioneer.get_cmdclass(),
+    # Version is now managed by setuptools_scm in pyproject.toml
     zip_safe=False,
 )

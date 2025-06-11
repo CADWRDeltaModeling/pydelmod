@@ -79,6 +79,16 @@ def read_scenarios(scenarios):
 
 
 def main(config_file):
+    """
+    Run the DSM2 Analysis from the config file
+    This function will read the config file and run the analysis
+    based on the config file. The config file should be in yaml format.
+    Arguments:
+        config_file -- config file in yaml format
+
+    Returns:
+        A dashboard with tabs for each plot
+    """
     mainPanel = pn.Tabs()
 
     def serve_main_panel():
