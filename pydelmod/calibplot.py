@@ -25,7 +25,7 @@ import numpy as np
 import copy
 import re
 
-
+cpalette = "Category10"
 def parse_time_window(timewindow):
     """
     Args:
@@ -914,7 +914,7 @@ def build_inst_plot(
         timewindow=inst_plot_timewindow,
         zoom_inst_plot=zoom_inst_plot,
     ).opts(ylabel=y_axis_label, show_grid=True, gridstyle=gridstyle, shared_axes=False)
-    tsp = tsp.opts(opts.Curve(color=hv.Cycle("Category10")))
+    tsp = tsp.opts(opts.Curve(color=hv.Cycle(cpalette)))
     return tsp
 
 
@@ -988,7 +988,7 @@ def build_godin_plot(
     gtsp = tsplot(gtsp_plot_data, [p.study.name for p in pp]).opts(
         ylabel=godin_y_axis_label, show_grid=True, gridstyle=gridstyle
     )
-    gtsp = gtsp.opts(opts.Curve(color=hv.Cycle("Category10")))
+    gtsp = gtsp.opts(opts.Curve(color=hv.Cycle(cpalette)))
     return gtsp
 
 
@@ -1062,7 +1062,7 @@ def build_scatter_plots(
         if splot_plot_data is not None and splot_plot_data[0] is not None:
             splot = (
                 scatterplot(splot_plot_data, [p.study.name for p in pp])
-                .opts(opts.Scatter(color=shift_cycle(hv.Cycle("Category10"))))
+                .opts(opts.Scatter(color=shift_cycle(hv.Cycle(cpalette))))
                 .opts(ylabel="Model", legend_position="top_left")
                 .opts(show_grid=True, frame_height=250, frame_width=250, data_aspect=1)
                 .opts(toolbar=toolbar_option)
@@ -1094,7 +1094,7 @@ def build_scatter_plots(
         if dfmetrics is not None:
             slope_plots = regression_line_plots(dfmetrics, flow_in_thousands)
             scatter_plot = (
-                slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle("Category10"))))
+                slope_plots.opts(opts.Slope(color=shift_cycle(hv.Cycle(cpalette))))
                 * splot
             )
             scatter_plot = scatter_plot.opts(
@@ -1682,7 +1682,7 @@ def build_kde_plots(pp, amp_title="(e)", phase_title="(f)", include_toolbar=True
         "Amplitude Diff (%)",
     )
     amp_pdiff_kde = amp_pdiff_kde.opts(
-        opts.Distribution(line_color=shift_cycle(hv.Cycle("Category10")), filled=False)
+        opts.Distribution(line_color=shift_cycle(hv.Cycle(cpalette)), filled=False)
     )
     amp_pdiff_kde.opts(opts.Distribution(line_width=5))
 
@@ -1692,7 +1692,7 @@ def build_kde_plots(pp, amp_title="(e)", phase_title="(f)", include_toolbar=True
         "Phase Diff (minutes)",
     )
     phase_diff_kde = phase_diff_kde.opts(
-        opts.Distribution(line_color=shift_cycle(hv.Cycle("Category10")), filled=False)
+        opts.Distribution(line_color=shift_cycle(hv.Cycle(cpalette)), filled=False)
     )
     phase_diff_kde.opts(opts.Distribution(line_width=5))
 
@@ -1813,7 +1813,7 @@ def create_validation_bar_charts(
                 legend_position="right",
                 ylabel=m + " (" + u + ")",
                 xlabel="",
-                color=shift_cycle(hv.Cycle("Category10")),
+                color=shift_cycle(hv.Cycle(cpalette)),
                 gridstyle=grid_style,
                 show_grid=True,
                 show_legend=False,
