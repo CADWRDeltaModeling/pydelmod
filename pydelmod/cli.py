@@ -306,6 +306,7 @@ from pydelmod import schismui
 from pydelmod import schismcalibplotui
 from pydelmod import ptm_animator
 from pydelmod.nbplot import calsim_dsm2_analysis
+from pydelmod import deltacduimgr
 
 main.add_command(schismui.show_schism_output_ui)
 main.add_command(schismcalibplotui.schism_calib_plot_ui)
@@ -328,6 +329,7 @@ main.add_command(calibplotui.calib_plot_ui)
 main.add_command(channel_orient.generate_channel_orientation)
 main.add_command(ptm_animator.ptm_animate)
 main.add_command(dsm2_analyze)
+main.add_command(deltacduimgr.show_deltacd_ui)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover

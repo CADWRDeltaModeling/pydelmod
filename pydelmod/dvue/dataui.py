@@ -245,7 +245,8 @@ class DataUI(param.Parameterized):
                 dfx = dfx.dropna(subset=["geometry"])
                 dfx = dfx.set_crs(self._dfcat.crs)
             else:
-                dfx = dfx.dropna(subset=["Latitude", "Longitude"])  # FIXME: ?
+                pass
+                #dfx = dfx.dropna(subset=["Latitude", "Longitude"])  # FIXME: ?
         else:
             dfx = self._dfcat
         return dfx
@@ -258,15 +259,15 @@ class DataUI(param.Parameterized):
         # check if the dfmap is a geodataframe
         try:
             if isinstance(dfmap, gpd.GeoDataFrame):
-                geom_type = dfmap.geometry.iloc[0].geom_type
-                if geom_type == "Point":
+                geom_type = str.lower(str(dfmap.geometry.iloc[0].geom_type))
+                if "point" in geom_type:
                     self._map_features = gv.Points(dfmap, crs=crs)
-                elif geom_type == "LineString":
+                elif "line" in geom_type:
                     self._map_features = gv.Path(dfmap, crs=crs)
-                elif geom_type == "Polygon":
+                elif "polygon" in geom_type:
                     self._map_features = gv.Polygons(dfmap, crs=crs)
                 else:  # pragma: no cover
-                    raise "Unknown geometry type " + geom_type
+                    raise ValueError("Unknown geometry type " + geom_type)
         except Exception as e:
             logger.error(f"Error building map of features: {e}")
             self._map_features = gv.Points(dfmap, crs=crs)
