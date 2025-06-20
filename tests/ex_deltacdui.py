@@ -24,7 +24,7 @@ import panel as pn
 pn.extension()
 pn.panel(pn.Row(map_view, sizing_mode="stretch_both")).servable(title="GeoJSON Map with Background Tiles").show()
 # %%
-detaw_output_file = "d:/delta/deltacd_inputs/historical/outputs/detawoutput_dsm2.nc"
+detaw_output_file = "d:/delta/deltacd_inputs/historical/outputs/dcd_dsm2.nc"
 import xarray as xr
 # %%
 ds = xr.open_dataset(detaw_output_file)

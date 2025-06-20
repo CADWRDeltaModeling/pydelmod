@@ -11,115 +11,157 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
     Handles data catalog creation and time series extraction for area_id and crop combinations.
     """
 
-    def __init__(self, nc_file_path, geojson_file_path=None):
+    def __init__(self, *nc_file_paths, **kwargs):
         """
         Initialize the DeltaCD UI Manager.
         
         Parameters:
         -----------
-        nc_file_path : str
-            Path to the netCDF file containing DeltaCD data
-        geojson_file_path : str, optional
+        nc_file_paths : str or list of str
+            Paths to the netCDF files containing DeltaCD data. Can be a single path or multiple paths.
+        geojson_file : str, optional
             Path to the GeoJSON file containing geographical information for area_ids
         """
-        self.nc_file_path = nc_file_path
-        self.geojson_file_path = geojson_file_path
-        self.ds = xr.open_dataset(nc_file_path)
+        self.nc_file_paths = nc_file_paths
+        self.geojson_file_path = kwargs.pop("geojson_file", None)
+        self.datasets = {}
+        dfcats = []
+        for nc_file_path in self.nc_file_paths:
+            if not nc_file_path.endswith('.nc'):
+                raise ValueError(f"Invalid file type: {nc_file_path}. Expected a netCDF file (.nc).")
+            self.datasets[nc_file_path] = xr.open_dataset(nc_file_path)
+            dfcat = self.get_data_catalog_for_dataset(self.datasets[nc_file_path], nc_file_path)
+            dfcats.append(dfcat)
         self.gdf = None
-        
-        if geojson_file_path:
-            self.gdf = gpd.read_file(geojson_file_path)
-            self.gdf.rename(columns={"OBJECTID": "area_id"}, inplace=True)
-        
+        if self.geojson_file_path:
+            self.gdf = gpd.read_file(self.geojson_file_path)
+            self.gdf.rename(columns={"NEW_SUB": "area_id"}, inplace=True)
+
+        # concatenate all data catalogs
+        dfcat = pd.concat(dfcats, ignore_index=True)
+        # merge with GeoDataFrame if available
+        # If geojson is available, convert to GeoDataFrame
+        if self.gdf is not None:
+            # Convert area_id to string in both DataFrames before merging
+            dfcat['area_id'] = dfcat['area_id'].astype(str)
+            gdf_copy = self.gdf.copy()
+            gdf_copy['area_id'] = gdf_copy['area_id'].astype(str)
+            
+            # Merge with geometry information based on area_id
+            merged_df = pd.merge(dfcat, gdf_copy, on="area_id", how="left")
+            
+            # Create GeoDataFrame
+            catalog = gpd.GeoDataFrame(merged_df, geometry="geometry")
+            
+            # Handle CRS properly
+            if self.gdf.crs is not None:
+                catalog.crs = self.gdf.crs
+            else:
+                catalog.set_crs(epsg=4326, inplace=True)
+        else:
+            # If no GeoDataFrame, just use the DataFrame
+            catalog = dfcat
+        self.dfcat = catalog
         # Initialize data cache
         self.data_cache = {}
         
+        kwargs['filename_column'] = "source"
+        super().__init__(**kwargs)
         # Set up columns for visualization
-        self.color_cycle_column = "crop"
+        self.color_cycle_column = "area_id"
         self.dashed_line_cycle_column = "variable"
         self.marker_cycle_column = "area_id"
         
-        super().__init__(filename_column="source")
 
     def get_data_catalog(self):
+        return self.dfcat
+
+    def get_data_catalog_for_dataset(self, ds, nc_file_path):
         """
         Create a data catalog from the netCDF file.
         Each row represents a time series for a variable for an area_id and crop combination.
         Includes all possible combinations of area_id, crop, and variable.
         """
         # Get available variables, excluding coordinates
-        variables = [var for var in self.ds.data_vars]
-        area_ids = self.ds.area_id.values
-        crops = self.ds.crop.values
+        variables = list(ds.data_vars)
+        dims = list(ds.dims)
+        if "time" not in dims:
+            raise ValueError(f"Dataset must contain a 'time' dimension. Dimensions available: {dims}")
+        if "area_id" not in dims:
+            raise ValueError(f"Dataset must contain an 'area_id' dimension. Dimensions available: {dims}")
+        area_ids = ds.area_id.values
+        other_dims = [dim for dim in dims if dim not in ["time", "area_id"]]
         
         # Create all combinations using pandas products
         combinations = []
+        columns = ['area_id']+other_dims
         for area_id in area_ids:
-            for crop in crops:
+            if 'crop' in dims:
+                for crop in ds.crop.values:
+                    # Create combinations for each variable
+                    for var in variables:
+                        combinations.append({
+                            'area_id': area_id,
+                            'crop': crop,
+                            'variable': var
+                        })
+            else:
                 for var in variables:
                     combinations.append({
-                        'area_id': int(area_id),
-                        'crop': str(crop),
+                        'area_id': area_id,
                         'variable': var
                     })
         
         # Create base DataFrame with all combinations
         df = pd.DataFrame(combinations)
         
-        # Get time range and other metadata for each combination
-        variable_units = {var: self.ds[var].attrs.get("units", "") for var in variables}
-        
         # Add additional columns
+        # More robust way to get units
+        variable_units = {}
+        for var in variables:
+            try:
+                # Try to get unit from the variable's attributes
+                unit = ds[var].attrs.get("units", "")
+                variable_units[var] = unit
+                print(f"Found unit '{unit}' for variable '{var}'")
+            except Exception as e:
+                print(f"Error getting unit for {var}: {e}")
+                variable_units[var] = ""  # Default to empty string
         df['unit'] = df['variable'].map(variable_units)
         df['interval'] = 'daily'  # Assuming all data is daily, adjust as needed
-        df['source'] = self.nc_file_path
+        df['source'] = nc_file_path
         
         # Add time range information
-        times = pd.to_datetime(self.ds.time.values)
+        times = pd.to_datetime(ds.time.values)
         df['start_year'] = str(times.min().year)
         df['max_year'] = str(times.max().year)
-        
-        # If geojson is available, convert to GeoDataFrame
-        if self.gdf is not None:
-            # Merge with geometry information based on area_id
-            merged_df = pd.merge(df, self.gdf, on="area_id", how="left")
-            
-            # Create GeoDataFrame
-            catalog = gpd.GeoDataFrame(merged_df, geometry="geometry")
-            
-            # Handle CRS properly
-            # Check if the GeoDataFrame already has a CRS
-            if self.gdf.crs is not None:
-                # GDF already has a CRS, no need to set it
-                pass
-            else:
-                # Set a default CRS if none exists
-                catalog.set_crs(epsg=4326, inplace=True)
-            
-            return catalog
-        else:
-            return df
+        return df        
 
     def get_time_range(self, dfcat):
         """Return the min and max time from the dataset"""
-        times = pd.to_datetime(self.ds.time.values)
-        return times.min(), times.max()
+        # return the min and max time for the dfcat
+        starttime = pd.to_datetime(dfcat['start_year'].min())
+        endtime = pd.to_datetime(dfcat['max_year'].max())
+        return starttime, endtime
 
     def build_station_name(self, r):
         """Build a display name for the area_id and crop combination"""
+        if 'crop' not in r or not r['crop'] or pd.isna(r['crop']):
+            return f"Area {r['area_id']}"
         return f"Area {r['area_id']} - {r['crop']}"
 
-    def get_table_column_width_map(self):
+    def _get_table_column_width_map(self):
         """Define column widths for the data catalog table"""
         column_width_map = {
             "area_id": "8%",
-            "crop": "15%",
             "variable": "12%",
             "unit": "8%",
             "interval": "10%",
             "start_year": "10%",
             "max_year": "10%",
         }
+        if 'crop' in self.get_data_catalog().columns:
+            column_width_map["crop"] = "15%"
         return column_width_map
 
     def get_table_filters(self):
@@ -175,32 +217,47 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
         Parameters:
         -----------
         r : pandas.Series
-            Row from data catalog containing area_id, crop, and variable
+            Row from data catalog containing area_id and variable (crop may be optional)
         time_range : tuple
             Start and end time for data extraction
-        
+    
         Returns:
         --------
         tuple
             (time series DataFrame, unit, data type)
         """
         area_id = r["area_id"]
-        crop = r["crop"]
         variable = r["variable"]
         unit = r["unit"]
+        filename = r["source"]
+        ds = self.datasets[filename]
+        try:
+            # Check if 'crop' exists in the row before trying to access it
+            if 'crop' in r and not pd.isna(r['crop']):
+                crop = r["crop"]
+                # Extract data from xarray for the specific area_id, crop, and variable
+                data = ds[variable].sel(area_id=area_id, crop=crop)
+            else:
+                # Handle case where crop is not in the data catalog
+                data = ds[variable].sel(area_id=area_id)
         
-        # Extract data from xarray for the specific area_id, crop, and variable
-        data = self.ds[variable].sel(area_id=area_id, crop=crop)
-        
-        # Convert to pandas Series and then DataFrame
-        df = data.to_pandas().to_frame()
+            # Convert to pandas Series and then DataFrame
+            df = data.to_pandas().to_frame()
+            # Ensure the index is a datetime index
+            if not isinstance(df.index, pd.DatetimeIndex):
+                # Try to convert the index to a datetime index
+                df.index = pd.to_datetime(df.index)
             
-        # Filter by time range if specified
-        if time_range and len(time_range) == 2:
-            start_time, end_time = time_range
-            df = df.loc[start_time:end_time]
-            
-        return df, unit, "instantaneous"
+            # Filter by time range if specified
+            if time_range and len(time_range) == 2:
+                start_time, end_time = time_range
+                df = df.loc[start_time:end_time]
+                
+            return df, unit, "instantaneous"
+        except Exception as e:
+            # Handle any exception that occurs during data extraction
+            print(f"Error extracting data for area_id={area_id}, variable={variable}: {e}")
+            return pd.DataFrame(), unit, "instantaneous"
 
     def get_tooltips(self):
         """Define tooltips for map visualization"""
@@ -222,11 +279,23 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
     def create_curve(self, df, r, unit, file_index=None):
         """Create a holoviews curve for plotting"""
         file_index_label = f"{file_index}:" if file_index is not None else ""
-        crvlabel = f'{file_index_label}Area {r["area_id"]} - {r["crop"]}: {r["variable"]}'
-        ylabel = f'{r["variable"]} ({unit})'
-        title = f'{r["variable"]} for {r["crop"]} @ Area {r["area_id"]}'
         
-        crv = hv.Curve(df.iloc[:, [0]], label=crvlabel).redim(value=crvlabel)
+        # Handle case where crop is missing or blank
+        if 'crop' not in r or not r['crop'] or pd.isna(r['crop']):
+            crvlabel = f'{file_index_label}Area {r["area_id"]}: {r["variable"]}'
+            title = f'{r["variable"]} @ Area {r["area_id"]}'
+        else:
+            crvlabel = f'{file_index_label}Area {r["area_id"]} - {r["crop"]}: {r["variable"]}'
+            title = f'{r["variable"]} for {r["crop"]} @ Area {r["area_id"]}'
+        
+        ylabel = f'{r["variable"]} ({unit})'
+        
+        # Create curve with appropriate data
+        if df.empty:
+            crv = hv.Curve(pd.DataFrame({'x': [], 'y': []}), kdims=['x'], vdims=['y'], label=crvlabel).redim(y=crvlabel)
+        else:
+            crv = hv.Curve(df, label=crvlabel).redim(value=crvlabel)
+        
         return crv.opts(
             xlabel="Time",
             ylabel=ylabel,
@@ -249,7 +318,14 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
         else:
             value = ["", ""]
         value[0] = self._append_value(r["variable"], value[0])
-        value[1] = self._append_value(f'Area {r["area_id"]} - {r["crop"]}', value[1])
+        
+        # Handle case where crop is missing or blank
+        if 'crop' not in r or not r['crop'] or pd.isna(r['crop']):
+            location_str = f'Area {r["area_id"]}'
+        else:
+            location_str = f'Area {r["area_id"]} - {r["crop"]}'
+        
+        value[1] = self._append_value(location_str, value[1])
         title_map[unit] = value
 
     def create_title(self, v):
@@ -259,19 +335,25 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
     
 import click
 @click.command()
-@click.argument("detaw_output_file", type=click.Path(exists=True, dir_okay=False))
+@click.argument(
+    "nc_files",
+    nargs=-1,
+    type=click.Path(exists=True, dir_okay=False),
+    required=True,
+)
 @click.option(
-    "--geojson_file_path",
+    "--geojson_file",
     type=click.Path(exists=True, dir_okay=False),
     default=None,
     help="Path to the GeoJSON file containing area geometries",
 )
-def show_deltacd_ui(detaw_output_file, geojson_file_path=None):
+def show_deltacd_ui(nc_files, geojson_file=None):
     """
     Show the DeltaCD UI Manager for the specified netCDF file and GeoJSON file.
     """
-    dcd_ui = DeltaCDUIManager(detaw_output_file, geojson_file_path=geojson_file_path)
+    dcd_ui = DeltaCDUIManager(*nc_files, geojson_file=geojson_file)
     from pydelmod.dvue import dataui
     import cartopy.crs as ccrs
     dui=dataui.DataUI(dcd_ui, station_id_column="area_id", crs=ccrs.epsg(26910))
     dui.create_view().servable(title="DeltaCD UI Manager").show()
+
