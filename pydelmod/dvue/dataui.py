@@ -384,10 +384,11 @@ class DataUI(param.Parameterized):
             return
         idcol = self._station_id_column
         table = self.display_table
+
         if idcol and idcol in self._dfcat.columns:
             # get station ids from the _map_features being displayed
             stations_map_selected = (
-                self._map_features.dframe().iloc[index][idcol].unique()
+                self._map_features.data.iloc[index][idcol].unique()
             )
             # get the stations selected in table already
             stations_table_selected = table.selected_dataframe[idcol].unique()
@@ -413,7 +414,7 @@ class DataUI(param.Parameterized):
             )
             selected_indices = i_selected_indices + list(keep_selected_from_map)
         else:
-            dfs = self._map_features.dframe().iloc[index]
+            dfs = self._map_features.data.iloc[index]
             merged_indices = (
                 self._dfcat.reset_index().merge(dfs)["index"].to_list()
             )  # index matching

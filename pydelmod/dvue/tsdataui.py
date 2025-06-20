@@ -129,6 +129,9 @@ class TimeSeriesDataUIManager(DataUIManager):
                     self.filename_column
                 ].apply(lambda x: unique_files.tolist().index(x))
                 self.display_fileno = True
+        else:
+            self.file_number_column_name = None
+            self.display_fileno = False
         self.time_range = self.get_time_range(self.get_data_catalog())
         super().__init__(**params)
         table_columns = list(self.get_table_columns())
@@ -311,10 +314,11 @@ class TimeSeriesDataUIManager(DataUIManager):
 
     def get_table_column_width_map(self):
         column_width_map = self._get_table_column_width_map()
-        column_width_map[self.filename_column] = "10%"
-        if self.display_fileno:
-            column_width_map[self.file_number_column_name] = "5%"
-        self.adjust_column_width(column_width_map)
+        if self.filename_column:
+            column_width_map[self.filename_column] = "10%"
+            if self.display_fileno:
+                column_width_map[self.file_number_column_name] = "5%"
+            self.adjust_column_width(column_width_map)
         return column_width_map
 
     def get_color_style_mapping(self, unique_values):
