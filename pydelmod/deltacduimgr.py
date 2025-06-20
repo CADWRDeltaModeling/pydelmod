@@ -1,3 +1,9 @@
+import logging
+
+# Configure logger for this module
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
 import pandas as pd
 import xarray as xr
 import geopandas as gpd
@@ -123,9 +129,9 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
                 # Try to get unit from the variable's attributes
                 unit = ds[var].attrs.get("units", "")
                 variable_units[var] = unit
-                print(f"Found unit '{unit}' for variable '{var}'")
+                logger.debug(f"Found unit '{unit}' for variable '{var}'")
             except Exception as e:
-                print(f"Error getting unit for {var}: {e}")
+                logger.debug(f"Error getting unit for {var}: {e}")
                 variable_units[var] = ""  # Default to empty string
         df['unit'] = df['variable'].map(variable_units)
         df['interval'] = 'daily'  # Assuming all data is daily, adjust as needed
@@ -254,9 +260,10 @@ class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
                 df = df.loc[start_time:end_time]
                 
             return df, unit, "instantaneous"
+        
         except Exception as e:
             # Handle any exception that occurs during data extraction
-            print(f"Error extracting data for area_id={area_id}, variable={variable}: {e}")
+            logger.debug(f"Error extracting data for area_id={area_id}, variable={variable}: {e}")
             return pd.DataFrame(), unit, "instantaneous"
 
     def get_tooltips(self):
