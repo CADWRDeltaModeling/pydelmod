@@ -177,8 +177,8 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
             [f.create_catalog() for k, f in self.tidefile_map.items()]
         )
         self.dfcat.reset_index(drop=True, inplace=True)
+        self.dfcat["geoid"] = self.dfcat.id.str.split("_", expand=True).iloc[:, 1]
         if self.channels is not None:
-            self.dfcat["geoid"] = self.dfcat.id.str.split("_", expand=True).iloc[:, 1]
             self.channels.id = self.channels.id.astype("str")
             self.channels.rename(columns={"id": "geoid"}, inplace=True)
             self.dfcat = pd.merge(
@@ -188,12 +188,12 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
                 right_on="geoid",
                 how="right",
             )
+        self.station_id_column = "geoid"
         time_ranges = [f.get_start_end_dates() for k, f in self.tidefile_map.items()]
         self.time_range = (
             min([pd.to_datetime(t[0]) for t in time_ranges]),
             max([pd.to_datetime(t[1]) for t in time_ranges]),
         )
-        self.station_id_column = "id"
         super().__init__(
             filename_column="filename",
             file_number_column_name="FILE_NUM",
@@ -233,6 +233,7 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
     def _get_table_column_width_map(self):
         """only columns to be displayed in the table should be included in the map"""
         column_width_map = {
+            "geoid": "10%",
             "id": "15%",
             "variable": "10%",
             "unit": "10%",
@@ -241,6 +242,7 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
 
     def get_table_filters(self):
         table_filters = {
+            "geoid": {"type": "input", "func": "like", "placeholder": "Enter match"},
             "id": {"type": "input", "func": "like", "placeholder": "Enter match"},
             "variable": {"type": "input", "func": "like", "placeholder": "Enter match"},
             "unit": {"type": "input", "func": "like", "placeholder": "Enter match"},
