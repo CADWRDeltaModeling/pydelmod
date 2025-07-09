@@ -4,7 +4,7 @@ channels:
   - cadwr-dms
   - nodefaults
 dependencies:
-  - python<3.12
+  - python<3.14
   - numpy
   - pip
   # pip install these
@@ -26,7 +26,7 @@ dependencies:
   - h5py
   - scipy
   # geo stuff
-  - pyogrio
+  # - pyogrio # causes schimpy to downgrade
   - geopandas
   # then plot stuff
   - plotly-orca
