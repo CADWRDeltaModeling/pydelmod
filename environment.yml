@@ -51,7 +51,7 @@ dependencies:
   - selenium
   - firefox
   - geckodriver
-  # finally misc 
+  # finally misc
   - lxml
   - black
   - tabulate

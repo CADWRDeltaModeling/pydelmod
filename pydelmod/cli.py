@@ -19,7 +19,9 @@ CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
 
 
 @click.group(context_settings=CONTEXT_SETTINGS)
-@click.version_option(__version__, "-v", "--version", message="%(prog)s, version %(version)s")
+@click.version_option(
+    __version__, "-v", "--version", message="%(prog)s, version %(version)s"
+)
 def main():
     """PyDelMod - Python Delta Modeling Tools."""
     pass
@@ -305,7 +307,8 @@ from pydelmod import calibplotui
 from pydelmod import schismui
 from pydelmod import schismcalibplotui
 from pydelmod import ptm_animator
-from pydelmod.nbplot import calsim_dsm2_analysis
+
+# from pydelmod.nbplot import calsim_dsm2_analysis
 from pydelmod import deltacduimgr
 
 main.add_command(schismui.show_schism_output_ui)
