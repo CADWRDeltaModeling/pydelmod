@@ -16,7 +16,31 @@ import hvplot.pandas
 #
 import panel as pn
 
-pn.extension()
+# Try to load VTK extension, but make it optional
+HAS_VTK = False
+if HAS_VTK:
+    try:
+        pn.extension("vtk")
+        import pyvista
+
+        HAS_VTK = True
+    except (ImportError, Exception):
+        HAS_VTK = False
+
+
+# Define a function to safely import PyVista-related modules
+def import_vtk_modules():
+    """Import PyVista and VTK-related modules if available."""
+    if not HAS_VTK:
+        return None, None
+
+    try:
+        import pyvista as pv
+        from panel.pane import VTK, VTKVolume
+
+        return pv, VTK
+    except ImportError:
+        return None, None
 
 
 import pyhecdss as dss
@@ -47,7 +71,6 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         self.color_cycle_column = "NAME"
         self.dashed_line_cycle_column = "FILE"
         self.marker_cycle_column = "VARIABLE"
-
 
     def build_station_name(self, r):
         if self.display_fileno:
@@ -156,8 +179,944 @@ class DSM2DataUIManager(TimeSeriesDataUIManager):
         return ["VARIABLE"]
 
 
+import numpy as np
 from pydsm.hydroh5 import HydroH5
 from pydsm.qualh5 import QualH5
+
+
+class DSM2TidefileXsectUIManager(param.Parameterized):
+    selected_channel = param.Selector(default=None, doc="Selected channel number")
+    selected_xsect = param.Selector(default=None, doc="Selected cross-section number")
+    show_all_xsects = param.Boolean(default=False, label="Show all cross sections")
+    table_xsect = param.Selector(
+        default=None, doc="Cross-section to show in data table"
+    )
+    show_3d_view = param.Boolean(default=False, label="Show 3D channel volume")
+
+    def __init__(self, tidefile, **kwargs):
+        """
+        Create a UI for examining cross-sections from a DSM2 tidefile
+
+        Parameters
+        ----------
+        tidefile: str
+            Path to the tidefile
+        """
+        super().__init__(**kwargs)
+
+        # Load the tidefile
+        self.tidefile = tidefile
+        self.hydro = HydroH5(tidefile)
+
+        # Get the virtual cross-section data
+        self.vx = self.hydro.get_geometry_table("/hydro/geometry/virtual_xsect")
+
+        # Get unique channel numbers
+        self.channel_numbers = np.sort(self.vx["chan_no"].unique())
+        self.param.selected_channel.objects = list(self.channel_numbers)
+
+        if len(self.channel_numbers) > 0:
+            # Default to the first channel
+            self.selected_channel = self.channel_numbers[0]
+
+            # Get cross-sections for the selected channel
+            self.update_xsections()
+
+    def update_xsections(self):
+        """Update the available cross-sections for the selected channel"""
+        if self.selected_channel is None:
+            return
+
+        # Filter for the selected channel
+        chan_xsects = self.vx[self.vx["chan_no"] == self.selected_channel]
+
+        # Get unique vsecno values for the channel
+        self.unique_vsecno = np.sort(chan_xsects["vsecno"].unique())
+        self.param.selected_xsect.objects = list(self.unique_vsecno)
+        self.param.table_xsect.objects = list(self.unique_vsecno)
+
+        if len(self.unique_vsecno) > 0:
+            self.selected_xsect = self.unique_vsecno[0]
+            self.table_xsect = self.unique_vsecno[0]
+
+    @param.depends("selected_channel", watch=True)
+    def _update_xsections_callback(self):
+        self.update_xsections()
+
+    def get_xsection_data(self, channel, vsecno=None):
+        """
+        Get cross-section data for the specified channel and cross-section
+
+        Parameters
+        ----------
+        channel : int
+            Channel number
+        vsecno : int, optional
+            Cross-section number. If None, returns data for all cross-sections in the channel
+
+        Returns
+        -------
+        dict
+            Dictionary of dataframes containing cross-section data, keyed by vsecno
+        """
+        # Filter for the specified channel
+        chan_xsects = self.vx[self.vx["chan_no"] == channel]
+
+        if vsecno is not None:
+            # Filter for specific cross-section if provided
+            chan_xsects = chan_xsects[chan_xsects["vsecno"] == vsecno]
+
+        # Get unique vsecno values
+        unique_vsecs = chan_xsects["vsecno"].unique()
+
+        # Create a dictionary to hold dataframes for each vsecno
+        xsect_dfs = {}
+
+        for vsec in unique_vsecs:
+            # Filter for this specific cross section
+            xsect_df = chan_xsects[chan_xsects["vsecno"] == vsec]
+
+            # Create a new dataframe with just the required columns
+            xsect_dfs[vsec] = xsect_df[
+                ["min_elev", "elevation", "area", "wet_p", "width"]
+            ].reset_index(drop=True)
+
+        return xsect_dfs
+
+    def create_symmetric_df(self, df):
+        """
+        Create a symmetrical cross-section dataframe for plotting
+
+        Parameters
+        ----------
+        df : DataFrame
+            Cross-section data
+
+        Returns
+        -------
+        DataFrame
+            Dataframe with symmetrical width points for plotting
+        """
+        import pandas as pd
+
+        # Create a new dataframe for the symmetrical cross-section
+        symmetric_df = pd.DataFrame()
+
+        # For each unique elevation, create symmetrical width points
+        for elev in df["elevation"].unique():
+            elev_rows = df["elevation"] == elev
+            width = df.loc[elev_rows, "width"].max()  # Get the width at this elevation
+
+            # Create two points: one at -width/2 and one at +width/2
+            new_rows = pd.DataFrame(
+                {
+                    "elevation": [elev, elev],
+                    "width": [-width / 2, width / 2],
+                    "min_elev": df.loc[elev_rows, "min_elev"].iloc[0],
+                    "area": df.loc[elev_rows, "area"].iloc[0],
+                    "wet_p": df.loc[elev_rows, "wet_p"].iloc[0],
+                }
+            )
+
+            symmetric_df = pd.concat([symmetric_df, new_rows])
+
+        # Sort by width for proper plotting
+        symmetric_df = symmetric_df.sort_values("width")
+
+        return symmetric_df
+
+    def create_3d_channel_volume(self, channel):
+        """
+        Create a 3D volume representation of a channel from its cross-sections
+
+        Parameters
+        ----------
+        channel : int
+            Channel number
+
+        Returns
+        -------
+        tuple
+            (volume_data, spacing, origin) for VTKVolume
+        """
+        import numpy as np
+        import pandas as pd
+
+        # Get all cross-sections for this channel
+        xsect_dfs = self.get_xsection_data(channel)
+
+        if not xsect_dfs:
+            return None
+
+        # Sort cross-sections by their number to ensure proper order along channel
+        xsect_nums = sorted(list(xsect_dfs.keys()))
+
+        # Determine the dimensions of our volume
+        n_xsects = len(xsect_nums)
+
+        # For each cross-section, standardize the elevations and widths for interpolation
+        # Find the min/max elevation and width across all cross-sections
+        min_elev = float("inf")
+        max_elev = float("-inf")
+        max_width = 0
+
+        for xsect in xsect_nums:
+            df = xsect_dfs[xsect]
+            symmetric_df = self.create_symmetric_df(df)
+            min_elev = min(min_elev, symmetric_df["elevation"].min())
+            max_elev = max(max_elev, symmetric_df["elevation"].max())
+            max_width = max(max_width, symmetric_df["width"].abs().max() * 2)
+
+        # Create a uniform grid for all cross-sections
+        n_height = 50  # Number of points in vertical direction
+        n_width = 50  # Number of points in horizontal direction
+
+        # Create 3D array for the channel volume
+        volume = np.zeros((n_xsects, n_height, n_width), dtype=np.float32)
+
+        # For each cross-section, interpolate onto the uniform grid
+        for i, xsect in enumerate(xsect_nums):
+            df = xsect_dfs[xsect]
+            symmetric_df = self.create_symmetric_df(df)
+
+            # Sort by elevation for proper interpolation
+            symmetric_df = symmetric_df.sort_values("elevation")
+
+            # Create a regular grid for this cross-section
+            elev_points = np.linspace(min_elev, max_elev, n_height)
+            width_points = np.linspace(-max_width / 2, max_width / 2, n_width)
+
+            # For each elevation, interpolate the width profile
+            for j, elev in enumerate(elev_points):
+                # Find closest elevations in the data
+                elev_idx = np.searchsorted(symmetric_df["elevation"].values, elev)
+
+                # If we're at or beyond the highest elevation, fill with zeros (air)
+                if (
+                    elev_idx >= len(symmetric_df["elevation"])
+                    or elev > symmetric_df["elevation"].max()
+                ):
+                    volume[i, j, :] = 0
+                    continue
+
+                # If we're below the lowest elevation, fill with ones (solid ground)
+                if elev_idx == 0 or elev < symmetric_df["elevation"].min():
+                    volume[i, j, :] = 1
+                    continue
+
+                # Get the widths at this elevation
+                elev_df = symmetric_df[
+                    symmetric_df["elevation"]
+                    == symmetric_df["elevation"].iloc[elev_idx]
+                ]
+
+                if len(elev_df) >= 2:  # We have both left and right points
+                    left_width = elev_df["width"].min()
+                    right_width = elev_df["width"].max()
+
+                    # For each width point, check if it's inside the channel
+                    for k, width in enumerate(width_points):
+                        if left_width <= width <= right_width:
+                            volume[i, j, k] = 1  # Inside channel (water)
+                        else:
+                            volume[i, j, k] = 0  # Outside channel
+
+        # Calculate spacing (assuming units are in feet)
+        # For the channel length, we use an arbitrary spacing since we don't have actual distances
+        channel_length = 1000  # Arbitrary channel length in feet
+        x_spacing = channel_length / (n_xsects - 1 if n_xsects > 1 else 1)
+        y_spacing = (max_elev - min_elev) / (n_height - 1)
+        z_spacing = max_width / (n_width - 1)
+
+        spacing = (x_spacing, y_spacing, z_spacing)
+        origin = (0, min_elev, -max_width / 2)
+
+        return volume, spacing, origin
+
+    def create_3d_channel_surface(self, channel):
+        """
+        Create a 3D surface representation of a channel from its cross-sections
+        using PyVista to create a structured surface from the cross-section points.
+
+        Parameters
+        ----------
+        channel : int
+            Channel number
+
+        Returns
+        -------
+        pyvista.PolyData
+            A PyVista mesh representing the channel surface
+        """
+        import numpy as np
+        import pandas as pd
+        import os
+        import time
+
+        # Check if VTK extension is available
+        if not HAS_VTK:
+            print("VTK extension not available. Cannot create 3D visualization.")
+            return None
+
+        # Try to import PyVista - this is optional
+        try:
+            import pyvista as pv
+        except ImportError:
+            print("PyVista package not found. Please install with: pip install pyvista")
+            return None
+
+        # Get all cross-sections for this channel
+        xsect_dfs = self.get_xsection_data(channel)
+
+        if not xsect_dfs:
+            return None
+
+        # Sort cross-sections by their number to ensure proper order along channel
+        xsect_nums = sorted(list(xsect_dfs.keys()))
+
+        if len(xsect_nums) < 2:
+            return None  # Need at least 2 cross sections to build a surface
+
+        # Channel length (arbitrary, for visualization)
+        channel_length = 1000  # feet
+        station_spacing = channel_length / (len(xsect_nums) - 1)
+
+        # Create lists to store points and connectivity information for each cross-section
+        cross_section_points = []
+        n_points_per_section = []
+
+        # Process each cross-section to get points
+        for i, xsect_num in enumerate(xsect_nums):
+            df = xsect_dfs[xsect_num]
+            symmetric_df = self.create_symmetric_df(df)
+
+            # Sort by elevation for consistent ordering
+            symmetric_df = symmetric_df.sort_values(["elevation", "width"])
+
+            # Station position along the channel
+            station = i * station_spacing
+
+            # Create points for this cross-section: (station, elevation, width)
+            section_points = np.column_stack(
+                [
+                    np.full(len(symmetric_df), station),  # x: station along channel
+                    symmetric_df["elevation"].values,  # y: elevation
+                    symmetric_df["width"].values,  # z: width (centered)
+                ]
+            )
+
+            # Store points and count
+            cross_section_points.append(section_points)
+            n_points_per_section.append(len(section_points))
+
+        # Create a PyVista PolyData object for the channel surface
+        surface = pv.PolyData()
+
+        # Combine all points into a single array
+        all_points = np.vstack(cross_section_points)
+        surface.points = all_points
+
+        # Create faces for the surface (triangulated quads between cross-sections)
+        faces = []
+        point_offset = 0
+
+        # First, let's verify our cross-section data
+        print(f"Creating surface with {len(xsect_nums)} cross-sections")
+        for i, n_pts in enumerate(n_points_per_section):
+            print(f"  Cross-section {i}: {n_pts} points")
+
+        # Try a different approach to create faces - use PyVista's StructuredGrid
+        if len(cross_section_points) >= 2:
+            try:
+                # Instead of manual face creation, try to use PyVista's structured grid
+                # and then extract the surface
+                print("Attempting to create structured grid from cross-sections")
+
+                # Make sure all cross-sections have the same number of points
+                min_points = min(n_points_per_section)
+                print(f"Normalizing cross-sections to {min_points} points each")
+
+                # Create a structured grid with normalized cross-sections
+                grid_points = np.zeros((len(xsect_nums), min_points, 3))
+
+                for i, points in enumerate(cross_section_points):
+                    # If needed, interpolate to get the same number of points per cross-section
+                    if len(points) > min_points:
+                        # Simple subsampling for now - ideally this would be interpolation
+                        indices = np.linspace(0, len(points) - 1, min_points, dtype=int)
+                        grid_points[i] = points[indices]
+                    elif len(points) == min_points:
+                        grid_points[i] = points
+
+                # Create a structured grid
+                print(f"Creating structured grid with shape {grid_points.shape}")
+                grid = pv.StructuredGrid(grid_points)
+
+                # Extract the surface
+                surface = grid.extract_surface()
+                print(
+                    f"Extracted surface with {surface.n_points} points and {surface.n_faces} faces"
+                )
+
+                # Add the elevation data
+                surface.point_data["elevation"] = surface.points[:, 1]
+
+                # Skip the manual face creation below
+                return surface
+
+            except Exception as e:
+                print(f"Structured grid approach failed: {str(e)}")
+                print("Falling back to manual face creation")
+
+        # If the structured grid approach failed, fall back to manual face creation
+        for i in range(len(xsect_nums) - 1):
+            n_current = n_points_per_section[i]
+            n_next = n_points_per_section[i + 1]
+
+            # Determine how to connect points between cross-sections
+            # We'll use the smaller number of points to avoid index errors
+            n_connect = min(n_current, n_next)
+
+            if n_connect < 2:
+                print(
+                    f"Warning: Not enough points to create faces between cross-sections {i} and {i+1}"
+                )
+                continue
+
+            # Create triangular faces between the cross-sections
+            for j in range(n_connect - 1):
+                # First triangle: current, next, current+1
+                faces.append(
+                    [
+                        3,
+                        point_offset + j,
+                        point_offset + n_current + j,
+                        point_offset + j + 1,
+                    ]
+                )
+
+                # Second triangle: current+1, next, next+1
+                faces.append(
+                    [
+                        3,
+                        point_offset + j + 1,
+                        point_offset + n_current + j,
+                        point_offset + n_current + j + 1,
+                    ]
+                )
+
+            # Update point offset for the next cross-section pair
+            point_offset += n_current
+
+        # Add faces to the surface
+        if faces:
+            surface.faces = np.hstack(faces)
+
+            # Add elevation as a scalar field for coloring
+            surface.point_data["elevation"] = all_points[:, 1]
+
+            # Compute normals for better rendering
+            surface.compute_normals(inplace=True)
+
+            # Save the surface to a file for external inspection
+            import os
+
+            output_dir = os.path.join(os.path.expanduser("~"), "dsm2_surfaces")
+            os.makedirs(output_dir, exist_ok=True)
+
+            # Create a filename with channel number and timestamp
+            import time
+
+            timestamp = int(time.time())
+            filename = os.path.join(
+                output_dir, f"channel_{channel}_surface_{timestamp}.vtk"
+            )
+
+            try:
+                surface.save(filename)
+                print(f"Surface saved to: {filename}")
+            except Exception as e:
+                print(f"Error saving surface to file: {str(e)}")
+
+            # Check if the surface is valid
+            print(
+                f"Surface info - Points: {surface.n_points}, Cells: {surface.n_cells}, Faces: {len(faces)}"
+            )
+            if surface.n_points == 0 or surface.n_cells == 0:
+                print("Warning: Empty surface detected!")
+
+            return surface
+        else:
+            return None
+
+    @param.depends("selected_channel", "selected_xsect", "show_all_xsects")
+    def create_xsection_plot(self):
+        """Create cross-section plot for the selected channel and cross-section"""
+        import holoviews as hv
+        import hvplot.pandas
+        from holoviews import opts
+
+        if self.selected_channel is None:
+            return hv.Div("No channel selected")
+
+        if self.show_all_xsects:
+            # Show all cross-sections for the selected channel
+            xsect_dfs = self.get_xsection_data(self.selected_channel)
+
+            # Create a dictionary to store the plots
+            xsect_plots = {}
+
+            # Generate plots for each cross-section
+            for vsec, df in xsect_dfs.items():
+                symmetric_df = self.create_symmetric_df(df)
+
+                # Create a scatter plot of elevation vs centered width
+                plot = symmetric_df.hvplot.scatter(
+                    x="width",
+                    y="elevation",
+                    title=f"Cross-Section {vsec}",
+                    xlabel="Centered Width (ft)",
+                    ylabel="Elevation (ft)",
+                    height=400,
+                    width=600,
+                )
+
+                # Store the plot in the dictionary
+                xsect_plots[vsec] = plot
+
+            # Create an overlay of all plots
+            all_plots = hv.NdOverlay(
+                {f"XS {vsec}": xsect_plots[vsec] for vsec in xsect_dfs.keys()}
+            )
+            all_plots = all_plots.opts(
+                opts.NdOverlay(
+                    legend_position="right",
+                    width=800,
+                    height=500,
+                    title=f"All Cross-Sections for Channel {self.selected_channel}",
+                )
+            )
+
+            return all_plots
+        else:
+            # Show only the selected cross-section
+            if self.selected_xsect is None:
+                return hv.Div("No cross-section selected")
+
+            xsect_dfs = self.get_xsection_data(
+                self.selected_channel, self.selected_xsect
+            )
+
+            if not xsect_dfs:
+                return hv.Div(
+                    f"No data for Channel {self.selected_channel}, Cross-section {self.selected_xsect}"
+                )
+
+            df = xsect_dfs[self.selected_xsect]
+            symmetric_df = self.create_symmetric_df(df)
+
+            # Create a scatter plot of elevation vs centered width
+            plot = symmetric_df.hvplot.scatter(
+                x="width",
+                y="elevation",
+                title=f"Channel {self.selected_channel}, Cross-Section {self.selected_xsect}",
+                xlabel="Centered Width (ft)",
+                ylabel="Elevation (ft)",
+                height=500,
+                width=800,
+            )
+
+            return plot
+
+    @param.depends("selected_channel", "show_3d_view")
+    def create_vtk_volume(self):
+        """Create VTK volume visualization for the channel"""
+        import panel as pn
+        import os
+        import time
+
+        if not self.show_3d_view or self.selected_channel is None:
+            return pn.pane.Str("")
+
+        # Check if VTK extension is available
+        if not HAS_VTK:
+            return pn.pane.Markdown(
+                """
+                ### 3D Visualization Not Available
+
+                The VTK extension for Panel is not available.
+                Please install it with:
+                ```
+                pip install pyvista panel vtk
+                ```
+                Then restart your application.
+                """
+            )
+
+        try:
+            # Import the necessary libraries - these are optional
+            try:
+                import pyvista as pv
+                from panel.pane import VTK
+            except ImportError as e:
+                return pn.pane.Markdown(
+                    f"""
+                    ### 3D Visualization requires additional libraries
+
+                    To use the 3D visualization feature, please install:
+                    ```
+                    pip install pyvista panel vtk
+                    ```
+
+                    Error: {str(e)}
+                    """
+                )
+
+            # Create 3D channel surface using the new surface method
+            surface = self.create_3d_channel_surface(self.selected_channel)
+
+            if surface is None:
+                print("Surface creation failed, falling back to legacy volume approach")
+                return self.create_vtk_volume_legacy()
+
+            # Create debug information
+            debug_info = f"""
+            Surface Details:
+            - Points: {surface.n_points}
+            - Faces: {surface.n_faces}
+            - Cells: {surface.n_cells}
+            - Has Elevation Data: {"elevation" in surface.point_data}
+            - Bounds: {surface.bounds}
+            """
+            print(debug_info)
+
+            # Create a plotter for better control
+            plotter = pv.Plotter()
+            plotter.add_mesh(
+                surface,
+                scalars="elevation",
+                cmap="terrain",  # Terrain colormap works well for elevation data
+                show_edges=True,  # Show edges for better debugging
+                line_width=1,
+                smooth_shading=True,
+            )
+
+            # Save the rendered scene to a file
+            output_dir = os.path.join(os.path.expanduser("~"), "dsm2_surfaces")
+            os.makedirs(output_dir, exist_ok=True)
+            timestamp = int(time.time())
+            screenshot_path = os.path.join(
+                output_dir, f"channel_{self.selected_channel}_render_{timestamp}.png"
+            )
+
+            try:
+                # Take a screenshot of the scene
+                plotter.show(auto_close=False)  # Render the scene but don't close
+                plotter.screenshot(screenshot_path)
+                print(f"Rendering screenshot saved to: {screenshot_path}")
+                plotter.close()
+
+                # Create fresh plotter for Panel
+                plotter = pv.Plotter()
+                plotter.add_mesh(
+                    surface,
+                    scalars="elevation",
+                    cmap="terrain",
+                    show_edges=True,
+                    line_width=1,
+                    smooth_shading=True,
+                )
+            except Exception as e:
+                print(f"Error saving screenshot: {str(e)}")
+
+            # Set up a VTK pane with the surface
+            debug_message = f"Surface has {surface.n_points} points and {surface.n_faces} faces. View saved to: {os.path.basename(screenshot_path)}"
+
+            return pn.Column(
+                pn.pane.Markdown(
+                    f"### 3D Channel Bathymetry for Channel {self.selected_channel}"
+                ),
+                pn.pane.Markdown(debug_message),
+                VTK(
+                    plotter,
+                    height=500,
+                    width=800,
+                ),
+            )
+        except ImportError as e:
+            return pn.pane.Markdown(
+                f"""
+                #### 3D Visualization requires additional libraries
+
+                To use the 3D visualization feature, please install:
+                ```
+                pip install pyvista panel vtk
+                ```
+
+                Error: {str(e)}
+                """
+            )
+        except Exception as e:
+            # If there's an error with the surface approach, fall back to volume approach
+            try:
+                return self.create_vtk_volume_legacy()
+            except Exception as inner_e:
+                return pn.pane.Markdown(
+                    f"Error creating 3D visualization: {str(e)}\nFallback error: {str(inner_e)}"
+                )
+
+    def create_vtk_volume_legacy(self):
+        """Legacy method for creating VTK volume visualization using voxel-based approach"""
+        import panel as pn
+        import numpy as np
+
+        # Check if VTK extension is available
+        if not HAS_VTK:
+            return pn.pane.Markdown(
+                """
+                ### 3D Visualization Not Available
+
+                The VTK extension for Panel is not available.
+                Please install it with:
+                ```
+                pip install pyvista panel vtk
+                ```
+                Then restart your application.
+                """
+            )
+
+        try:
+            # Import the necessary libraries - these are optional
+            try:
+                import pyvista as pv
+                from panel.pane import VTKVolume
+            except ImportError as e:
+                return pn.pane.Markdown(
+                    f"""
+                    ### 3D Visualization requires additional libraries
+
+                    To use the 3D visualization feature, please install:
+                    ```
+                    pip install pyvista panel vtk
+                    ```
+
+                    Error: {str(e)}
+                    """
+                )
+
+            # Create 3D channel volume
+            volume_data = self.create_3d_channel_volume(self.selected_channel)
+
+            if volume_data is None:
+                return pn.pane.Markdown(
+                    f"No data available for 3D visualization of Channel {self.selected_channel}"
+                )
+
+            volume, spacing, origin = volume_data
+
+            # Create a PyVista uniform grid - handle different PyVista versions
+            try:
+                # For newer PyVista versions
+                grid = pv.UniformGrid()
+            except AttributeError:
+                try:
+                    # For older PyVista versions
+                    from pyvista.core.grid import UniformGrid
+
+                    grid = UniformGrid()
+                except (ImportError, AttributeError):
+                    # Fall back to using ImageData which is similar to UniformGrid
+                    # but has been available in earlier PyVista versions
+                    grid = pv.ImageData(
+                        dimensions=np.array(volume.shape) + 1,
+                        spacing=spacing,
+                        origin=origin,
+                    )
+
+            # Set dimensions, spacing, and origin if not already set (for UniformGrid)
+            if not hasattr(grid, "dimensions") or grid.dimensions is None:
+                grid.dimensions = np.array(volume.shape) + 1
+            if not hasattr(grid, "spacing") or grid.spacing is None:
+                grid.spacing = spacing
+            if not hasattr(grid, "origin") or grid.origin is None:
+                grid.origin = origin
+
+            # Create a properly sized array for the grid points
+            # The grid dimensions are volume.shape + 1, so we need to resize our data
+            # to match the number of points in the grid
+            dims = np.array(volume.shape) + 1
+            num_points = dims[0] * dims[1] * dims[2]
+
+            # Create a new volume array that's compatible with the grid dimensions
+            grid_values = np.zeros(num_points, dtype=np.float32)
+
+            # Add the volume data to the grid
+            grid.cell_data["values"] = volume.flatten(order="F")
+
+            # We need to convert cell data to point data for proper volume rendering
+            grid.cell_data_to_point_data()
+
+            # Make sure we have data in point_data after conversion
+            if "values" not in grid.point_data:
+                if "values" in grid.cell_data:
+                    # If the conversion didn't work, create a simpler volume directly
+                    new_grid = pv.ImageData(
+                        dimensions=volume.shape,  # Not +1 for direct mapping
+                        spacing=spacing,
+                        origin=origin,
+                    )
+                    new_grid.point_data["values"] = volume.flatten(order="F")
+                    grid = new_grid
+
+            # Set up a VTK volume with the data
+            return pn.Column(
+                pn.pane.Markdown(
+                    f"### 3D Channel Volume for Channel {self.selected_channel}"
+                ),
+                VTKVolume(
+                    grid,
+                    colormap="Rainbow Desaturated",  # More widely available colormap in VTK
+                    shadow=True,
+                    height=500,
+                    width=800,
+                    orientation_widget=True,
+                ),
+            )
+        except Exception as e:
+            return pn.pane.Markdown(
+                f"Error creating 3D visualization (legacy method): {str(e)}"
+            )
+            return pn.pane.Markdown(f"Error creating 3D visualization: {str(e)}")
+
+    @param.depends(
+        "selected_channel", "selected_xsect", "show_all_xsects", "table_xsect"
+    )
+    def get_data_table(self):
+        """Create a data table for the selected cross-section"""
+        import panel as pn
+
+        if self.selected_channel is None:
+            return pn.pane.Markdown("No channel selected")
+
+        # For table display, we'll use table_xsect if showing all, otherwise selected_xsect
+        display_xsect = (
+            self.table_xsect if self.show_all_xsects else self.selected_xsect
+        )
+
+        if display_xsect is None:
+            return pn.pane.Markdown("No cross-section selected")
+
+        xsect_dfs = self.get_xsection_data(self.selected_channel, display_xsect)
+        if not xsect_dfs or display_xsect not in xsect_dfs:
+            return pn.pane.Markdown(
+                f"No data for Channel {self.selected_channel}, Cross-section {display_xsect}"
+            )
+
+        df = xsect_dfs[display_xsect]
+        return pn.Column(
+            pn.pane.Markdown(f"#### Data for Cross-Section {display_xsect}"),
+            pn.widgets.Tabulator(
+                df,
+                pagination="local",
+                page_size=10,
+                sizing_mode="stretch_width",
+                height=250,
+            ),
+        )
+
+    def get_panel(self):
+        """Create a panel interface for the cross-section viewer"""
+        import panel as pn
+
+        # Create widgets for channel and cross-section selection
+        channel_select = pn.Param(
+            self.param.selected_channel,
+            widgets={
+                "selected_channel": pn.widgets.Select(
+                    name="Channel", options=list(self.channel_numbers)
+                )
+            },
+        )
+
+        xsect_select = pn.Param(
+            self.param.selected_xsect,
+            widgets={
+                "selected_xsect": pn.widgets.Select(
+                    name="Cross-Section",
+                    options=(
+                        list(self.unique_vsecno)
+                        if hasattr(self, "unique_vsecno")
+                        else []
+                    ),
+                )
+            },
+        )
+
+        show_all_checkbox = pn.Param(
+            self.param.show_all_xsects,
+            widgets={
+                "show_all_xsects": pn.widgets.Checkbox(name="Show all cross-sections")
+            },
+        )
+
+        # Only show 3D checkbox if VTK is available
+        if HAS_VTK:
+            show_3d_checkbox = pn.Param(
+                self.param.show_3d_view,
+                widgets={
+                    "show_3d_view": pn.widgets.Checkbox(name="Show 3D channel volume")
+                },
+            )
+        else:
+            show_3d_checkbox = pn.pane.Markdown(
+                "*3D visualization not available - install PyVista and VTK*"
+            )
+
+        # Create table cross-section selector for when showing all cross-sections
+        table_xsect_select = pn.Param(
+            self.param.table_xsect,
+            widgets={
+                "table_xsect": pn.widgets.Select(
+                    name="Table Cross-Section",
+                    options=(
+                        list(self.unique_vsecno)
+                        if hasattr(self, "unique_vsecno")
+                        else []
+                    ),
+                )
+            },
+        )
+
+        # The table section will show the selector only when "show all" is checked
+        table_controls = pn.Column(
+            pn.pane.Markdown("### Cross-Section Data"),
+            pn.bind(
+                lambda show_all: table_xsect_select if show_all else pn.pane.Str(""),
+                self.param.show_all_xsects,
+            ),
+        )
+
+        # Create a tabulator widget for the cross-section data
+        data_table_pane = pn.Column(table_controls, self.get_data_table)
+
+        # Create the panel layout
+        return pn.Column(
+            pn.pane.Markdown(
+                f"# DSM2 Tidefile Cross-Section Viewer\n## File: {self.tidefile}"
+            ),
+            pn.Row(
+                pn.Column(
+                    channel_select,
+                    xsect_select,
+                    show_all_checkbox,
+                    show_3d_checkbox,
+                    width=300,
+                ),
+                pn.Column(self.create_xsection_plot, width=800),
+            ),
+            data_table_pane,
+            self.create_vtk_volume,
+        )
 
 
 class DSM2TidefileUIManager(TimeSeriesDataUIManager):
@@ -203,7 +1162,6 @@ class DSM2TidefileUIManager(TimeSeriesDataUIManager):
         self.color_cycle_column = "id"
         self.dashed_line_cycle_column = "filename"
         self.marker_cycle_column = "variable"
-
 
     def read_tidefile(tidefile, guess="hydro"):
         try:
@@ -672,3 +1630,30 @@ def show_dsm2_tidefile_ui(tidefiles, channel_file=None):
         tidefile_manager, crs=ccrs.epsg("26910"), station_id_column="geoid"
     )
     ui.create_view(title="DSM2 Tidefile UI").show()
+
+
+@click.command()
+@click.argument("tidefile", type=str)
+def show_dsm2_tidefile_xsect_ui(tidefile):
+    """
+    Show a user interface for viewing cross-sections from DSM2 tide files
+
+    Parameters
+    ----------
+
+    tidefile : string path to a DSM2 tide file (HDF5 format)
+    """
+    import panel as pn
+
+    # Extension is needed for serving the panel app
+    pn.extension()
+
+    # Create the UI manager
+    xsect_manager = DSM2TidefileXsectUIManager(tidefile)
+
+    # Create the panel and serve it
+    panel = xsect_manager.get_panel()
+    panel.servable(title="DSM2 Tidefile Cross-Section UI")
+
+    # Show the panel
+    panel.show()

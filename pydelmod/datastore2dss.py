@@ -20,7 +20,7 @@ def find_lastest_fname(pattern, dir="."):
 
 
 def read_from_datastore_write_to_dss(
-    datastore_dir, dssfile, param, repo_level="screened"
+    datastore_dir, dssfile, param, repo_level="screened", unit_name=None
 ):
     """
     Reads datastore timeseries files and writes to a DSS file
@@ -58,7 +58,12 @@ def read_from_datastore_write_to_dss(
             epart = ts.index.freqstr
             pathname = f'/{apart}/{bpart}/{row["param"]}///{fpart}/'
             print("Writing to ", pathname)
-            f.write_rts(pathname, ts, row["unit"], "INST-VAL")
+            f.write_rts(
+                pathname,
+                ts,
+                unit_name if unit_name is not None else row["unit"],
+                "INST-VAL",
+            )
     print("Done")
 
 

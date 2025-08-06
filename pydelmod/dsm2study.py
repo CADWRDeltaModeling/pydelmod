@@ -116,9 +116,25 @@ def join_channels_info_with_dsm2_channel_line(dsm2_chan_lines, tables, geo_id="i
 
 
 def load_dsm2_flowline_shapefile(shapefile):
-    dsm2_chans = gpd.read_file(shapefile).to_crs(epsg=3857)
-    dsm2_chans.geometry = dsm2_chans.geometry.simplify(tolerance=50)
-    dsm2_chans.geometry = dsm2_chans.geometry.buffer(250, cap_style=1, join_style=1)
+    dsm2_chans = gpd.read_file(shapefile).to_crs(epsg=26910)
+
+    # First, filter out invalid geometries
+    valid_mask = dsm2_chans.geometry.is_valid & dsm2_chans.geometry.notna()
+    if not valid_mask.all():
+        print(
+            f"Warning: {(~valid_mask).sum()} invalid or null geometries found and will be excluded from simplification"
+        )
+
+    # Apply simplify only to valid geometries
+    valid_indices = valid_mask[valid_mask].index
+    if len(valid_indices) > 0:
+        dsm2_chans.loc[valid_indices, "geometry"] = dsm2_chans.loc[
+            valid_indices, "geometry"
+        ].simplify(tolerance=50)
+        dsm2_chans.loc[valid_indices, "geometry"] = dsm2_chans.loc[
+            valid_indices, "geometry"
+        ].buffer(250, cap_style=1, join_style=1)
+
     return dsm2_chans
 
 

@@ -176,7 +176,14 @@ def exec_create_ann_inputs():
     type=click.Choice(["screened"], case_sensitive=False),
     default="screened",
 )
-def datastore_to_dss(datastore_dir, dssfile, param, repo_level="screened"):
+@click.option(
+    "--unit-name",
+    type=str,
+    default=None,
+)
+def datastore_to_dss(
+    datastore_dir, dssfile, param, repo_level="screened", unit_name=None
+):
     """
     Reads datastore timeseries files and writes to a DSS file
 
@@ -191,7 +198,7 @@ def datastore_to_dss(datastore_dir, dssfile, param, repo_level="screened"):
         e.g one of "flow","elev", "ec", etc.
     """
     datastore2dss.read_from_datastore_write_to_dss(
-        datastore_dir, dssfile, param, repo_level
+        datastore_dir, dssfile, param, repo_level, unit_name=unit_name
     )
 
 
@@ -334,6 +341,7 @@ main.add_command(channel_orient.generate_channel_orientation)
 main.add_command(ptm_animator.ptm_animate)
 main.add_command(dsm2_analyze)
 main.add_command(deltacduimgr.show_deltacd_ui)
+main.add_command(dsm2ui.show_dsm2_tidefile_xsect_ui)
 
 if __name__ == "__main__":
     sys.exit(main())  # pragma: no cover
