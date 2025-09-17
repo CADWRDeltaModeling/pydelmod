@@ -15,6 +15,7 @@ from .dvue.dataui import DataUI, DataUIManager
 from . import datastore, schismstudy
 from vtools.functions.filter import cosine_lanczos
 from . import calibplot
+from .dvue.utils import interpret_file_relative_to
 
 # from .calibplot import tsplot, scatterplot, calculate_metrics, regression_line_plots
 
@@ -34,19 +35,14 @@ variable_units = {
 }
 
 
-def interpret_file_relative_to(base_dir, fpath):
-    full_path = base_dir / fpath
-    if full_path.exists():
-        return str(full_path)
-    else:
-        return str(fpath)
-
-
 def replace_with_paths_relative_to(base_dir, params):
     params = params.copy()
-    params["output_dir"] = [
-        interpret_file_relative_to(base_dir, file) for file in params["outputs_dir"]
-    ]
+
+    def _to_list(v):
+        return [v] if isinstance(v, (str, pathlib.Path)) else v
+
+    # Normalize possibly singular entries to lists before path interpretation
+    params["outputs_dir"] = _to_list(params.get("outputs_dir", []))
     params["stations_csv"] = interpret_file_relative_to(
         base_dir, params["stations_csv"]
     )
@@ -55,17 +51,17 @@ def replace_with_paths_relative_to(base_dir, params):
     ]
     if "station_input" in params:
         params["station_input"] = [
-            interpret_file_relative_to(base_dir, file)
-            for file in params["station_input"]
+            interpret_file_relative_to(base_dir, f)
+            for f in _to_list(params["station_input"])
+        ]
+    if "flow_station_input" in params:
+        params["flow_station_input"] = [
+            interpret_file_relative_to(base_dir, f)
+            for f in _to_list(params["flow_station_input"])
         ]
     params["obs_links_csv"] = interpret_file_relative_to(
         base_dir, params["obs_links_csv"]
     )
-    if "flow_station_input" in params:
-        params["flow_station_input"] = [
-            interpret_file_relative_to(base_dir, file)
-            for file in params["flow_station_input"]
-        ]
     return params
 
 
@@ -95,7 +91,9 @@ class SchismCalibPlotUIManager(DataUIManager):
             config["station_input"] = ["station.in"]
         if "flow_station_input" not in config:
             config["flow_station_input"] = ["fluxflag.prop"]
-        config = replace_with_paths_relative_to(base_dir, config)
+        config = replace_with_paths_relative_to(
+            base_dir, config
+        )  # no replacement needed as schismstudy does it
         self.config = config
         # load studies and datastore
         self.reftime = pd.Timestamp(self.config["time_basis"])
@@ -109,17 +107,49 @@ class SchismCalibPlotUIManager(DataUIManager):
         )
         self.labels = self.config["labels"]
         self.studies = {}
-        for schism_dir, flux_xsect_file, station_inf_file, label in zip(
-            self.config["output_dir"],
-            self.config["flow_station_input"],
-            self.config["station_input"],
-            self.labels[1:],
-        ):
+
+        def _ensure_list(v):
+            return [v] if isinstance(v, (str, pathlib.Path)) else v
+
+        # Normalize to lists (may be a single string/path or already a list)
+        outputs_dir_list = _ensure_list(self.config.get("outputs_dir", []))
+        station_input_list = _ensure_list(self.config.get("station_input", []))
+        flow_station_input_list = _ensure_list(
+            self.config.get("flow_station_input", [])
+        )
+
+        if len(outputs_dir_list) == 0:
+            raise ValueError("outputs_dir is empty in config.")
+        if len(station_input_list) == 0:
+            raise ValueError("station_input is empty in config.")
+        if len(flow_station_input_list) == 0:
+            raise ValueError("flow_station_input is empty in config.")
+
+        for idx, label in enumerate(self.labels[1:]):  # skip first label (Obs)
+            # Select matching (or last) entries for each list
+            if idx < len(outputs_dir_list):
+                chosen_output_dir = outputs_dir_list[idx]
+            else:
+                chosen_output_dir = outputs_dir_list[-1]
+
+            if idx < len(station_input_list):
+                chosen_station_input = station_input_list[idx]
+            else:
+                chosen_station_input = station_input_list[-1]
+
+            if idx < len(flow_station_input_list):
+                chosen_flow_station_input = flow_station_input_list[idx]
+            else:
+                chosen_flow_station_input = flow_station_input_list[-1]
+
             study = schismstudy.SchismStudy(
-                base_dir=schism_dir,
-                flux_xsect_file=flux_xsect_file,
+                study_name=label,
+                base_dir=str(base_dir),
+                output_dir=str(chosen_output_dir),
+                param_nml_file="param.nml",
+                flux_xsect_file=str(chosen_flow_station_input),
                 flux_out="flux.out",
-                station_in_file=station_inf_file,
+                station_in_file=str(chosen_station_input),
                 reftime=self.reftime,
             )
             self.studies[label] = study
@@ -207,9 +237,19 @@ class SchismCalibPlotUIManager(DataUIManager):
                 df.columns = [study_name]
                 dfs.append(df)
         dparam = self.get_datastore_param_name(variable)
+        idsplit = id.split("_")
+        try:
+            if len(idsplit) > 1 and variable not in ["flow", "elev"]:
+                id_col = "full_id"
+            else:
+                id_col = "station_id"
+        except Exception:
+            id_col = "station_id"
+        if variable in ["flow", "elev"] and len(idsplit) > 1:
+            id = idsplit[0]
         try:
             rd = self.dcat[
-                self.dcat.eval(f'(full_id=="{id}") & (param=="{dparam}")')
+                self.dcat.eval(f'({id_col}=="{id}") & (param=="{dparam}")')
             ].iloc[0]
         except IndexError:
             print("No data found for", id, variable)
