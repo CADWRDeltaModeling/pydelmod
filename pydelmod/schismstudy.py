@@ -133,6 +133,11 @@ class SchismStudy(param.Parameterized):
             self.base_dir, pathlib.Path(output_dir)
         )
         try:
+            # check permissions to create cache in base_dir
+            test_cache_path = self.base_dir / ".cache-schismstudy"
+            test_cache_path.mkdir(parents=True, exist_ok=True)
+            if not os.access(test_cache_path, os.W_OK):
+                raise PermissionError("No write access to cache directory.")
             self.cache = diskcache.Cache(self.base_dir / ".cache-schismstudy")
         except:
             logger.warning("Could not create cache. Using temporary cache.")
