@@ -46,8 +46,8 @@ def import_vtk_modules():
 import pyhecdss as dss
 from vtools.functions.filter import cosine_lanczos
 from .dsm2study import *
-from .dvue.dataui import full_stack
-from .dvue.tsdataui import TimeSeriesDataUIManager
+from dvue.dataui import full_stack
+from dvue.tsdataui import TimeSeriesDataUIManager
 
 
 class DSM2DataUIManager(TimeSeriesDataUIManager):
@@ -1568,7 +1568,7 @@ def build_output_plotter(*echo_files, channel_shapefile=None):
     return plotter
 
 
-from .dvue import dataui
+from dvue import dataui
 import click
 
 

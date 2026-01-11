@@ -3,9 +3,9 @@ import cartopy.crs as ccrs
 import holoviews as hv
 
 hv.extension("bokeh")
-from .dvue.dataui import DataUI
-from .dvue.tsdataui import TimeSeriesDataUIManager
-from .dvue import utils
+from dvue.dataui import DataUI
+from dvue.tsdataui import TimeSeriesDataUIManager
+from dvue import utils
 from pydelmod import schismstudy, datastore
 import pathlib
 import param

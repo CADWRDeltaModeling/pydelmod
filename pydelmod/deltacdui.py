@@ -25,7 +25,7 @@ import panel as pn
 
 pn.extension()
 
-from pydelmod.dvue import tsdataui
+from dvue import tsdataui
 
 class DeltaCDNodesUIManager(tsdataui.TimeSeriesDataUIManager):
     """
@@ -365,7 +365,7 @@ def show_deltacd_nodes_ui(nc_files, nodes_file=None):
     This UI is designed for netCDF files that use 'node' as the station dimension.
     """
     dcd_ui = DeltaCDNodesUIManager(*nc_files, nodes_file=nodes_file)
-    from pydelmod.dvue import dataui
+    from dvue import dataui
     dui = dataui.DataUI(dcd_ui, station_id_column="node", crs=ccrs.epsg(26910))
     dui.create_view().servable(title="DeltaCD Nodes UI Manager").show()
 

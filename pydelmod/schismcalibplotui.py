@@ -11,11 +11,21 @@ import holoviews as hv
 from holoviews import opts
 
 from schimpy import batch_metrics
-from .dvue.dataui import DataUI, DataUIManager
+from dvue.dataui import DataUI, DataUIManager
 from . import datastore, schismstudy
 from vtools.functions.filter import cosine_lanczos
 from . import calibplot
-from .dvue.utils import interpret_file_relative_to
+
+
+# Utility function for interpreting file paths relative to a base directory
+def interpret_file_relative_to(base_dir, fpath):
+    """Interpret file path relative to base directory if it exists."""
+    from pathlib import Path
+    full_path = Path(base_dir) / fpath
+    if full_path.exists():
+        return str(full_path)
+    else:
+        return str(fpath)
 
 # from .calibplot import tsplot, scatterplot, calculate_metrics, regression_line_plots
 

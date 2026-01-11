@@ -1,7 +1,7 @@
 # %%
 import pandas as pd
 from pydelmod import dsm2ui
-from pydelmod.dvue import dataui
+from dvue import dataui
 
 # %%
 dir = ".."

@@ -39,7 +39,7 @@ file_path = '../pydelmod/dsm2gis/detaw168subareas.geojson'
 dcd_ui = DeltaCDUIManager(detaw_output_file)
 dfcat=dcd_ui.get_data_catalog()
 # %%
-from pydelmod.dvue import dataui
+from dvue import dataui
 import cartopy.crs as ccrs
 dui=dataui.DataUI(dcd_ui, station_id_column="area_id", crs=ccrs.epsg(26910))
 dui.create_view().servable(title="DeltaCD UI Manager").show()

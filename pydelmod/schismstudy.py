@@ -28,7 +28,17 @@ formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(messag
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-from pydelmod.dvue import utils
+from dvue import utils
+
+
+def _interpret_file_relative_to(base_dir, fpath):
+    """Interpret file path relative to base directory if it exists."""
+    from pathlib import Path
+    full_path = Path(base_dir) / fpath
+    if full_path.exists():
+        return str(full_path)
+    else:
+        return str(fpath)
 
 def read_station_in(station_in_file):
     return station.read_station_in(station_in_file)
@@ -191,7 +201,7 @@ class SchismStudy(param.Parameterized):
             self.flux_names = names
 
     def interpret_file_relative_to(self, base_dir, fpath):
-        return utils.interpret_file_relative_to(base_dir, fpath)
+        return _interpret_file_relative_to(base_dir, fpath)
 
     def get_unit_for_variable(self, var):
         if var in ["elev"]:

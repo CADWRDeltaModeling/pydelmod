@@ -9,7 +9,7 @@ import xarray as xr
 import geopandas as gpd
 import numpy as np
 import holoviews as hv
-from pydelmod.dvue import tsdataui
+from dvue import tsdataui
 
 class DeltaCDUIManager(tsdataui.TimeSeriesDataUIManager):
     """
@@ -359,7 +359,7 @@ def show_deltacd_ui(nc_files, geojson_file=None):
     Show the DeltaCD UI Manager for the specified netCDF file and GeoJSON file.
     """
     dcd_ui = DeltaCDUIManager(*nc_files, geojson_file=geojson_file)
-    from pydelmod.dvue import dataui
+    from dvue import dataui
     import cartopy.crs as ccrs
     dui=dataui.DataUI(dcd_ui, station_id_column="area_id", crs=ccrs.epsg(26910))
     dui.create_view().servable(title="DeltaCD UI Manager").show()
