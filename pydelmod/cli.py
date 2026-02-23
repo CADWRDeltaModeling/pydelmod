@@ -311,15 +311,11 @@ from pydelmod import dsm2gis
 from pydelmod import dsm2ui
 from pydelmod import deltacdui
 from pydelmod import calibplotui
-from pydelmod import schismui
-from pydelmod import schismcalibplotui
 from pydelmod import ptm_animator
 
 # from pydelmod.nbplot import calsim_dsm2_analysis
 from pydelmod import deltacduimgr
 
-main.add_command(schismui.show_schism_output_ui)
-main.add_command(schismcalibplotui.schism_calib_plot_ui)
 main.add_command(dsm2ui.show_dsm2_output_ui)
 main.add_command(dsm2ui.show_dsm2_tidefile_ui)
 main.add_command(dssui.show_dss_ui)
